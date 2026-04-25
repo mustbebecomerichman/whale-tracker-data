@@ -1,0 +1,66 @@
+name: 🐋 Whale Data Daily Update
+
+on:
+  schedule:
+    - cron: '0 1 * * *'     # 매일 오전 10시 KST (UTC 01:00)
+  workflow_dispatch:          # GitHub에서 수동 실행 버튼
+
+jobs:
+  update-whale-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 📥 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: 🐍 Python 3.11 설치
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 📦 패키지 설치
+        run: pip install requests firebase-admin
+
+      - name: 🇰🇷 DART 국민연금·대량보유 수집
+        env:
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: python dart_fetcher.py --dart --auto
+
+      - name: 🌍 SEC 13F 글로벌 고래 수집
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python - << 'EOF'
+          import sys
+          sys.path.insert(0, '.')
+          import dart_fetcher as df
+          import os
+          df.FB_SERVICE_ACCOUNT_JSON = os.environ.get('FIREBASE_SERVICE_ACCOUNT','')
+          df.run_global_whales(auto=True)
+          EOF
+
+      - name: 📊 결과 확인
+        run: |
+          echo "=== whale_data.json ==="
+          python -c "
+          import json
+          try:
+            d = json.load(open('whale_data.json'))
+            print(f'국민연금 종목: {len(d.get(\"nps_portfolio\",[]))}개')
+            print(f'대량보유 알림: {len(d.get(\"alert5\",[]))}건')
+            print(f'업데이트: {d.get(\"updated_at\",\"-\")}')
+          except: print('파일 없음')
+          "
+          echo "=== global_whales.json ==="
+          python -c "
+          import json
+          try:
+            d = json.load(open('global_whales.json'))
+            whales = d.get('global_whales',[])
+            print(f'글로벌 고래: {len(whales)}개 기관')
+            for w in whales[:3]:
+              print(f'  - {w[\"name\"]}: {len(w.get(\"top\",[]))}개 종목')
+          except: print('파일 없음')
+          "
