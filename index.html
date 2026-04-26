@@ -1135,7 +1135,6 @@ function renderMpSummary(data) {
 
 // ─── 계좌별 현황 시트 (종목 + 현재가 + 수급) ─────────────────────
 var _acctRows = [];
-var ACCT_TYPES = ['위탁','ISA','연금저축','IRP','CMA','기타'];
 
 function renderMpAccounts(accounts) {
   _acctRows = (accounts || []).map(function(a) { return Object.assign({}, a); });
