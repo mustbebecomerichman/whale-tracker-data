@@ -348,7 +348,6 @@ footer p{font-size:.77rem;color:var(--text2);line-height:1.8;}footer a{color:var
           <td></td>
         </tr></tfoot>
       </table>
-      <div class="sheet-add-row" onclick="addAcctRow()">＋ 종목 추가</div>
     </div>
   </div>
 
@@ -408,7 +407,6 @@ footer p{font-size:.77rem;color:var(--text2);line-height:1.8;}footer a{color:var
           <td colspan="2"></td>
         </tr></tfoot>
       </table>
-      <div class="sheet-add-row" onclick="addSheetRow()">＋ 새 행 추가</div>
     </div>
   </div>
   <!-- 배당 수익 -->
@@ -446,7 +444,6 @@ footer p{font-size:.77rem;color:var(--text2);line-height:1.8;}footer a{color:var
           <td></td>
         </tr></tfoot>
       </table>
-      <div class="sheet-add-row" onclick="addDivRow()">＋ 배당 추가</div>
     </div>
   </div>
   <!-- 히스토리 차트 -->
@@ -1176,15 +1173,15 @@ function drawAcctRows() {
       '<td><select class="sheet-input" onclick="event.stopPropagation()" onchange="_acctRows[' + i + '].type=this.value">' +
         ACCT_TYPES.map(function(t){ return '<option value="'+t+'"'+(a.type===t?' selected':'')+'>'+t+'</option>'; }).join('') +
       '</select></td>' +
-      '<td><input class="sheet-input" value="' + (a.code||'') + '" placeholder="종목코드" onclick="event.stopPropagation()" onchange="acctCodeChange(' + i + ',this)"/></td>' +
+      '<td><input class="sheet-input" value="' + (a.code||'') + '" placeholder="종목코드" onclick="event.stopPropagation()" onblur="acctCodeChange(' + i + ',this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();acctCodeChange(' + i + ',this);}"/></td>' +
       '<td><input id="acct-sn-' + i + '" class="sheet-input" value="' + (a.stockName||'') + '" placeholder="종목명" onclick="event.stopPropagation()" onchange="_acctRows[' + i + '].stockName=this.value"/></td>' +
       '<td><input class="sheet-input" type="number" value="' + (a.qty||0) + '" placeholder="0" onclick="event.stopPropagation()" oninput="_acctRows[' + i + '].qty=+this.value;recalcAcctRow(' + i + ')"/></td>' +
       '<td><input class="sheet-input" type="number" value="' + (a.avgBuy||0) + '" placeholder="0" onclick="event.stopPropagation()" oninput="_acctRows[' + i + '].avgBuy=+this.value;recalcAcctRow(' + i + ')"/></td>' +
-      '<td class="calc-input sheet-input" id="acct-cur-' + i + '" style="color:' + (hasCur?'var(--text)':'var(--text2)') + '">' + (hasCur ? cur.toLocaleString('ko-KR')+'원' : '미조회') + '</td>' +
-      '<td class="calc-input sheet-input" id="acct-ev-' + i  + '">' + (ev  ? fmt(ev)+'원'  : '-') + '</td>' +
-      '<td class="calc-input sheet-input" id="acct-pu-' + i  + '">' + (pu  ? fmt(pu)+'원'  : '-') + '</td>' +
-      '<td class="calc-input sheet-input ' + (ev&&pu?rCls:'') + '" id="acct-rate-' + i + '">' + (ev&&pu ? (rate>=0?'+':'') + rate.toFixed(1)+'%' : '-') + '</td>' +
-      '<td class="calc-input sheet-input ' + (ev&&pu?rCls:'') + '" id="acct-pnl-' + i  + '">' + (ev&&pu ? (pnl>=0?'+':'') + fmt(pnl)+'원' : '-') + '</td>' +
+      '<td class="calc-col" id="acct-cur-' + i + '" style="color:' + (hasCur?'var(--text)':'var(--text2)') + '">' + (hasCur ? cur.toLocaleString('ko-KR')+'원' : '미조회') + '</td>' +
+      '<td class="calc-col" id="acct-ev-' + i  + '">' + (ev  ? fmt(ev)+'원'  : '-') + '</td>' +
+      '<td class="calc-col" id="acct-pu-' + i  + '">' + (pu  ? fmt(pu)+'원'  : '-') + '</td>' +
+      '<td class="calc-col ' + (ev&&pu?rCls:'') + '" id="acct-rate-' + i + '">' + (ev&&pu ? (rate>=0?'+':'') + rate.toFixed(1)+'%' : '-') + '</td>' +
+      '<td class="calc-col ' + (ev&&pu?rCls:'') + '" id="acct-pnl-' + i  + '">' + (ev&&pu ? (pnl>=0?'+':'') + fmt(pnl)+'원' : '-') + '</td>' +
       '<td></td>' +
     '</tr>';
   }).join('');
@@ -1204,7 +1201,7 @@ function recalcAcctRow(i) {
     var el = document.getElementById(id);
     if (!el) return;
     el.textContent = v;
-    if (cls !== undefined) el.className = 'calc-input sheet-input ' + cls;
+    if (cls !== undefined) el.className = 'calc-col ' + cls;
   };
   set('acct-ev-'  + i, ev  ? fmt(ev)+'원'  : '-');
   set('acct-pu-'  + i, pu  ? fmt(pu)+'원'  : '-');
@@ -1322,6 +1319,14 @@ async function showStockDetail(i) {
       var p  = pd['J:'+a.code];
       if (p && p.price) {
         _acctRows[i].price = p.price;
+        // 종목명이 없으면 API 응답에서 채우기
+        if (p.name && !_acctRows[i].stockName) {
+          _acctRows[i].stockName = p.name;
+          var snEl = document.getElementById('acct-sn-' + i);
+          if (snEl) snEl.value = p.name;
+        }
+        var stockLabel = _acctRows[i].stockName || p.name || a.code;
+        if (title) title.textContent = stockLabel + ' (' + a.code + ') 상세';
         var cur = p.price, avg = parseFloat(a.avgBuy)||0, qty = parseFloat(a.qty)||0;
         var pnl  = qty > 0 ? Math.round((cur-avg)*qty) : 0;
         var rate = avg > 0 ? ((cur-avg)/avg*100) : 0;
@@ -1436,7 +1441,7 @@ function drawSheetRows(rows, filtered) {
       '<td><input class="sheet-input" type="date" value="' + (t.date||'') + '" data-field="date" onchange="cellChange(' + rowIdx + ',this)"/></td>' +
       '<td><select class="sheet-input" data-field="brokerage" onchange="cellChange(' + rowIdx + ',this)" style="min-width:105px"><option value="">선택</option>' + bOpts + '</select></td>' +
       '<td><select class="sheet-input" data-field="acctType" onchange="cellChange(' + rowIdx + ',this)" style="min-width:75px"><option value="">선택</option>' + aOpts + '</select></td>' +
-      '<td><input class="sheet-input" type="text" value="' + (t.code||'') + '" data-field="code" placeholder="005930" onchange="cellChange(' + rowIdx + ',this)" style="width:75px"/></td>' +
+      '<td><input class="sheet-input" type="text" value="' + (t.code||'') + '" data-field="code" placeholder="005930" onblur="cellChange(' + rowIdx + ',this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();cellChange(' + rowIdx + ',this);}" style="width:75px"/></td>' +
       '<td><input class="sheet-input" type="text" value="' + (t.name||'') + '" data-field="name" placeholder="종목명" onchange="cellChange(' + rowIdx + ',this)" style="min-width:110px"/></td>' +
       '<td><input class="sheet-input" type="number" value="' + (t.qty||'') + '" data-field="qty" oninput="cellChange(' + rowIdx + ',this)" style="width:65px"/></td>' +
       '<td><input class="sheet-input" type="number" value="' + (t.avgBuy||'') + '" data-field="avgBuy" oninput="cellChange(' + rowIdx + ',this)" style="width:88px"/></td>' +
@@ -1633,7 +1638,7 @@ function drawDivRows(rows) {
       '<td class="row-num" onclick="deleteDivRow('+i+')" title="삭제">🗑</td>' +
       '<td><input class="sheet-input" type="date" value="'+(d.date||'')+'" data-field="date" onchange="divCell('+i+',this)"/></td>' +
       '<td><select class="sheet-input" data-field="brokerage" onchange="divCell('+i+',this)" style="min-width:105px"><option value="">선택</option>'+bOpts+'</select></td>' +
-      '<td><input id="div-code-'+i+'" class="sheet-input" type="text" value="'+(d.code||'')+'" data-field="code" placeholder="005930" onchange="divCodeChange('+i+',this)" style="width:75px"/></td>' +
+      '<td><input id="div-code-'+i+'" class="sheet-input" type="text" value="'+(d.code||'')+'" data-field="code" placeholder="005930" onblur="divCodeChange('+i+',this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();divCodeChange('+i+',this);}" style="width:75px"/></td>' +
       '<td><input id="div-sn-'+i+'" class="sheet-input" type="text" value="'+(d.name||'')+'" data-field="name" placeholder="종목명" onchange="divCell('+i+',this)" style="min-width:100px"/></td>' +
       '<td><input class="sheet-input" type="number" value="'+(d.perShare||'')+'" data-field="perShare" placeholder="주당" oninput="divCell('+i+',this)" style="width:80px"/></td>' +
       '<td><input class="sheet-input" type="number" value="'+(d.qty||'')+'" data-field="qty" placeholder="주수" oninput="divCell('+i+',this)" style="width:65px"/></td>' +
