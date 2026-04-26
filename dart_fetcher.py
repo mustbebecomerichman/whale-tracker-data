@@ -33,7 +33,7 @@ DART_BASE_URL  = "https://opendart.fss.or.kr/api"
 # ▶ 로컬 실행: 아래 "" 안에 직접 값 입력 (절대 GitHub에 올리지 마세요)
 KIS_APP_KEY    = os.environ.get("KIS_APP_KEY",    "")   # 환경변수 또는 직접 입력
 KIS_APP_SECRET = os.environ.get("KIS_APP_SECRET", "")   # 환경변수 또는 직접 입력
-KIS_ACCOUNT_NO = os.environ.get("KIS_ACCOUNT_NO", "64635355")
+KIS_ACCOUNT_NO = os.environ.get("KIS_ACCOUNT_NO", "")  # GitHub Secrets에 등록 필요
 KIS_ACCOUNT_TYPE = "01"
 KIS_MOCK       = False
 KIS_BASE       = "https://openapivts.koreainvestment.com:29443" if KIS_MOCK else "https://openapi.koreainvestment.com:9443"

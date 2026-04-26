@@ -67,8 +67,9 @@ async function fetchDomesticPrice(code, token, env) {
   const price = parseInt(out.stck_prpr) || 0;
   const change = parseInt(out.prdy_vrss) || 0;
   const changeRate = parseFloat(out.prdy_ctrt) || 0;
+  const name = out.prdt_abrv_name || out.stck_kor_isnm || '';
   if (!price) throw new Error(out.msg1 || '데이터 없음');
-  return { price, change, changeRate };
+  return { price, change, changeRate, name };
 }
 
 async function fetchOverseasPrice(code, market, token, env) {

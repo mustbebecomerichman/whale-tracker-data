@@ -431,17 +431,18 @@ footer p{font-size:.77rem;color:var(--text2);line-height:1.8;}footer a{color:var
     <div class="sheet-wrap">
       <table class="sheet-table" id="div-table">
         <thead><tr>
-          <th style="width:34px">#</th><th>날짜</th><th>증권사</th><th>종목명</th><th>배당금(원)</th>
+          <th style="width:34px">#</th><th>날짜</th><th>증권사</th><th>종목코드</th><th>종목명</th><th>주당배당금</th><th>주식수</th>
+          <th class="calc-col">배당금(원)</th>
           <th title="체크하면 비과세(ISA계좌)">ISA계좌<br><small style="font-weight:400">(비과세)</small></th>
           <th class="calc-col">과세율</th><th class="calc-col">세금</th><th class="calc-col">실수령액</th><th>메모</th>
         </tr></thead>
         <tbody id="div-body"></tbody>
         <tfoot><tr>
-          <td colspan="4" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
-          <td id="div-ft-gross" style="font-weight:700;padding:8px 10px;"></td>
+          <td colspan="7" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
+          <td id="div-ft-gross" style="font-weight:700;padding:8px 10px;" class="calc-col"></td>
           <td></td><td></td>
-          <td id="div-ft-tax" style="font-weight:700;padding:8px 10px;color:var(--down)"></td>
-          <td id="div-ft-net" style="font-weight:700;padding:8px 10px;color:var(--up)"></td>
+          <td id="div-ft-tax" style="font-weight:700;padding:8px 10px;color:var(--down)" class="calc-col"></td>
+          <td id="div-ft-net" style="font-weight:700;padding:8px 10px;color:var(--up)" class="calc-col"></td>
           <td></td>
         </tr></tfoot>
       </table>
@@ -1133,6 +1134,21 @@ function renderMpSummary(data) {
     '<span class="status-chip" style="color:var(--down)">▼' + s.lossCount + '</span>';
 }
 
+// ─── 종목코드 → 종목명 자동 조회 ────────────────────────────────
+async function lookupStockName(code, cb) {
+  if (!code || code.trim().length < 4) return;
+  try {
+    var res = await fetch('/api/kis-price', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({items:[{code:code.trim(), market:'J'}]})
+    });
+    if (!res.ok) return;
+    var data = await res.json();
+    var p = data['J:' + code.trim()];
+    if (p && p.name) cb(p.name);
+  } catch(e) {}
+}
+
 // ─── 계좌별 현황 시트 (종목 + 현재가 + 수급) ─────────────────────
 var _acctRows = [];
 
@@ -1156,12 +1172,12 @@ function drawAcctRows() {
     var hasCur = cur > 0;
     return '<tr style="cursor:pointer" onclick="showStockDetail(' + i + ')" title="클릭하면 상세(현재가·수급) 조회">' +
       '<td class="row-num" onclick="event.stopPropagation();deleteAcctRow(' + i + ')" title="삭제">✕</td>' +
-      '<td><input class="sheet-input" value="' + (a.name||'') + '" placeholder="증권사" onclick="event.stopPropagation()" onchange="_acctRows[' + i + '].name=this.value"/></td>' +
+      '<td><select class="sheet-input" onclick="event.stopPropagation()" onchange="_acctRows[' + i + '].name=this.value" style="min-width:105px"><option value="">선택</option>' + BROKERS.map(function(b){return '<option value="'+b+'"'+(a.name===b?' selected':'')+'>'+b+'</option>';}).join('') + '</select></td>' +
       '<td><select class="sheet-input" onclick="event.stopPropagation()" onchange="_acctRows[' + i + '].type=this.value">' +
         ACCT_TYPES.map(function(t){ return '<option value="'+t+'"'+(a.type===t?' selected':'')+'>'+t+'</option>'; }).join('') +
       '</select></td>' +
-      '<td><input class="sheet-input" value="' + (a.code||'') + '" placeholder="종목코드" onclick="event.stopPropagation()" onchange="_acctRows[' + i + '].code=this.value.trim()"/></td>' +
-      '<td><input class="sheet-input" value="' + (a.stockName||'') + '" placeholder="종목명" onclick="event.stopPropagation()" onchange="_acctRows[' + i + '].stockName=this.value"/></td>' +
+      '<td><input class="sheet-input" value="' + (a.code||'') + '" placeholder="종목코드" onclick="event.stopPropagation()" onchange="acctCodeChange(' + i + ',this)"/></td>' +
+      '<td><input id="acct-sn-' + i + '" class="sheet-input" value="' + (a.stockName||'') + '" placeholder="종목명" onclick="event.stopPropagation()" onchange="_acctRows[' + i + '].stockName=this.value"/></td>' +
       '<td><input class="sheet-input" type="number" value="' + (a.qty||0) + '" placeholder="0" onclick="event.stopPropagation()" oninput="_acctRows[' + i + '].qty=+this.value;recalcAcctRow(' + i + ')"/></td>' +
       '<td><input class="sheet-input" type="number" value="' + (a.avgBuy||0) + '" placeholder="0" onclick="event.stopPropagation()" oninput="_acctRows[' + i + '].avgBuy=+this.value;recalcAcctRow(' + i + ')"/></td>' +
       '<td class="calc-input sheet-input" id="acct-cur-' + i + '" style="color:' + (hasCur?'var(--text)':'var(--text2)') + '">' + (hasCur ? cur.toLocaleString('ko-KR')+'원' : '미조회') + '</td>' +
@@ -1238,6 +1254,16 @@ function deleteAcctRow(i) {
   _acctRows.splice(i, 1);
   drawAcctRows();
   showToast('삭제됨 (저장 버튼으로 확정)', 'ok');
+}
+
+function acctCodeChange(i, el) {
+  _acctRows[i].code = el.value.trim();
+  if (!el.value.trim()) return;
+  lookupStockName(el.value.trim(), function(name) {
+    _acctRows[i].stockName = name;
+    var snEl = document.getElementById('acct-sn-' + i);
+    if (snEl) snEl.value = name;
+  });
 }
 
 // 일괄 현재가 조회
@@ -1446,6 +1472,13 @@ function cellChange(idx, input) {
   if (!_sheetRows[idx]) return;
   var field = input.dataset.field, val = input.value;
   _sheetRows[idx][field] = ['date','brokerage','acctType','code','name','note'].indexOf(field)>=0 ? val : (parseFloat(val)||0);
+  if (field === 'code' && val.trim()) {
+    lookupStockName(val.trim(), function(name) {
+      _sheetRows[idx].name = name;
+      var r = document.querySelector('#sheet-body tr[data-idx="' + idx + '"]');
+      if (r) { var ni = r.querySelector('input[data-field="name"]'); if (ni) ni.value = name; }
+    });
+  }
   var row = input.closest('tr'); if (!row) return;
   var calcs = row.querySelectorAll('.calc-input');
   var pnl=calcPnl(_sheetRows[idx]), pur=calcPurchase(_sheetRows[idx]), ev=calcEval(_sheetRows[idx]), rate=calcRate(_sheetRows[idx]);
@@ -1556,8 +1589,15 @@ async function fetchAllPrices() {
 // ═══ 배당 수익 ══════════════════════════════════════════════════
 var DIV_TAX = 0.154, _divRows = [], _divYear = '2026';
 
-function calcDivTax(d) { return d.isa ? 0 : Math.round((parseFloat(d.gross)||0)*DIV_TAX); }
-function calcDivNet(d) { return (parseFloat(d.gross)||0) - calcDivTax(d); }
+function calcDivGross(d) {
+  // 주당배당금 × 주식수가 입력되어 있으면 자동계산, 아니면 기존 gross값 사용 (하위호환)
+  if ((parseFloat(d.perShare)||0) > 0 || (parseFloat(d.qty)||0) > 0) {
+    return Math.round((parseFloat(d.perShare)||0) * (parseFloat(d.qty)||0));
+  }
+  return parseFloat(d.gross) || 0;
+}
+function calcDivTax(d) { return d.isa ? 0 : Math.round(calcDivGross(d)*DIV_TAX); }
+function calcDivNet(d) { return calcDivGross(d) - calcDivTax(d); }
 
 function renderDivYearChips(divByYear) {
   var years = Object.keys(divByYear).sort(function(a,b){return b-a;});
@@ -1587,17 +1627,20 @@ function renderDivSheet(year, allDivs) {
 function drawDivRows(rows) {
   var tbody = document.getElementById('div-body');
   tbody.innerHTML = rows.map(function(d,i) {
-    var tax=calcDivTax(d),net=calcDivNet(d);
+    var gross=calcDivGross(d),tax=calcDivTax(d),net=calcDivNet(d);
     var bOpts=BROKERS.map(function(b){return '<option'+(b===d.brokerage?' selected':'')+'>'+b+'</option>';}).join('');
     return '<tr>' +
       '<td class="row-num" onclick="deleteDivRow('+i+')" title="삭제">🗑</td>' +
       '<td><input class="sheet-input" type="date" value="'+(d.date||'')+'" data-field="date" onchange="divCell('+i+',this)"/></td>' +
       '<td><select class="sheet-input" data-field="brokerage" onchange="divCell('+i+',this)" style="min-width:105px"><option value="">선택</option>'+bOpts+'</select></td>' +
-      '<td><input class="sheet-input" type="text" value="'+(d.name||'')+'" data-field="name" placeholder="삼성전자" onchange="divCell('+i+',this)" style="min-width:100px"/></td>' +
-      '<td><input class="sheet-input" type="number" value="'+(d.gross||'')+'" data-field="gross" placeholder="50000" oninput="divCell('+i+',this)" style="width:88px"/></td>' +
+      '<td><input id="div-code-'+i+'" class="sheet-input" type="text" value="'+(d.code||'')+'" data-field="code" placeholder="005930" onchange="divCodeChange('+i+',this)" style="width:75px"/></td>' +
+      '<td><input id="div-sn-'+i+'" class="sheet-input" type="text" value="'+(d.name||'')+'" data-field="name" placeholder="종목명" onchange="divCell('+i+',this)" style="min-width:100px"/></td>' +
+      '<td><input class="sheet-input" type="number" value="'+(d.perShare||'')+'" data-field="perShare" placeholder="주당" oninput="divCell('+i+',this)" style="width:80px"/></td>' +
+      '<td><input class="sheet-input" type="number" value="'+(d.qty||'')+'" data-field="qty" placeholder="주수" oninput="divCell('+i+',this)" style="width:65px"/></td>' +
+      '<td><input class="sheet-input calc-input" value="'+(gross?fmt(gross)+'원':'')+'" readonly style="width:88px"/></td>' +
       '<td style="text-align:center;padding:6px 4px;"><input type="checkbox" class="isa-check" '+(d.isa?'checked':'')+' data-field="isa" onchange="divCell('+i+',this)"/></td>' +
       '<td><input class="sheet-input calc-input" value="'+(d.isa?'0% (비과세)':'15.4%')+'" readonly style="width:88px;color:'+(d.isa?'var(--accent)':'var(--down)')+'"/></td>' +
-      '<td><input class="sheet-input calc-input '+(tax?'down':'')+'" value="'+(tax?'-'+fmt(tax)+'원':d.gross?'0원':'')+'" readonly style="width:82px"/></td>' +
+      '<td><input class="sheet-input calc-input '+(tax?'down':'')+'" value="'+(tax?'-'+fmt(tax)+'원':gross?'0원':'')+'" readonly style="width:82px"/></td>' +
       '<td><input class="sheet-input calc-input up" value="'+(net?'+'+fmt(net)+'원':'')+'" readonly style="width:88px"/></td>' +
       '<td><input class="sheet-input" type="text" value="'+(d.note||'')+'" data-field="note" placeholder="메모" onchange="divCell('+i+',this)" style="min-width:88px"/></td>' +
       '</tr>';
@@ -1609,21 +1652,33 @@ function divCell(idx, input) {
   if (!_divRows[idx]) return;
   var field=input.dataset.field;
   if (field==='isa') _divRows[idx].isa=input.checked;
-  else if (field==='gross') _divRows[idx].gross=parseFloat(input.value)||0;
+  else if (['perShare','qty'].indexOf(field)>=0) _divRows[idx][field]=parseFloat(input.value)||0;
   else _divRows[idx][field]=input.value;
   var row=input.closest('tr'); if(!row) return;
-  var d=_divRows[idx],tax=calcDivTax(d),net=calcDivNet(d);
+  var d=_divRows[idx],gross=calcDivGross(d),tax=calcDivTax(d),net=calcDivNet(d);
   var calcs=row.querySelectorAll('.calc-input');
-  if(calcs[0]){calcs[0].value=d.isa?'0% (비과세)':'15.4%';calcs[0].style.color=d.isa?'var(--accent)':'var(--down)';}
-  if(calcs[1]){calcs[1].value=tax?'-'+fmt(tax)+'원':d.gross?'0원':'';calcs[1].className='sheet-input calc-input '+(tax?'down':'');}
-  if(calcs[2]) calcs[2].value=net?'+'+fmt(net)+'원':'';
+  // calcs[0]=배당금(자동), calcs[1]=과세율, calcs[2]=세금, calcs[3]=실수령액
+  if(calcs[0]) calcs[0].value=gross?fmt(gross)+'원':'';
+  if(calcs[1]){calcs[1].value=d.isa?'0% (비과세)':'15.4%';calcs[1].style.color=d.isa?'var(--accent)':'var(--down)';}
+  if(calcs[2]){calcs[2].value=tax?'-'+fmt(tax)+'원':gross?'0원':'';calcs[2].className='sheet-input calc-input '+(tax?'down':'');}
+  if(calcs[3]) calcs[3].value=net?'+'+fmt(net)+'원':'';
   updateDivFooter(_divRows); updateDivCards(_divRows);
 }
 
 function addDivRow() {
-  _divRows.unshift({date:new Date().toISOString().slice(0,10),brokerage:'',name:'',gross:0,isa:false,note:''});
+  _divRows.unshift({date:new Date().toISOString().slice(0,10),brokerage:'',code:'',name:'',perShare:0,qty:0,isa:false,note:''});
   drawDivRows(_divRows);
   var fi=document.querySelector('#div-body tr:first-child input[data-field="name"]'); if(fi) fi.focus();
+}
+
+function divCodeChange(i, el) {
+  _divRows[i].code = el.value.trim();
+  if (!el.value.trim()) return;
+  lookupStockName(el.value.trim(), function(name) {
+    _divRows[i].name = name;
+    var snEl = document.getElementById('div-sn-' + i);
+    if (snEl) snEl.value = name;
+  });
 }
 
 function deleteDivRow(idx) {
@@ -1632,7 +1687,7 @@ function deleteDivRow(idx) {
 }
 
 function updateDivFooter(rows) {
-  var sG=rows.reduce(function(s,d){return s+(parseFloat(d.gross)||0);},0);
+  var sG=rows.reduce(function(s,d){return s+calcDivGross(d);},0);
   var sTax=rows.reduce(function(s,d){return s+calcDivTax(d);},0);
   var sNet=rows.reduce(function(s,d){return s+calcDivNet(d);},0);
   var fg=document.getElementById('div-ft-gross');if(fg)fg.textContent=fmt(sG)+'원';
@@ -1641,10 +1696,10 @@ function updateDivFooter(rows) {
 }
 
 function updateDivCards(rows) {
-  var gross=rows.reduce(function(s,d){return s+(parseFloat(d.gross)||0);},0);
+  var gross=rows.reduce(function(s,d){return s+calcDivGross(d);},0);
   var tax=rows.reduce(function(s,d){return s+calcDivTax(d);},0);
   var net=rows.reduce(function(s,d){return s+calcDivNet(d);},0);
-  var isaNet=rows.filter(function(d){return d.isa;}).reduce(function(s,d){return s+(parseFloat(d.gross)||0);},0);
+  var isaNet=rows.filter(function(d){return d.isa;}).reduce(function(s,d){return s+calcDivGross(d);},0);
   var taxedNet=rows.filter(function(d){return !d.isa;}).reduce(function(s,d){return s+calcDivNet(d);},0);
   var taxedTax=rows.filter(function(d){return !d.isa;}).reduce(function(s,d){return s+calcDivTax(d);},0);
   function set(id,v){var el=document.getElementById(id);if(el)el.textContent=v;}
@@ -1656,7 +1711,11 @@ function updateDivCards(rows) {
 async function saveDivSheet() {
   if (!mpData) mpData=JSON.parse(JSON.stringify(S_PORT));
   if (!mpData.dividends) mpData.dividends={};
-  mpData.dividends[_divYear]=_divRows.filter(function(d){return d.name&&d.name.trim();});
+  mpData.dividends[_divYear]=_divRows.filter(function(d){return d.name&&d.name.trim();}).map(function(d){
+    return {date:d.date||'',brokerage:d.brokerage||'',code:d.code||'',name:d.name||'',
+            perShare:parseFloat(d.perShare)||0,qty:parseFloat(d.qty)||0,
+            gross:calcDivGross(d),isa:!!d.isa,note:d.note||''};
+  });
   mpData.updatedAt=new Date().toLocaleDateString('ko-KR');
   renderDivYearChips(mpData.dividends);
   await saveMpData(mpData);
