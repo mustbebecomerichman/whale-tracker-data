@@ -1238,23 +1238,10 @@ async function fetchAllPrices() {
     return '<div class="price-card" id="pc-'+h.code+'"><div class="price-card-name">'+h.name+'</div><div class="price-card-code">'+h.code+'</div><div class="price-card-price" style="color:var(--text2)">조회 중...</div></div>';
   }).join('');
   try {
-    var res = await fetch('/.netlify/functions/kis-price',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:holdings})});
-    if (!res.ok) throw new Error('HTTP '+res.status);
-    var prices = await res.json();
-    holdings.forEach(function(h) {
-      var key=h.market+':'+h.code, p=prices[key], card=document.getElementById('pc-'+h.code);
-      if (!card) return;
-      if (!p||p.error) { card.querySelector('.price-card-price').textContent=p&&p.error?p.error:'조회 실패'; return; }
-      var cls=p.changeRate>0?'up':p.changeRate<0?'down':'flat', sym=p.changeRate>0?'▲':p.changeRate<0?'▼':'-';
-      var pnl=h.qty>0?Math.round((p.price-h.avgBuy)*h.qty):null;
-      card.innerHTML='<div class="price-card-name">'+h.name+'</div><div class="price-card-code">'+h.code+(h.qty?' · '+h.qty+'주':'')+'</div>' +
-        '<div class="price-card-price">'+p.price.toLocaleString('ko-KR')+'원</div>' +
-        '<div class="price-card-change '+cls+'">'+sym+' '+Math.abs(p.change).toLocaleString('ko-KR')+'원 ('+(p.changeRate>=0?'+':'')+p.changeRate.toFixed(2)+'%)</div>' +
-        (pnl!==null?'<div style="margin-top:3px;font-size:.72rem;font-weight:700;color:'+(pnl>=0?'var(--up)':'var(--down)')+'">손익 '+(pnl>=0?'+':'')+fmt(pnl)+'원</div>':'');
-    });
-    var now=new Date(); document.getElementById('price-last-update').textContent=now.getHours()+':'+String(now.getMinutes()).padStart(2,'0')+' 업데이트';
+    // 현재가 조회: 별도 API 서버 필요 (현재 미지원)
+    throw new Error('unavailable');
   } catch(e) {
-    grid.innerHTML='<div class="price-loading" style="color:var(--down)">⚠ '+e.message+'<br><small>Netlify 폴더 배포 + 환경변수 설정 필요</small></div>';
+    grid.innerHTML='<div class="price-loading" style="color:var(--text2)">📡 현재가 조회 기능은 준비 중입니다.<br><small>거래 내역 입력 및 손익 계산은 정상 이용 가능합니다.</small></div>';
   }
   _priceBusy = false;
 }
@@ -1574,49 +1561,9 @@ async function fetchScreenerPrices() {
     return;
   }
 
-  try {
-    var res = await fetch('/.netlify/functions/kis-price', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: items })
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    var prices = await res.json();
-
-    // 각 결과 카드에 현재가 추가
-    _scrResults.forEach(function(s) {
-      var key = (OVERSEAS_CODES.has((s.code||'').toUpperCase()) ? 'NAS' : 'J') + ':' + s.code;
-      var p = prices[key];
-      var cardId='scr-card-'+(s.code||s.name).replace(/[^a-zA-Z0-9가-힣]/g,'_');
-      var card = document.getElementById(cardId);
-      if (!card || !p) return;
-
-      var priceDiv = card.querySelector('.scr-price-info');
-      if (!priceDiv) { priceDiv = document.createElement('div'); priceDiv.className = 'scr-price-info'; card.appendChild(priceDiv); }
-
-      if (p.error) {
-        priceDiv.innerHTML = '<div style="font-size:.76rem;color:var(--text2);margin-top:6px;">가격 조회 실패</div>';
-        return;
-      }
-      var cls = p.changeRate > 0 ? 'up' : p.changeRate < 0 ? 'down' : 'neutral';
-      var sym = p.changeRate > 0 ? '▲' : p.changeRate < 0 ? '▼' : '-';
-      priceDiv.innerHTML =
-        '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">' +
-          '<div style="font-size:1rem;font-weight:900;color:var(--text)">' + p.price.toLocaleString('ko-KR') + '원</div>' +
-          '<div style="font-size:.8rem;font-weight:700;color:var(--' + (cls==='up'?'up':cls==='down'?'down':'text2') + ')">' +
-            sym + ' ' + Math.abs(p.change).toLocaleString('ko-KR') + '원 (' +
-            (p.changeRate >= 0 ? '+' : '') + p.changeRate.toFixed(2) + '%)' +
-          '</div>' +
-        '</div>';
-    });
-
-    var now = new Date();
-    showToast('✅ 현재가 조회 완료 (' + now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ')', 'ok');
-  } catch(e) {
-    showToast('시세 조회 실패: ' + e.message + ' (Netlify 폴더 배포 필요)', 'err');
-  }
-
-  if (btn) { btn.disabled = false; btn.textContent = '🔄 현재가 재조회'; }
+  // 현재가 조회: 별도 API 서버 필요 (현재 미지원)
+  showToast('📡 현재가 조회 기능은 준비 중입니다.', 'ok');
+  if (btn) { btn.disabled = false; btn.textContent = '🔄 현재가 조회'; }
 }
 
 
