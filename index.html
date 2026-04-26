@@ -303,54 +303,77 @@ footer p{font-size:.77rem;color:var(--text2);line-height:1.8;}footer a{color:var
 <!-- 내 포트폴리오 -->
 <div class="page" id="page-mypage">
   <div class="hero"><h1>📊 내 <span>포트폴리오</span></h1><p>개인 투자 현황 · 연간 실현 손익 · 계좌별 성과</p></div>
-  <div class="kis-status">
-    <div style="font-size:2rem;flex-shrink:0">🏦</div>
-    <div><h4>한국투자증권 API 연동 완료 ✅</h4><p><code>python dart_fetcher.py --kis</code> 실행 후 JSON 파일로 동기화 가능</p></div>
-    <div style="margin-left:auto;flex-shrink:0;"><button class="btn btn-outline btn-sm" onclick="fetchAllPrices()">🔄 시세 조회</button></div>
-  </div>
+  <!-- 요약 카드 -->
   <div class="mp-summary-grid">
     <div class="mp-card c-blue"><div class="mp-lbl">총 평가금액</div><div class="mp-val" id="mp-total">-</div><div class="mp-sub" id="mp-updated-date">-</div></div>
     <div class="mp-card c-green"><div class="mp-lbl">수익률</div><div class="mp-val" id="mp-rate">-</div><div class="mp-sub" id="mp-purchase-sub">-</div></div>
     <div class="mp-card c-orange"><div class="mp-lbl">평가 손익</div><div class="mp-val" id="mp-pnl">-</div><div id="mp-stock-stats" style="margin-top:4px;display:flex;gap:5px;flex-wrap:wrap;"></div></div>
     <div class="mp-card c-purple"><div class="mp-lbl">당해 실현 손익</div><div class="mp-val" id="mp-realized">-</div><div class="mp-sub" id="mp-realized-sub">거래 내역 기준</div></div>
   </div>
-  <!-- 현재가 -->
-  <div class="section">
-    <div class="section-title"><div class="section-title-left">📈 보유 종목 현재가 <span class="badge" id="price-last-update">조회 전</span></div></div>
-    <div class="price-grid" id="price-grid"><div class="price-loading">🔄 시세 조회 버튼을 눌러주세요</div></div>
-  </div>
-  <!-- 계좌별 현황 -->
+
+  <!-- 계좌별 현황 (종목 포함) -->
   <div class="section">
     <div class="section-title">
-      <div class="section-title-left">계좌별 현황</div>
+      <div class="section-title-left">🏦 계좌별 현황</div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button class="btn btn-primary btn-sm" onclick="addAcctRow()">＋ 계좌 추가</button>
+        <button class="btn btn-outline btn-sm" onclick="fetchAcctPrices()" id="acct-price-btn">🔄 현재가 일괄 조회</button>
+        <button class="btn btn-primary btn-sm" onclick="addAcctRow()">＋ 종목 추가</button>
         <button class="btn btn-success btn-sm" onclick="saveAcctSheet()">💾 저장</button>
       </div>
     </div>
     <div class="sheet-wrap">
       <table class="sheet-table" id="acct-table">
         <thead><tr>
-          <th style="width:34px">#</th>
+          <th style="width:30px">#</th>
           <th>증권사</th>
           <th>계좌유형</th>
-          <th>평가금액 (원)</th>
-          <th>매입금액 (원)</th>
+          <th>종목코드</th>
+          <th>종목명</th>
+          <th>수량</th>
+          <th>평균매입가</th>
+          <th class="calc-col">현재가</th>
+          <th class="calc-col">평가금액</th>
+          <th class="calc-col">매입금액</th>
           <th class="calc-col">수익률</th>
           <th class="calc-col">평가손익</th>
-          <th style="width:40px"></th>
+          <th style="width:36px"></th>
         </tr></thead>
         <tbody id="acct-body"></tbody>
         <tfoot><tr>
-          <td colspan="3" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
-          <td id="acct-ft-eval" style="font-weight:700;padding:8px 10px;"></td>
-          <td id="acct-ft-purchase" style="font-weight:700;padding:8px 10px;"></td>
-          <td id="acct-ft-rate" style="font-weight:700;padding:8px 10px;" class="calc-col"></td>
-          <td id="acct-ft-pnl" style="font-weight:700;padding:8px 10px;" class="calc-col"></td>
+          <td colspan="8" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
+          <td id="acct-ft-eval"     style="font-weight:700;padding:8px 10px;" class="calc-col"></td>
+          <td id="acct-ft-purchase" style="font-weight:700;padding:8px 10px;" class="calc-col"></td>
+          <td id="acct-ft-rate"     style="font-weight:700;padding:8px 10px;" class="calc-col"></td>
+          <td id="acct-ft-pnl"      style="font-weight:700;padding:8px 10px;" class="calc-col"></td>
           <td></td>
         </tr></tfoot>
       </table>
-      <div class="sheet-add-row" onclick="addAcctRow()">＋ 계좌 추가</div>
+      <div class="sheet-add-row" onclick="addAcctRow()">＋ 종목 추가</div>
+    </div>
+  </div>
+
+  <!-- 종목 상세 패널 (행 클릭 시 표시) -->
+  <div id="stock-detail-panel" style="display:none;" class="section">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title" id="sdp-title">종목 상세</div>
+        <button onclick="document.getElementById('stock-detail-panel').style.display='none'" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:.78rem;">닫기</button>
+      </div>
+      <!-- 현재가 -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px;">
+        <div class="mp-card c-blue" style="margin:0"><div class="mp-lbl">현재가</div><div class="mp-val" id="sdp-price" style="font-size:1.2rem">-</div></div>
+        <div class="mp-card" style="margin:0;border-top:3px solid var(--accent)"><div class="mp-lbl">등락</div><div class="mp-val" id="sdp-change" style="font-size:1rem">-</div></div>
+        <div class="mp-card c-green" style="margin:0"><div class="mp-lbl">내 수익률</div><div class="mp-val" id="sdp-myrate" style="font-size:1rem">-</div></div>
+        <div class="mp-card c-orange" style="margin:0"><div class="mp-lbl">내 평가손익</div><div class="mp-val" id="sdp-mypnl" style="font-size:1rem">-</div></div>
+      </div>
+      <!-- 수급 현황 -->
+      <div style="font-size:.82rem;font-weight:700;color:var(--text2);margin-bottom:8px;">📊 투자자별 수급 (당일)</div>
+      <div id="sdp-supply" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+        <div class="mp-card" style="margin:0;text-align:center"><div class="mp-lbl">개인</div><div id="sdp-ind" class="mp-val" style="font-size:.95rem">-</div></div>
+        <div class="mp-card" style="margin:0;text-align:center"><div class="mp-lbl">외국인</div><div id="sdp-for" class="mp-val" style="font-size:.95rem">-</div></div>
+        <div class="mp-card" style="margin:0;text-align:center"><div class="mp-lbl">기관</div><div id="sdp-ins" class="mp-val" style="font-size:.95rem">-</div></div>
+      </div>
+      <p style="font-size:.7rem;color:var(--text2);margin-top:8px;">순매수(▲) · 순매도(▼) · 단위: 주</p>
     </div>
   </div>
   <!-- 거래 내역 스프레드시트 -->
@@ -439,6 +462,11 @@ footer p{font-size:.77rem;color:var(--text2);line-height:1.8;}footer a{color:var
     <div id="sd-wrap">
       <div class="mp-empty"><div class="ei">📊</div><p>수급 조회 버튼을 눌러 보유 종목의 투자자별 매매 동향을 확인하세요.</p></div>
     </div>
+  </div>
+  <!-- KIS API 안내 (하단) -->
+  <div class="kis-status" style="margin-bottom:16px;">
+    <div style="font-size:2rem;flex-shrink:0">🏦</div>
+    <div><h4>한국투자증권 API 연동 완료 ✅</h4><p><code>python dart_fetcher.py --kis</code> 실행 후 JSON 파일로 동기화 가능</p></div>
   </div>
   <!-- 백업 & 복원 -->
   <div class="section">
@@ -807,15 +835,30 @@ async function doLogin() {
     var tmout = new Promise(function(_, rej) { setTimeout(function() { rej({code:'timeout'}); }, 15000); });
     await Promise.race([auth.signInWithEmailAndPassword(email, pw), tmout]);
   } catch(e) {
-    var msgs = {
-      'timeout':                 '연결 시간 초과. 새로고침 후 시도하세요.',
-      'auth/user-not-found':     '계정이 없습니다. 회원가입 탭에서 먼저 가입해주세요.',
-      'auth/wrong-password':     '비밀번호가 올바르지 않습니다.',
-      'auth/invalid-credential': '이메일 또는 비밀번호를 확인하세요.',
-      'auth/too-many-requests':  '로그인 시도 횟수 초과. 잠시 후 다시 시도하세요.',
-      'auth/network-request-failed': '네트워크 오류. 인터넷 연결을 확인하세요.'
-    };
-    setMsg(msgs[e.code] || '로그인 실패: ' + (e.message || e.code || '오류'), "error");
+    // auth/invalid-login-credentials는 이메일/비밀번호 구분이 안 되므로
+    // fetchSignInMethodsForEmail로 이메일 존재 여부를 먼저 확인
+    if (e.code === 'auth/invalid-login-credentials' || e.code === 'auth/invalid-credential') {
+      try {
+        var methods = await auth.fetchSignInMethodsForEmail(email);
+        if (!methods || methods.length === 0) {
+          setMsg("이메일을 확인하세요.", "error");
+        } else {
+          setMsg("비밀번호를 확인하세요.", "error");
+        }
+      } catch(_) {
+        setMsg("이메일 또는 비밀번호를 확인하세요.", "error");
+      }
+    } else {
+      var msgs = {
+        'timeout':                     '연결 시간 초과. 새로고침 후 시도하세요.',
+        'auth/user-not-found':         '이메일을 확인하세요.',
+        'auth/wrong-password':         '비밀번호를 확인하세요.',
+        'auth/too-many-requests':      '로그인 시도 횟수 초과. 잠시 후 다시 시도하세요.',
+        'auth/network-request-failed': '네트워크 오류. 인터넷 연결을 확인하세요.',
+        'auth/invalid-email':          '올바른 이메일 형식이 아닙니다.',
+      };
+      setMsg(msgs[e.code] || '로그인 실패: ' + (e.message || e.code), "error");
+    }
     btn.disabled = false; btn.textContent = '로그인';
   }
 }
@@ -1090,8 +1133,9 @@ function renderMpSummary(data) {
     '<span class="status-chip" style="color:var(--down)">▼' + s.lossCount + '</span>';
 }
 
-// ─── 계좌별 현황 시트 ────────────────────────────────────────────
+// ─── 계좌별 현황 시트 (종목 + 현재가 + 수급) ─────────────────────
 var _acctRows = [];
+var ACCT_TYPES = ['위탁','ISA','연금저축','IRP','CMA','기타'];
 
 function renderMpAccounts(accounts) {
   _acctRows = (accounts || []).map(function(a) { return Object.assign({}, a); });
@@ -1101,82 +1145,208 @@ function renderMpAccounts(accounts) {
 function drawAcctRows() {
   var tbody = document.getElementById('acct-body');
   if (!tbody) return;
-  var ACCT_TYPES = ['위탁','ISA','연금저축','IRP','CMA','기타'];
   tbody.innerHTML = _acctRows.map(function(a, i) {
-    var ev = parseFloat(a.eval) || 0;
-    var pu = parseFloat(a.purchase) || 0;
-    var rate = pu > 0 ? ((ev - pu) / pu * 100) : (a.rate || 0);
-    var pnl = ev - pu;
+    var qty  = parseFloat(a.qty)    || 0;
+    var avg  = parseFloat(a.avgBuy) || 0;
+    var cur  = parseFloat(a.price)  || 0;
+    var ev   = cur > 0 ? Math.round(qty * cur) : (parseFloat(a.eval) || 0);
+    var pu   = qty > 0 && avg > 0 ? Math.round(qty * avg) : (parseFloat(a.purchase) || 0);
+    var rate = pu > 0 ? ((ev - pu) / pu * 100) : 0;
+    var pnl  = ev - pu;
     var rCls = rate >= 0 ? 'up' : 'down';
-    return '<tr>' +
-      '<td class="row-num" onclick="deleteAcctRow(' + i + ')" title="클릭하면 삭제">✕</td>' +
-      '<td><input class="sheet-input" value="' + (a.name||'') + '" placeholder="증권사명" onchange="_acctRows[' + i + '].name=this.value"/></td>' +
-      '<td><select class="sheet-input" onchange="_acctRows[' + i + '].type=this.value">' +
+    var hasCur = cur > 0;
+    return '<tr style="cursor:pointer" onclick="showStockDetail(' + i + ')" title="클릭하면 상세(현재가·수급) 조회">' +
+      '<td class="row-num" onclick="event.stopPropagation();deleteAcctRow(' + i + ')" title="삭제">✕</td>' +
+      '<td><input class="sheet-input" value="' + (a.name||'') + '" placeholder="증권사" onclick="event.stopPropagation()" onchange="_acctRows[' + i + '].name=this.value"/></td>' +
+      '<td><select class="sheet-input" onclick="event.stopPropagation()" onchange="_acctRows[' + i + '].type=this.value">' +
         ACCT_TYPES.map(function(t){ return '<option value="'+t+'"'+(a.type===t?' selected':'')+'>'+t+'</option>'; }).join('') +
       '</select></td>' +
-      '<td><input class="sheet-input" type="number" value="' + (a.eval||0) + '" placeholder="0" oninput="_acctRows[' + i + '].eval=+this.value;refreshAcctCalc(' + i + ')"/></td>' +
-      '<td><input class="sheet-input" type="number" value="' + (a.purchase||0) + '" placeholder="0" oninput="_acctRows[' + i + '].purchase=+this.value;refreshAcctCalc(' + i + ')"/></td>' +
-      '<td class="calc-input sheet-input ' + rCls + '" id="acct-rate-' + i + '">' + (rate>=0?'+':'') + rate.toFixed(1) + '%</td>' +
-      '<td class="calc-input sheet-input ' + rCls + '" id="acct-pnl-' + i + '">' + (pnl>=0?'+':'') + fmt(pnl) + '원</td>' +
+      '<td><input class="sheet-input" value="' + (a.code||'') + '" placeholder="종목코드" onclick="event.stopPropagation()" onchange="_acctRows[' + i + '].code=this.value.trim()"/></td>' +
+      '<td><input class="sheet-input" value="' + (a.stockName||'') + '" placeholder="종목명" onclick="event.stopPropagation()" onchange="_acctRows[' + i + '].stockName=this.value"/></td>' +
+      '<td><input class="sheet-input" type="number" value="' + (a.qty||0) + '" placeholder="0" onclick="event.stopPropagation()" oninput="_acctRows[' + i + '].qty=+this.value;recalcAcctRow(' + i + ')"/></td>' +
+      '<td><input class="sheet-input" type="number" value="' + (a.avgBuy||0) + '" placeholder="0" onclick="event.stopPropagation()" oninput="_acctRows[' + i + '].avgBuy=+this.value;recalcAcctRow(' + i + ')"/></td>' +
+      '<td class="calc-input sheet-input" id="acct-cur-' + i + '" style="color:' + (hasCur?'var(--text)':'var(--text2)') + '">' + (hasCur ? cur.toLocaleString('ko-KR')+'원' : '미조회') + '</td>' +
+      '<td class="calc-input sheet-input" id="acct-ev-' + i  + '">' + (ev  ? fmt(ev)+'원'  : '-') + '</td>' +
+      '<td class="calc-input sheet-input" id="acct-pu-' + i  + '">' + (pu  ? fmt(pu)+'원'  : '-') + '</td>' +
+      '<td class="calc-input sheet-input ' + (ev&&pu?rCls:'') + '" id="acct-rate-' + i + '">' + (ev&&pu ? (rate>=0?'+':'') + rate.toFixed(1)+'%' : '-') + '</td>' +
+      '<td class="calc-input sheet-input ' + (ev&&pu?rCls:'') + '" id="acct-pnl-' + i  + '">' + (ev&&pu ? (pnl>=0?'+':'') + fmt(pnl)+'원' : '-') + '</td>' +
       '<td></td>' +
     '</tr>';
   }).join('');
   updateAcctFooter();
 }
 
-function refreshAcctCalc(i) {
-  var a = _acctRows[i];
-  var ev = parseFloat(a.eval) || 0;
-  var pu = parseFloat(a.purchase) || 0;
+function recalcAcctRow(i) {
+  var a   = _acctRows[i];
+  var qty = parseFloat(a.qty)    || 0;
+  var avg = parseFloat(a.avgBuy) || 0;
+  var cur = parseFloat(a.price)  || 0;
+  var ev  = cur > 0 ? Math.round(qty * cur) : 0;
+  var pu  = qty > 0 && avg > 0 ? Math.round(qty * avg) : 0;
   var rate = pu > 0 ? ((ev - pu) / pu * 100) : 0;
-  var pnl = ev - pu;
-  var rEl = document.getElementById('acct-rate-' + i);
-  var pEl = document.getElementById('acct-pnl-' + i);
-  if (rEl) { rEl.textContent = (rate>=0?'+':'') + rate.toFixed(1) + '%'; rEl.className = 'calc-input sheet-input ' + (rate>=0?'up':'down'); }
-  if (pEl) { pEl.textContent = (pnl>=0?'+':'') + fmt(pnl) + '원'; pEl.className = 'calc-input sheet-input ' + (pnl>=0?'up':'down'); }
+  var pnl  = ev - pu;
+  var set = function(id, v, cls) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = v;
+    if (cls !== undefined) el.className = 'calc-input sheet-input ' + cls;
+  };
+  set('acct-ev-'  + i, ev  ? fmt(ev)+'원'  : '-');
+  set('acct-pu-'  + i, pu  ? fmt(pu)+'원'  : '-');
+  set('acct-rate-'+ i, ev&&pu ? (rate>=0?'+':'') + rate.toFixed(1)+'%' : '-', ev&&pu ? (rate>=0?'up':'down') : '');
+  set('acct-pnl-' + i, ev&&pu ? (pnl>=0?'+':'') + fmt(pnl)+'원' : '-',       ev&&pu ? (pnl>=0?'up':'down') : '');
   updateAcctFooter();
 }
 
 function updateAcctFooter() {
-  var totEval = _acctRows.reduce(function(s,a){ return s+(parseFloat(a.eval)||0); }, 0);
-  var totPu   = _acctRows.reduce(function(s,a){ return s+(parseFloat(a.purchase)||0); }, 0);
+  var totEval = 0, totPu = 0;
+  _acctRows.forEach(function(a) {
+    var qty = parseFloat(a.qty)||0, avg = parseFloat(a.avgBuy)||0, cur = parseFloat(a.price)||0;
+    totEval += cur > 0 ? Math.round(qty*cur) : (parseFloat(a.eval)||0);
+    totPu   += qty > 0 && avg > 0 ? Math.round(qty*avg) : (parseFloat(a.purchase)||0);
+  });
   var totPnl  = totEval - totPu;
   var totRate = totPu > 0 ? (totPnl/totPu*100) : 0;
   var set = function(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; };
-  set('acct-ft-eval',    fmt(totEval) + '원');
-  set('acct-ft-purchase',fmt(totPu)   + '원');
-  set('acct-ft-rate',    (totRate>=0?'+':'') + totRate.toFixed(1) + '%');
-  set('acct-ft-pnl',     (totPnl>=0?'+':'') + fmt(totPnl) + '원');
+  set('acct-ft-eval',    totEval ? fmt(totEval)+'원' : '-');
+  set('acct-ft-purchase',totPu   ? fmt(totPu)+'원'   : '-');
+  set('acct-ft-rate',    totPu   ? (totRate>=0?'+':'') + totRate.toFixed(1)+'%' : '-');
+  set('acct-ft-pnl',     totPu   ? (totPnl>=0?'+':'') + fmt(totPnl)+'원' : '-');
+  // 상단 요약 카드도 업데이트
+  updateMpSummaryFromAcct(totEval, totPu);
+}
+
+function updateMpSummaryFromAcct(totEval, totPu) {
+  var totPnl  = totEval - totPu;
+  var totRate = totPu > 0 ? (totPnl/totPu*100) : 0;
+  var W = function(n){ return n ? Math.abs(n).toLocaleString('ko-KR')+'원' : '-'; };
+  var el;
+  el = document.getElementById('mp-total'); if(el) el.textContent = totEval ? W(totEval) : '-';
+  el = document.getElementById('mp-rate');  if(el) { el.textContent = totPu ? (totRate>=0?'+':'') + totRate.toFixed(1)+'%' : '-'; el.className = 'mp-val '+(totRate>=0?'up':'down'); }
+  el = document.getElementById('mp-pnl');   if(el) { el.textContent = totPu ? (totPnl>=0?'+':'')+W(totPnl) : '-'; el.className = 'mp-val '+(totPnl>=0?'up':'down'); }
+  el = document.getElementById('mp-purchase-sub'); if(el) el.textContent = totPu ? '총 투자: '+W(totPu) : '';
 }
 
 function addAcctRow() {
-  _acctRows.push({name:'', type:'위탁', eval:0, purchase:0, rate:0});
+  _acctRows.push({name:'', type:'위탁', code:'', stockName:'', qty:0, avgBuy:0, price:0, eval:0, purchase:0});
   drawAcctRows();
   var rows = document.querySelectorAll('#acct-body tr');
   if (rows.length) { var inp = rows[rows.length-1].querySelector('input'); if(inp) inp.focus(); }
 }
 
 function deleteAcctRow(i) {
-  if (!confirm('이 계좌를 삭제하시겠습니까?')) return;
+  if (!confirm('이 종목을 삭제하시겠습니까?')) return;
   _acctRows.splice(i, 1);
   drawAcctRows();
   showToast('삭제됨 (저장 버튼으로 확정)', 'ok');
 }
 
+// 일괄 현재가 조회
+async function fetchAcctPrices() {
+  var btn = document.getElementById('acct-price-btn');
+  var items = _acctRows.map(function(a,i){ return {idx:i, code:a.code, name:a.stockName, market:'J'}; })
+                       .filter(function(x){ return x.code && x.code.trim(); });
+  if (!items.length) { showToast('종목코드를 먼저 입력하세요.', 'err'); return; }
+  if (btn) { btn.disabled=true; btn.textContent='조회 중...'; }
+  try {
+    var res = await fetch('/api/kis-price', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ items: items.map(function(x){ return {code:x.code, market:x.market}; }) })
+    });
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    var prices = await res.json();
+    items.forEach(function(x) {
+      var p = prices['J:'+x.code] || prices['NAS:'+x.code];
+      if (p && p.price) {
+        _acctRows[x.idx].price = p.price;
+        var curEl = document.getElementById('acct-cur-'+x.idx);
+        if (curEl) { curEl.textContent = p.price.toLocaleString('ko-KR')+'원'; curEl.style.color='var(--text)'; }
+        recalcAcctRow(x.idx);
+      }
+    });
+    var now = new Date();
+    showToast('✅ 현재가 조회 완료 ('+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0')+')', 'ok');
+  } catch(e) {
+    showToast('⚠ 현재가 조회 실패: '+e.message, 'err');
+  }
+  if (btn) { btn.disabled=false; btn.textContent='🔄 현재가 일괄 조회'; }
+}
+
+// 행 클릭 → 종목 상세 패널
+async function showStockDetail(i) {
+  var a = _acctRows[i];
+  if (!a.code) { showToast('종목코드를 먼저 입력하세요.', 'err'); return; }
+  var panel = document.getElementById('stock-detail-panel');
+  var title = document.getElementById('sdp-title');
+  if (title) title.textContent = (a.stockName||a.code) + ' 상세';
+  // 패널 초기화 및 표시
+  var setEl = function(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; };
+  setEl('sdp-price','조회 중...'); setEl('sdp-change',''); setEl('sdp-myrate','');
+  setEl('sdp-mypnl',''); setEl('sdp-ind','조회 중...'); setEl('sdp-for','조회 중...'); setEl('sdp-ins','조회 중...');
+  if (panel) { panel.style.display='block'; panel.scrollIntoView({behavior:'smooth',block:'start'}); }
+
+  // 현재가 + 수급 동시 조회
+  try {
+    var [priceRes, sdRes] = await Promise.all([
+      fetch('/api/kis-price',      {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:[{code:a.code,market:'J'}]})}),
+      fetch('/api/supply-demand',  {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codes:[a.code]})})
+    ]);
+    // 현재가
+    if (priceRes.ok) {
+      var pd = await priceRes.json();
+      var p  = pd['J:'+a.code];
+      if (p && p.price) {
+        _acctRows[i].price = p.price;
+        var cur = p.price, avg = parseFloat(a.avgBuy)||0, qty = parseFloat(a.qty)||0;
+        var pnl  = qty > 0 ? Math.round((cur-avg)*qty) : 0;
+        var rate = avg > 0 ? ((cur-avg)/avg*100) : 0;
+        var cls  = p.changeRate >= 0 ? 'up' : 'down';
+        var sym  = p.changeRate >= 0 ? '▲' : '▼';
+        setEl('sdp-price', cur.toLocaleString('ko-KR')+'원');
+        var chEl = document.getElementById('sdp-change');
+        if (chEl) { chEl.textContent = sym+' '+Math.abs(p.change).toLocaleString('ko-KR')+'원 ('+(p.changeRate>=0?'+':'')+p.changeRate.toFixed(2)+'%)'; chEl.className='mp-val '+cls; }
+        var rEl = document.getElementById('sdp-myrate');
+        if (rEl) { rEl.textContent = (rate>=0?'+':'')+rate.toFixed(1)+'%'; rEl.className='mp-val '+(rate>=0?'up':'down'); }
+        var pEl = document.getElementById('sdp-mypnl');
+        if (pEl) { pEl.textContent = (pnl>=0?'+':'')+fmt(pnl)+'원'; pEl.className='mp-val '+(pnl>=0?'up':'down'); }
+        recalcAcctRow(i);
+      }
+    }
+    // 수급
+    if (sdRes.ok) {
+      var sd = await sdRes.json();
+      var d  = sd[a.code] || {};
+      function fq(n) {
+        if (!n) return '-';
+        var sym2 = n>0?'▲':'▼', cls2 = n>0?'#1a8a4a':'#c0392b';
+        return '<span style="color:'+cls2+';font-weight:800">'+sym2+' '+Math.abs(n).toLocaleString('ko-KR')+'주</span>';
+      }
+      document.getElementById('sdp-ind').innerHTML = d.individual !== undefined ? fq(d.individual) : (d.error||'오류');
+      document.getElementById('sdp-for').innerHTML = d.foreign    !== undefined ? fq(d.foreign)    : (d.error||'오류');
+      document.getElementById('sdp-ins').innerHTML = d.institution!== undefined ? fq(d.institution): (d.error||'오류');
+    }
+  } catch(e) {
+    setEl('sdp-price', '조회 실패: '+e.message);
+  }
+}
+
 async function saveAcctSheet() {
   if (!mpData) mpData = JSON.parse(JSON.stringify(S_PORT));
-  mpData.accounts = _acctRows.filter(function(a){ return a.name && a.name.trim(); }).map(function(a){
-    var ev = parseFloat(a.eval)||0, pu = parseFloat(a.purchase)||0;
-    return { name:a.name, type:a.type||'위탁', eval:ev, purchase:pu,
+  mpData.accounts = _acctRows.filter(function(a){ return a.name||a.code||a.stockName; }).map(function(a){
+    var qty=parseFloat(a.qty)||0, avg=parseFloat(a.avgBuy)||0, cur=parseFloat(a.price)||0;
+    var ev = cur>0 ? Math.round(qty*cur) : (parseFloat(a.eval)||0);
+    var pu = qty>0&&avg>0 ? Math.round(qty*avg) : (parseFloat(a.purchase)||0);
+    return { name:a.name||'', type:a.type||'위탁', code:a.code||'', stockName:a.stockName||'',
+             qty:qty, avgBuy:avg, price:cur, eval:ev, purchase:pu,
              rate: pu>0 ? Math.round((ev-pu)/pu*10000)/100 : 0 };
   });
-  // 요약 데이터도 계좌 기준으로 재계산
-  var totEval = mpData.accounts.reduce(function(s,a){return s+a.eval;},0);
-  var totPu   = mpData.accounts.reduce(function(s,a){return s+a.purchase;},0);
+  // 요약 계산
+  var totEval = mpData.accounts.reduce(function(s,a){return s+(a.eval||0);},0);
+  var totPu   = mpData.accounts.reduce(function(s,a){return s+(a.purchase||0);},0);
   if (!mpData.summary) mpData.summary = {};
-  mpData.summary.total    = totEval;
-  mpData.summary.purchase = totPu;
-  mpData.summary.pnl      = totEval - totPu;
+  mpData.summary.total      = totEval;
+  mpData.summary.purchase   = totPu;
+  mpData.summary.pnl        = totEval - totPu;
   mpData.summary.returnRate = totPu>0 ? Math.round((totEval-totPu)/totPu*10000)/100 : 0;
   mpData.summary.numStocks  = mpData.accounts.length;
   mpData.updatedAt = new Date().toLocaleDateString('ko-KR');

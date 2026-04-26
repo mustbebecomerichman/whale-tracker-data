@@ -25,12 +25,15 @@ from pathlib import Path
 # ──────────────────────────────────────────────────────
 
 # GitHub Actions 환경변수 우선, 없으면 직접 입력값 사용
-DART_API_KEY   = os.environ.get("DART_API_KEY",   "4d6279b105f764c7893ccbc316d7ba2709271e3e")
+DART_API_KEY   = os.environ.get("DART_API_KEY",   "")   # 환경변수 또는 직접 입력
 DART_BASE_URL  = "https://opendart.fss.or.kr/api"
 
-KIS_APP_KEY    = "PSOn8tlms3kVwARGyz712rySYkS6oOu3vvT4"
-KIS_APP_SECRET = "5nx8Va73aehjB3UZlEXXEd/poGOEU0Mw7Tzyjb9UnndCWwDNE0X0CqTp3gM7bKeGftRjbCMGN94YEQkLfGfNde8PRdgdgDPujJJghYlSXBwuxpJUkN537byXC72vevXdYUGa3ysEGzPLKatojZSJ4zqhNCTEUysvJ0th36NF3B7tItXOltk="
-KIS_ACCOUNT_NO = "64635355"
+# KIS API 인증 정보 — 환경변수 우선, 없으면 로컬 직접 입력값 사용
+# ▶ GitHub Actions: GitHub Secrets에 등록
+# ▶ 로컬 실행: 아래 "" 안에 직접 값 입력 (절대 GitHub에 올리지 마세요)
+KIS_APP_KEY    = os.environ.get("KIS_APP_KEY",    "")   # 환경변수 또는 직접 입력
+KIS_APP_SECRET = os.environ.get("KIS_APP_SECRET", "")   # 환경변수 또는 직접 입력
+KIS_ACCOUNT_NO = os.environ.get("KIS_ACCOUNT_NO", "64635355")
 KIS_ACCOUNT_TYPE = "01"
 KIS_MOCK       = False
 KIS_BASE       = "https://openapivts.koreainvestment.com:29443" if KIS_MOCK else "https://openapi.koreainvestment.com:9443"
