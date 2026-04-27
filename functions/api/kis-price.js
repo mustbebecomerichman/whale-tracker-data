@@ -15,15 +15,23 @@ const CORS = {
 
 let _cachedToken = null, _tokenExpiry = 0;
 
+function getKisCreds(env) {
+  return {
+    appKey: env.KIS_APP_KEY || env.KIS_APPKEY || env.KIS_KEY || '',
+    appSecret: env.KIS_APP_SECRET || env.KIS_APPSECRET || env.KIS_SECRET || '',
+  };
+}
+
 async function getKisToken(env) {
   if (_cachedToken && Date.now() < _tokenExpiry) return _cachedToken;
+  const { appKey, appSecret } = getKisCreds(env);
   const base = env.KIS_MOCK === 'true'
     ? 'https://openapivts.koreainvestment.com:29443'
     : 'https://openapi.koreainvestment.com:9443';
   const res = await fetch(`${base}/oauth2/tokenP`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ grant_type:'client_credentials', appkey:env.KIS_APP_KEY, appsecret:env.KIS_APP_SECRET }),
+    body: JSON.stringify({ grant_type:'client_credentials', appkey:appKey, appsecret:appSecret }),
   });
   const data = await res.json();
   if (!data.access_token) throw new Error('KIS 토큰 발급 실패: ' + JSON.stringify(data));
@@ -33,12 +41,13 @@ async function getKisToken(env) {
 }
 
 async function fetchDomesticPrice(code, token, env) {
+  const { appKey, appSecret } = getKisCreds(env);
   const base = env.KIS_MOCK === 'true'
     ? 'https://openapivts.koreainvestment.com:29443'
     : 'https://openapi.koreainvestment.com:9443';
   const res = await fetch(
     `${base}/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=${code}`,
-    { headers: { 'Content-Type':'application/json', authorization:`Bearer ${token}`, appkey:env.KIS_APP_KEY, appsecret:env.KIS_APP_SECRET, tr_id:'FHKST01010100', custtype:'P' } }
+    { headers: { 'Content-Type':'application/json', authorization:`Bearer ${token}`, appkey:appKey, appsecret:appSecret, tr_id:'FHKST01010100', custtype:'P' } }
   );
   const data = await res.json();
   const out = data.output || {};
@@ -46,47 +55,84 @@ async function fetchDomesticPrice(code, token, env) {
   const change = parseInt(out.prdy_vrss) || 0;
   const changeRate = parseFloat(out.prdy_ctrt) || 0;
   const name = out.prdt_abrv_name || out.stck_kor_isnm || '';
-  if (!price) throw new Error(out.msg1 || '데이터 없음');
-  return { price, change, changeRate, name };
+  if (!price) throw new Error(data.msg1 || out.msg1 || `데이터 없음 (${data.rt_cd || res.status})`);
+  return { price, change, changeRate, name, source:'KIS', code };
 }
 
 async function fetchOverseasPrice(code, market, token, env) {
+  const { appKey, appSecret } = getKisCreds(env);
   const base = env.KIS_MOCK === 'true'
     ? 'https://openapivts.koreainvestment.com:29443'
     : 'https://openapi.koreainvestment.com:9443';
   const exch = { NAS:'NAS', NYS:'NYS', AMS:'AMS', HKS:'HKS', TSE:'TSE', SHS:'SHS' }[market] || 'NAS';
   const res = await fetch(
     `${base}/uapi/overseas-price/v1/quotations/price?AUTH=&EXCD=${exch}&SYMB=${code}`,
-    { headers: { 'Content-Type':'application/json', authorization:`Bearer ${token}`, appkey:env.KIS_APP_KEY, appsecret:env.KIS_APP_SECRET, tr_id:'HHDFS00000300', custtype:'P' } }
+    { headers: { 'Content-Type':'application/json', authorization:`Bearer ${token}`, appkey:appKey, appsecret:appSecret, tr_id:'HHDFS00000300', custtype:'P' } }
   );
   const data = await res.json();
   const out = data.output || {};
   const price = parseFloat(out.last) || 0;
   const change = parseFloat(out.diff) || 0;
   const changeRate = parseFloat(out.rate) || 0;
-  if (!price) throw new Error(out.msg1 || '데이터 없음');
-  return { price, change, changeRate };
+  if (!price) throw new Error(data.msg1 || out.msg1 || `데이터 없음 (${data.rt_cd || res.status})`);
+  return { price, change, changeRate, source:'KIS', code };
+}
+
+async function handlePriceRequest(request, env) {
+  const { appKey, appSecret } = getKisCreds(env);
+  if (!appKey || !appSecret)
+    throw new Error('KIS_APP_KEY/KIS_APPSECRET 환경변수가 설정되지 않았습니다.');
+
+  let items = [];
+  if (request.method === 'GET') {
+    const url = new URL(request.url);
+    const code = url.searchParams.get('code');
+    const market = url.searchParams.get('market') || 'J';
+    if (code) items = [{ code, market }];
+  } else {
+    const body = await request.json();
+    items = body.items;
+  }
+  if (!Array.isArray(items) || !items.length) throw new Error('items 배열 또는 ?code=005930 값이 필요합니다.');
+
+  const token = await getKisToken(env);
+  const results = {};
+  for (const item of items) {
+    const code = String(item.code || '').trim().toUpperCase();
+    const market = item.market || 'J';
+    const key = `${market}:${code}`;
+    try {
+      const isOverseas = ['NAS','NYS','AMS','HKS','TSE','SHS'].includes(market);
+      results[key] = isOverseas
+        ? await fetchOverseasPrice(code, market, token, env)
+        : await fetchDomesticPrice(code, token, env);
+    } catch(e) {
+      results[key] = { error: e.message, code, market };
+    }
+    await new Promise(r => setTimeout(r, 200));
+  }
+  return results;
 }
 
 export async function onRequestPost(context) {
   const { request, env } = context;
   try {
-    if (!env.KIS_APP_KEY || !env.KIS_APP_SECRET)
-      throw new Error('KIS_APP_KEY / KIS_APP_SECRET 환경변수가 설정되지 않았습니다.');
-    const { items } = await request.json();
-    if (!Array.isArray(items) || !items.length) throw new Error('items 배열이 필요합니다.');
-    const token = await getKisToken(env);
-    const results = {};
-    for (const item of items) {
-      const key = `${item.market}:${item.code}`;
-      try {
-        const isOverseas = ['NAS','NYS','AMS','HKS','TSE','SHS'].includes(item.market);
-        results[key] = isOverseas
-          ? await fetchOverseasPrice(item.code, item.market, token, env)
-          : await fetchDomesticPrice(item.code, token, env);
-      } catch(e) { results[key] = { error: e.message }; }
-      await new Promise(r => setTimeout(r, 200));
-    }
+    const results = await handlePriceRequest(request, env);
+    return new Response(JSON.stringify(results), {
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  } catch(e) {
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+export async function onRequestGet(context) {
+  const { request, env } = context;
+  try {
+    const results = await handlePriceRequest(request, env);
     return new Response(JSON.stringify(results), {
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });

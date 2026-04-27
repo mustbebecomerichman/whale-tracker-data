@@ -457,6 +457,59 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   #div-body td:nth-child(12)::before{content:"실수령액";}
   #div-body td:nth-child(13)::before{content:"메모";}
 }
+
+/* 거래내역: 두 줄 compact layout */
+#sheet-table{display:block;width:100%;}
+#sheet-table thead,#sheet-table tfoot{display:none;}
+#sheet-table tbody{display:grid;gap:10px;width:100%;}
+#sheet-table tbody tr{
+  display:grid!important;
+  grid-template-columns:34px repeat(4,minmax(72px,1fr)) minmax(120px,1.4fr) repeat(3,minmax(72px,1fr));
+  grid-template-areas:
+    "del date broker acct code name name note note"
+    "del qty avg price purchase eval pnl rate fee";
+  gap:6px;background:#fff;border:1px solid var(--border);border-radius:10px;
+  box-shadow:var(--shadow);padding:8px;margin-bottom:0;
+}
+#sheet-table tbody td{
+  display:flex!important;flex-direction:column;justify-content:center;gap:3px;
+  min-width:0!important;border:1px solid #edf0f3!important;border-radius:7px;
+  padding:5px!important;background:#fff;white-space:normal!important;
+}
+#sheet-table tbody td::before{font-size:.64rem;font-weight:700;color:var(--text2);line-height:1;}
+#sheet-table tbody td.row-num{grid-area:del;align-items:center;background:#fff8f8!important;cursor:pointer;}
+#sheet-table tbody td:nth-child(2){grid-area:date;}
+#sheet-table tbody td:nth-child(3){grid-area:broker;}
+#sheet-table tbody td:nth-child(4){grid-area:acct;}
+#sheet-table tbody td:nth-child(5){grid-area:code;}
+#sheet-table tbody td:nth-child(6){grid-area:name;}
+#sheet-table tbody td:nth-child(7){grid-area:qty;}
+#sheet-table tbody td:nth-child(8){grid-area:avg;}
+#sheet-table tbody td:nth-child(9){grid-area:price;}
+#sheet-table tbody td:nth-child(10){grid-area:purchase;}
+#sheet-table tbody td:nth-child(11){grid-area:eval;}
+#sheet-table tbody td:nth-child(12){grid-area:pnl;}
+#sheet-table tbody td:nth-child(13){grid-area:rate;}
+#sheet-table tbody td:nth-child(14){grid-area:fee;}
+#sheet-table tbody td:nth-child(15){grid-area:note;}
+#sheet-table .sheet-input{width:100%!important;min-width:0!important;max-width:100%!important;padding:5px 6px;font-size:.78rem;}
+
+@media(max-width:720px){
+  #sheet-table tbody tr{
+    grid-template-columns:34px 1fr 1fr;
+    grid-template-areas:
+      "del date code"
+      "del broker acct"
+      "name name name"
+      "qty avg price"
+      "purchase eval pnl"
+      "rate fee note";
+    gap:6px;padding:8px;
+  }
+  #sheet-table tbody td{display:flex!important;}
+  #sheet-table tbody td.row-num{grid-row:1 / 3;}
+  #sheet-table .sheet-input{font-size:.78rem;padding:6px 5px;}
+}
 </style>
 </head>
 <body>
@@ -655,7 +708,8 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   <!-- 현재가 시세판 -->
   <div class="section">
     <div class="section-title">
-      <div class="section-title-left">📈 보유 종목 현재가 <span class="badge" id="price-last-update">조회 전</span></div>
+      <div class="section-title-left">📈 보유 종목 현재가 <span class="badge" id="price-last-update">조회 전</span>
+        <span class="badge" id="price-api-status">API 대기</span></div>
     </div>
     <div class="price-grid" id="price-grid">
       <div class="price-loading">🔄 시세 조회 버튼을 눌러주세요</div>
@@ -1673,6 +1727,7 @@ async function fetchAllPrices(){
     const now=new Date();
     document.getElementById('price-last-update').textContent=now.getHours()+':'+String(now.getMinutes()).padStart(2,'0')+' 업데이트';
   }catch(e){
+    setPriceApiStatus('API 오류', 'err');
     grid.innerHTML=`<div class="price-loading" style="color:var(--down)">⚠ ${e.message}<br><small>Cloudflare Pages 환경변수(KIS_APP_KEY, KIS_APP_SECRET) 확인 필요</small></div>`;
   }
   _priceBusy=false;
@@ -1897,18 +1952,31 @@ async function fetchQuoteForCode(code){
   const key=market+':'+clean;
   const cached=quoteCache[key];
   if(cached && Date.now()-cached.at<60_000)return cached.data;
+  setPriceApiStatus('조회 중', 'neutral');
   const res=await fetch('/api/kis-price',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({items:[{code:clean,market}]})
   });
-  if(!res.ok)throw new Error('HTTP '+res.status);
-  const data=await res.json();
+  const data=await safeJson(res);
+  if(!res.ok)throw new Error(data?.error || `HTTP ${res.status}`);
   const quote=normalizeQuote(extractQuote(data,key,clean),clean,market);
   if(!quote || quote.error)throw new Error(quote?.error||'현재가 데이터 없음');
   if(!quote.price)throw new Error('현재가 값 없음');
   quoteCache[key]={at:Date.now(),data:quote};
+  setPriceApiStatus('API 정상', 'ok');
   return quoteCache[key].data;
+}
+async function safeJson(res){
+  try{return await res.json();}catch(e){return null;}
+}
+function setPriceApiStatus(text,type='neutral'){
+  const el=document.getElementById('price-api-status');
+  if(!el)return;
+  el.textContent=text;
+  el.style.color=type==='ok'?'#1a8a4a':type==='err'?'#c0392b':'var(--text2)';
+  el.style.borderColor=type==='ok'?'#abe5c3':type==='err'?'#ffbfbf':'var(--border)';
+  el.style.background=type==='ok'?'#f0fff6':type==='err'?'#fff5f5':'var(--bg3)';
 }
 function extractQuote(data,key,code){
   if(!data)return null;
@@ -1956,6 +2024,7 @@ async function handleSheetCodeInput(rowIdx, codeInput){
     schedulePortfolioAutosave(false);
     showToast(`✅ ${code} 현재가 ${fmt(q.price)}원 반영`, 'ok');
   }catch(e){
+    setPriceApiStatus('API 오류', 'err');
     showToast(`현재가 조회 실패: ${e.message}`, 'err');
   }
 }
@@ -1984,6 +2053,7 @@ async function handleAcctCodeInput(acctIdx, codeInput){
     schedulePortfolioAutosave(false);
     showToast(`✅ ${code} 현재가 ${fmt(q.price)}원 반영`, 'ok');
   }catch(e){
+    setPriceApiStatus('API 오류', 'err');
     showToast(`현재가 조회 실패: ${e.message}`, 'err');
   }
 }
@@ -2216,6 +2286,7 @@ async function fetchAndUpdateAcctPrices() {
     schedulePortfolioAutosave(true,120);
     showToast("✅ 현재가 업데이트 완료!", "ok");
   } catch(e) {
+    setPriceApiStatus('API 오류', 'err');
     showToast("현재가 조회 실패: " + e.message, "err");
   }
 }
