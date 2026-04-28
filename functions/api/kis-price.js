@@ -137,25 +137,23 @@ async function fetchOverseasPrice(code, market, token, env) {
   return { price, change, changeRate, name, source:'KIS', code, market:exch };
 }
 
-async function fetchYahooQuote(code) {
-  const res = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(code)}`, {
+async function fetchStooqQuote(code) {
+  const symbol = `${String(code || '').trim().toLowerCase().replace('.', '-')}.us`;
+  const res = await fetch(`https://stooq.com/q/l/?s=${encodeURIComponent(symbol)}&f=sd2t2ohlcvn&h&e=json`, {
     headers: { 'User-Agent': 'WhaleTrackerPro/1.0' },
   });
   const data = await res.json();
-  const q = data?.quoteResponse?.result?.[0] || {};
-  const price = Number(q.regularMarketPrice || 0);
-  if (!price) throw new Error('Yahoo 해외 현재가 데이터 없음');
-  const prev = Number(q.regularMarketPreviousClose || 0);
-  const change = Number(q.regularMarketChange ?? (prev ? price - prev : 0));
-  const changeRate = Number(q.regularMarketChangePercent ?? (prev ? change / prev * 100 : 0));
+  const q = data?.symbols?.[0] || {};
+  const price = Number(q.close || 0);
+  if (!q.name && !price) throw new Error('Stooq 해외 종목 데이터 없음');
   return {
     price,
-    change,
-    changeRate,
-    name: q.longName || q.shortName || code,
-    source: 'Yahoo',
+    change: 0,
+    changeRate: 0,
+    name: q.name || code,
+    source: 'Stooq',
     code,
-    market: q.fullExchangeName || q.exchange || 'US',
+    market: 'US',
   };
 }
 
@@ -168,8 +166,8 @@ async function fetchOverseasPriceWithFallback(code, market, token, env) {
       const quote = await fetchOverseasPrice(code, exch, token, env);
       if (!quote.name) {
         try {
-          const yahoo = await fetchYahooQuote(code);
-          return { ...quote, name: yahoo.name || quote.name, market: quote.market || yahoo.market };
+          const stooq = await fetchStooqQuote(code);
+          return { ...quote, name: stooq.name || quote.name, market: quote.market || stooq.market };
         } catch (e) {}
       }
       return quote;
@@ -178,7 +176,7 @@ async function fetchOverseasPriceWithFallback(code, market, token, env) {
     }
   }
   try {
-    return await fetchYahooQuote(code);
+    return await fetchStooqQuote(code);
   } catch (e) {
     throw lastError || e || new Error('해외 현재가 데이터 없음');
   }
