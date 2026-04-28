@@ -1,0 +1,100 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function primaryAdmin() {
+      return signedIn()
+        && request.auth.token.email == 'smmoon2030@gmail.com';
+    }
+
+    function adminByClaim() {
+      return signedIn()
+        && request.auth.token.admin == true;
+    }
+
+    function adminByDoc() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return primaryAdmin() || adminByClaim() || adminByDoc();
+    }
+
+    function approvedByEmail() {
+      return signedIn()
+        && request.auth.token.email is string
+        && exists(/databases/$(database)/documents/approved_users/$(request.auth.token.email));
+    }
+
+    function approvedByUid() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/approved_uids/$(request.auth.uid));
+    }
+
+    function approvedByClaim() {
+      return signedIn()
+        && request.auth.token.approved == true;
+    }
+
+    function isApproved() {
+      return isAdmin()
+        || approvedByClaim()
+        || approvedByUid()
+        || approvedByEmail();
+    }
+
+    function ownsProfile(uid) {
+      return signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email;
+    }
+
+    match /portfolio_data/{uid} {
+      allow read, write: if signedIn() && isApproved() && uid == request.auth.uid;
+    }
+
+    match /users/{uid} {
+      allow get: if isAdmin() || (signedIn() && uid == request.auth.uid);
+      allow list: if isAdmin();
+      allow create, update: if isApproved() && ownsProfile(uid);
+      allow delete: if isAdmin();
+    }
+
+    match /approved_users/{email} {
+      allow get: if isAdmin()
+        || (signedIn() && request.auth.token.email == email);
+      allow list, create, update, delete: if isAdmin();
+    }
+
+    match /approved_uids/{uid} {
+      allow get: if isAdmin()
+        || (signedIn() && uid == request.auth.uid);
+      allow list, create, update, delete: if isAdmin();
+    }
+
+    match /admins/{uid} {
+      allow get: if signedIn() && (uid == request.auth.uid || isAdmin());
+      allow list: if primaryAdmin() || adminByClaim();
+      allow create, update, delete: if primaryAdmin() || adminByClaim();
+    }
+
+    match /whale_data/{docId} {
+      allow read: if signedIn() && isApproved();
+      allow write: if isAdmin();
+    }
+
+    match /changelog/{docId} {
+      allow read: if signedIn() && isApproved();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

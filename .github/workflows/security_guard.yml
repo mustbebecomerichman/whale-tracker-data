@@ -1,0 +1,48 @@
+name: Security Guard
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'index.html'
+      - 'functions/**'
+      - 'firestore.rules'
+      - 'firebase.json'
+      - '.github/workflows/security_guard.yml'
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'functions/**'
+      - 'firestore.rules'
+      - 'firebase.json'
+      - '.github/workflows/security_guard.yml'
+  workflow_dispatch:
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Block unauthenticated browser API calls
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -nE "fetch\(['\"]\/api\/" index.html; then
+            echo "Browser API calls must use apiFetch so Firebase ID tokens are attached." >&2
+            exit 1
+          fi
+
+      - name: Require API auth guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in functions/api/*.js; do
+            if ! grep -q "requireFirebaseUser" "$file"; then
+              echo "$file is missing requireFirebaseUser." >&2
+              exit 1
+            fi
+          done

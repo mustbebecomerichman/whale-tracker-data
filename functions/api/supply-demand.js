@@ -1,3 +1,5 @@
+import { requireFirebaseUser } from '../_shared/firebase-auth.js';
+
 /**
  * Cloudflare Pages Function - KIS 투자자별 수급 현황
  * POST /api/supply-demand
@@ -8,7 +10,7 @@
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 let _cachedToken = null, _tokenExpiry = 0;
@@ -140,6 +142,8 @@ export async function onRequestPost(context) {
   const { request, env } = context;
 
   try {
+    const auth = await requireFirebaseUser(request);
+    if (!auth.ok) return auth.response;
     const { appKey, appSecret } = getKisCreds(env);
     if (!appKey || !appSecret) {
       throw new Error('KIS_APP_KEY / KIS_APP_SECRET 환경변수가 설정되지 않았습니다.');

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-28-auto-fx-v1"/>
+<meta name="whale-tracker-version" content="2026-04-28-security-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -1163,7 +1163,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.NONE)
 async function handleAuthState(u){
   const explicit=sessionStorage.getItem(AUTH_SESSION_KEY)==='1';
   if(u && explicit){
-    me = u; afterLogin(u);
+    me = u;
+    await afterLogin(u);
   } else {
     me = null;
     sessionStorage.removeItem(AUTH_SESSION_KEY);
@@ -1175,9 +1176,55 @@ async function handleAuthState(u){
 }
 
 async function approved(email){
-  return true;
+  const u=auth.currentUser;
+  if(!u||!email)return false;
+  if(await isAdminUser(u))return true;
+  try{
+    const uidGrant=await db.collection('approved_uids').doc(u.uid).get();
+    if(uidGrant.exists)return true;
+  }catch(e){}
+  try{
+    const s=await db.collection('approved_users').doc(emailKey(email)).get();
+    return s.exists;
+  }catch(e){
+    return false;
+  }
 }
-function ekey(e){ return e.replace(/\./g,'__dot__').replace(/@/g,'__at__'); }
+function emailKey(e){ return (e||'').trim().toLowerCase(); }
+function ekey(e){ return emailKey(e).replace(/\./g,'__dot__').replace(/@/g,'__at__'); }
+async function isAdminUser(u=auth.currentUser){
+  if(!u)return false;
+  if(u.email===ADMIN)return true;
+  try{
+    const token=await u.getIdTokenResult(true);
+    if(token?.claims?.admin===true)return true;
+  }catch(e){}
+  try{
+    const s=await db.collection('admins').doc(u.uid).get();
+    return s.exists;
+  }catch(e){
+    return false;
+  }
+}
+async function authHeaders(headers={}){
+  const u=auth.currentUser;
+  if(!u)throw new Error('로그인이 필요합니다.');
+  const token=await u.getIdToken();
+  const merged=new Headers(headers);
+  merged.set('Authorization',`Bearer ${token}`);
+  return merged;
+}
+async function apiFetch(url, options={}){
+  const headers=await authHeaders(options.headers||{});
+  const res=await fetch(url,{...options,headers});
+  if(res.status===401){
+    showToast('인증이 만료되었습니다. 다시 로그인하세요.','err');
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    try{await auth.signOut();}catch(e){}
+    throw new Error('API 인증 실패');
+  }
+  return res;
+}
 
 // ── 인증 ──────────────────────────────────────────────
 function show(which){
@@ -1237,7 +1284,6 @@ async function doSignup(){
   try{
     const c=await auth.createUserWithEmailAndPassword(email,pw);
     await c.user.updateProfile({displayName:name});
-    await db.collection('users').doc(ekey(email)).set({name,email,joinedAt:firebase.firestore.FieldValue.serverTimestamp()});
     setAuthMsg("✅ 가입 완료! 로그인됩니다.","success");
   }catch(e){
     if(e.code==='auth/email-already-in-use'){
@@ -1266,13 +1312,23 @@ function setAuthMsg(msg,type){
 // ── 로그인 후처리 ──────────────────────────────────────
 async function afterLogin(u){
   mpData=null; // ✅ 계정 전환 시 이전 사용자 데이터 초기화
+  const allowed=await approved(u.email);
+  if(!allowed){
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    me=null;
+    await auth.signOut();
+    show('auth');
+    setAuthMsg('초대된 사용자만 이용할 수 있습니다. 관리자에게 승인 요청을 해주세요.', 'error');
+    return;
+  }
   document.getElementById('user-display').textContent=u.displayName||u.email.split('@')[0];
-  const isAdm=u.email===ADMIN;
+  const isAdm=await isAdminUser(u);
   document.getElementById('admin-nav-btn').style.display=isAdm?'inline-block':'none';
   document.getElementById('admin-badge').style.display=isAdm?'inline-block':'none';
   show('app');
   try{
-    await db.collection('users').doc(ekey(u.email)).set({
+    await db.collection('users').doc(u.uid).set({
+      uid:u.uid,
       email:u.email,
       name:u.displayName||u.email.split('@')[0],
       lastLoginAt:firebase.firestore.FieldValue.serverTimestamp()
@@ -2420,7 +2476,7 @@ async function fetchAllPrices(){
   if(!holdings.length){grid.innerHTML='<div class="price-loading">거래 내역에 종목을 입력하면 현재가가 표시됩니다.</div>';_priceBusy=false;return;}
   grid.innerHTML=holdings.map(h=>`<div class="price-card" id="pc-${h.code}" onclick="showHoldingDetail('${h.code}')"><div class="price-card-name">${h.name}</div><div class="price-card-code">${h.code}</div><div class="price-card-price" style="color:var(--text2)">조회 중...</div></div>`).join('');
   try{
-    const res=await fetch('/api/kis-price',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:holdings})});
+    const res=await apiFetch('/api/kis-price',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:holdings})});
     if(!res.ok)throw new Error('HTTP '+res.status);
     const prices=await res.json();
     const supplies=await fetchSupplyDemandMap(holdings.filter(h=>!isOverseasCode(h.code)).map(h=>h.code));
@@ -2453,7 +2509,7 @@ async function fetchSupplyDemandMap(codes){
   if(!clean.length)return {};
   try{
     setPriceApiStatus('수급 조회 중', 'neutral');
-    const res=await fetch('/api/supply-demand',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codes:clean})});
+    const res=await apiFetch('/api/supply-demand',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codes:clean})});
     const data=await safeJson(res);
     if(!res.ok)return Object.fromEntries(clean.map(c=>[c,{error:data?.error||('HTTP '+res.status)}]));
     return data||{};
@@ -2471,7 +2527,7 @@ function supplyMiniHtml(s,code){
 async function fetchSupplyDemandForCode(code){
   if(isOverseasCode(code))return null;
   try{
-    const res=await fetch('/api/supply-demand',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codes:[normalizeStockCode(code)]})});
+    const res=await apiFetch('/api/supply-demand',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codes:[normalizeStockCode(code)]})});
     const data=await safeJson(res);
     if(!res.ok)return {error:data?.error||('HTTP '+res.status)};
     return data?.[normalizeStockCode(code)]||null;
@@ -2601,13 +2657,16 @@ async function addUser(){
   const email=document.getElementById('new-user-email').value.trim();
   const name=document.getElementById('new-user-name').value.trim();
   if(!email){showToast("이메일을 입력하세요","err");return;}
-  await db.collection('approved_users').doc(ekey(email)).set({email,name:name||email.split('@')[0],addedAt:firebase.firestore.FieldValue.serverTimestamp(),addedBy:me?.email});
+  await db.collection('approved_users').doc(emailKey(email)).set({email:emailKey(email),name:name||email.split('@')[0],addedAt:firebase.firestore.FieldValue.serverTimestamp(),addedBy:me?.email});
   document.getElementById('new-user-email').value='';document.getElementById('new-user-name').value='';
   showToast("✅ 추가 완료","ok");loadUserList();
 }
 async function removeUser(id,email){
   if(!confirm(`${email} 삭제?`))return;
-  await db.collection('approved_users').doc(id).delete();
+  const raw=emailKey(email);
+  const legacy=ekey(email);
+  const refs=[id,raw,legacy].filter((v,i,a)=>v&&a.indexOf(v)===i);
+  await Promise.all(refs.map(ref=>db.collection('approved_users').doc(ref).delete().catch(()=>{})));
   showToast("삭제 완료","ok");loadUserList();
 }
 function loadJSONFile(e){
@@ -2814,7 +2873,7 @@ async function loadAutoFxRate(force=false){
   _fxAutoLoading=true;
   setFxStatus('TTS 조회 중','neutral');
   try{
-    const res=await fetch('/api/fx-rate');
+    const res=await apiFetch('/api/fx-rate');
     const data=await safeJson(res);
     if(!res.ok || !data?.rate)throw new Error(data?.error||`HTTP ${res.status}`);
     const meta={
@@ -2993,7 +3052,7 @@ async function fetchQuoteForCode(code){
   const cached=quoteCache[key];
   if(cached && Date.now()-cached.at<60_000)return cached.data;
   setPriceApiStatus('조회 중', 'neutral');
-  const res=await fetch('/api/kis-price',{
+  const res=await apiFetch('/api/kis-price',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({items:[{code:clean,market}]})
@@ -3365,7 +3424,7 @@ async function fetchAndUpdateAcctPrices() {
   if (!holdings.length) { showToast("종목 코드를 먼저 입력하세요", "err"); return; }
   showToast("현재가 조회 중...", "ok");
   try {
-    const res = await fetch('/api/kis-price', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({items:holdings})});
+    const res = await apiFetch('/api/kis-price', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({items:holdings})});
     if (!res.ok) throw new Error('HTTP '+res.status);
     const prices = await res.json();
     _acctRows.forEach((a, i) => {

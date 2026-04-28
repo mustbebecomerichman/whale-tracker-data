@@ -1,3 +1,5 @@
+import { requireFirebaseUser } from '../_shared/firebase-auth.js';
+
 /**
  * Cloudflare Pages Function — KIS 현재가 조회
  * POST /api/kis-price
@@ -10,7 +12,7 @@
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 let _cachedToken = null, _tokenExpiry = 0;
@@ -246,6 +248,8 @@ async function handlePriceRequest(request, env) {
 export async function onRequestPost(context) {
   const { request, env } = context;
   try {
+    const auth = await requireFirebaseUser(request);
+    if (!auth.ok) return auth.response;
     const results = await handlePriceRequest(request, env);
     return new Response(JSON.stringify(results), {
       headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -261,6 +265,8 @@ export async function onRequestPost(context) {
 export async function onRequestGet(context) {
   const { request, env } = context;
   try {
+    const auth = await requireFirebaseUser(request);
+    if (!auth.ok) return auth.response;
     const results = await handlePriceRequest(request, env);
     return new Response(JSON.stringify(results), {
       headers: { ...CORS, 'Content-Type': 'application/json' },

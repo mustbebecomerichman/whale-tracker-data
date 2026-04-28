@@ -1,7 +1,9 @@
+import { requireFirebaseUser } from '../_shared/firebase-auth.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 const HANA_URL = 'https://www.kebhana.com/cms/rate/wpfxd651_01i_01.do';
@@ -118,6 +120,8 @@ export async function onRequest(context) {
   const { request } = context;
   if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
   if (request.method !== 'GET') return json({ error: 'GET only' }, 405);
+  const auth = await requireFirebaseUser(request);
+  if (!auth.ok) return auth.response;
 
   const today = ymd();
   if (memoryCache?.requestedDateRaw === today && Date.now() - memoryCache.cachedAt < 6 * 60 * 60 * 1000) {
