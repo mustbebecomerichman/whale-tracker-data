@@ -1,23 +1,8 @@
 /**
- * Cloudflare Pages Function — 투자자별 수급 현황
+ * Cloudflare Pages Function - KIS 투자자별 수급 현황
  * POST /api/supply-demand
  *
- * Request body: { codes: ["005930", "000660", ...] }  // 국내 종목 코드 배열
- *
- * Response:
- * {
- *   "005930": {
- *     individual:    -12345,   // 개인 순매수 수량 (음수 = 순매도)
- *     foreign:       +56789,   // 외국인 순매수 수량
- *     institution:   +11111,   // 기관 순매수 수량
- *     individualAmt: -1234,    // 개인 순매수 금액 (백만원)
- *     foreignAmt:    +5678,
- *     institutionAmt:+1111,
- *   }, ...
- * }
- *
- * 환경변수:
- *   KIS_APP_KEY, KIS_APP_SECRET
+ * Request body: { codes: ["005930", "000660"] }
  */
 
 const CORS = {
@@ -26,48 +11,100 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-let _cachedToken = null;
-let _tokenExpiry = 0;
+let _cachedToken = null, _tokenExpiry = 0;
+const TOKEN_KEY = 'kis-access-token-v1';
+const TOKEN_EXPIRY_BUFFER_MS = 10 * 60 * 1000;
 
-async function getKisToken(env) {
-  if (_cachedToken && Date.now() < _tokenExpiry) return _cachedToken;
+function getKisCreds(env) {
+  return {
+    appKey: env.KIS_APP_KEY || env.KIS_APPKEY || env.KIS_KEY || '',
+    appSecret: env.KIS_APP_SECRET || env.KIS_APPSECRET || env.KIS_SECRET || '',
+  };
+}
 
-  const mock = env.KIS_MOCK === 'true';
-  const base = mock
+function getTokenStore(env) {
+  return env.KIS_TOKEN_KV || env.WHALE_TOKEN_KV || env.WHALE_KV || null;
+}
+
+function kisBase(env) {
+  return env.KIS_MOCK === 'true'
     ? 'https://openapivts.koreainvestment.com:29443'
     : 'https://openapi.koreainvestment.com:9443';
+}
 
-  const res = await fetch(`${base}/oauth2/tokenP`, {
+function parseKisTokenExpiry(data) {
+  const expiries = [];
+  const sec = Number(data.expires_in || data.expires_in_sec || data.expires_in_second || 0);
+  if (sec > 0) expiries.push(Date.now() + sec * 1000);
+  const raw = data.access_token_token_expired || data.token_expired || data.expired_at || '';
+  if (raw) {
+    const parsed = Date.parse(String(raw).replace(' ', 'T'));
+    if (Number.isFinite(parsed)) expiries.push(parsed);
+  }
+  expiries.push(Date.now() + 23 * 60 * 60 * 1000 + 50 * 60 * 1000);
+  return Math.min(...expiries) - TOKEN_EXPIRY_BUFFER_MS;
+}
+
+async function readStoredToken(env) {
+  if (_cachedToken && Date.now() < _tokenExpiry) return _cachedToken;
+  const store = getTokenStore(env);
+  if (!store || typeof store.get !== 'function') return null;
+  try {
+    const saved = await store.get(TOKEN_KEY, 'json');
+    if (saved?.accessToken && saved?.expiresAt && Date.now() < saved.expiresAt) {
+      _cachedToken = saved.accessToken;
+      _tokenExpiry = saved.expiresAt;
+      return _cachedToken;
+    }
+  } catch (e) {
+    console.warn('KIS token KV read failed:', e.message);
+  }
+  return null;
+}
+
+async function writeStoredToken(env, accessToken, expiresAt) {
+  _cachedToken = accessToken;
+  _tokenExpiry = expiresAt;
+  const store = getTokenStore(env);
+  if (!store || typeof store.put !== 'function') return;
+  try {
+    const ttl = Math.max(60, Math.floor((expiresAt - Date.now()) / 1000));
+    await store.put(TOKEN_KEY, JSON.stringify({ accessToken, expiresAt }), { expirationTtl: ttl });
+  } catch (e) {
+    console.warn('KIS token KV write failed:', e.message);
+  }
+}
+
+async function getKisToken(env) {
+  const stored = await readStoredToken(env);
+  if (stored) return stored;
+
+  const { appKey, appSecret } = getKisCreds(env);
+  const res = await fetch(`${kisBase(env)}/oauth2/tokenP`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       grant_type: 'client_credentials',
-      appkey: env.KIS_APP_KEY,
-      appsecret: env.KIS_APP_SECRET,
+      appkey: appKey,
+      appsecret: appSecret,
     }),
   });
   const data = await res.json();
-  if (!data.access_token) throw new Error('KIS 토큰 발급 실패');
-  _cachedToken = data.access_token;
-  _tokenExpiry = Date.now() + 6 * 60 * 60 * 1000;
+  if (!data.access_token) throw new Error('KIS 토큰 발급 실패: ' + JSON.stringify(data));
+  await writeStoredToken(env, data.access_token, parseKisTokenExpiry(data));
   return _cachedToken;
 }
 
 async function fetchInvestorData(code, token, env) {
-  const mock = env.KIS_MOCK === 'true';
-  const base = mock
-    ? 'https://openapivts.koreainvestment.com:29443'
-    : 'https://openapi.koreainvestment.com:9443';
-
-  // 투자자별 매매 동향 (당일)
+  const { appKey, appSecret } = getKisCreds(env);
   const res = await fetch(
-    `${base}/uapi/domestic-stock/v1/quotations/inquire-investor?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=${code}`,
+    `${kisBase(env)}/uapi/domestic-stock/v1/quotations/inquire-investor?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=${code}`,
     {
       headers: {
         'Content-Type': 'application/json',
         authorization: `Bearer ${token}`,
-        appkey: env.KIS_APP_KEY,
-        appsecret: env.KIS_APP_SECRET,
+        appkey: appKey,
+        appsecret: appSecret,
         tr_id: 'FHKST01010900',
         custtype: 'P',
       },
@@ -75,34 +112,32 @@ async function fetchInvestorData(code, token, env) {
   );
   const data = await res.json();
   const out = data.output || {};
-
-  // 당일 기준 최신 데이터 (output 배열의 첫 번째 행)
   const row = Array.isArray(out) ? out[0] : out;
+  if (!row || (!row.prsn_ntby_qty && !row.frgn_ntby_qty && !row.orgn_ntby_qty)) {
+    if (data.msg1) throw new Error(data.msg1);
+  }
 
   return {
-    individual:     parseInt(row.prsn_ntby_qty      || row.ind_ntby_qty  || 0),
-    foreign:        parseInt(row.frgn_ntby_qty       || row.for_ntby_qty  || 0),
-    institution:    parseInt(row.orgn_ntby_qty       || row.ins_ntby_qty  || 0),
-    financialInst:  parseInt(row.fnnc_ntby_qty       || 0),  // 금융투자
-    insurance:      parseInt(row.insn_ntby_qty       || 0),  // 보험
-    trust:          parseInt(row.mrkt_ntby_qty       || 0),  // 투신
-    individualAmt:  parseInt(row.prsn_ntby_tr_pbmn   || row.ind_ntby_tr_pbmn || 0),  // 백만원
-    foreignAmt:     parseInt(row.frgn_ntby_tr_pbmn   || row.for_ntby_tr_pbmn || 0),
-    institutionAmt: parseInt(row.orgn_ntby_tr_pbmn   || row.ins_ntby_tr_pbmn || 0),
-    date:           row.stck_bsop_date || '',
+    individual: parseInt(row.prsn_ntby_qty || row.ind_ntby_qty || 0, 10),
+    foreign: parseInt(row.frgn_ntby_qty || row.for_ntby_qty || 0, 10),
+    institution: parseInt(row.orgn_ntby_qty || row.ins_ntby_qty || 0, 10),
+    financialInst: parseInt(row.fnnc_ntby_qty || 0, 10),
+    insurance: parseInt(row.insn_ntby_qty || 0, 10),
+    trust: parseInt(row.mrkt_ntby_qty || 0, 10),
+    individualAmt: parseInt(row.prsn_ntby_tr_pbmn || row.ind_ntby_tr_pbmn || 0, 10),
+    foreignAmt: parseInt(row.frgn_ntby_tr_pbmn || row.for_ntby_tr_pbmn || 0, 10),
+    institutionAmt: parseInt(row.orgn_ntby_tr_pbmn || row.ins_ntby_tr_pbmn || 0, 10),
+    date: row.stck_bsop_date || '',
   };
 }
 
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { headers: CORS });
-  }
-
   try {
-    if (!env.KIS_APP_KEY || !env.KIS_APP_SECRET) {
-      throw new Error('KIS_APP_KEY / KIS_APP_SECRET 환경변수가 없습니다.');
+    const { appKey, appSecret } = getKisCreds(env);
+    if (!appKey || !appSecret) {
+      throw new Error('KIS_APP_KEY / KIS_APP_SECRET 환경변수가 설정되지 않았습니다.');
     }
 
     const { codes } = await request.json();
@@ -113,7 +148,12 @@ export async function onRequestPost(context) {
     const token = await getKisToken(env);
     const results = {};
 
-    for (const code of codes) {
+    for (const rawCode of codes) {
+      const code = String(rawCode || '').trim().toUpperCase();
+      if (!/^\d{6}$/.test(code)) {
+        results[code] = { error: '국내 6자리 종목코드만 수급 조회를 지원합니다.' };
+        continue;
+      }
       try {
         results[code] = await fetchInvestorData(code, token, env);
       } catch (e) {
