@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-28-us-portfolio-v6"/>
+<meta name="whale-tracker-version" content="2026-04-28-instant-quote-order-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -236,8 +236,14 @@ td.name{font-weight:600;color:var(--text);}
 .sheet-table thead th.calc-col{background:#E8F4FD;color:var(--accent4);}
 .sheet-table tbody tr:hover td{background:#F9FFFC;}
 .sheet-table tbody td{border:1px solid #EDEFF2;padding:0;min-width:60px;}
-.sheet-table tbody td.row-num{background:#F8F9FA;text-align:center;color:var(--text2);font-size:.72rem;padding:0 8px;width:36px;cursor:pointer;}
-.sheet-table tbody td.row-num:hover{background:#FFE8E8;}
+.sheet-table tbody td.row-num{background:#F8F9FA;text-align:center;color:var(--text2);font-size:.72rem;padding:3px 5px;width:50px;cursor:default;}
+.sheet-table tbody td.row-num:hover{background:#F8F9FA;}
+.row-tools{display:inline-flex;align-items:center;justify-content:center;gap:3px;vertical-align:middle;}
+.row-move,.row-del{width:21px;height:21px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text2);font-size:.67rem;line-height:1;cursor:pointer;transition:all .15s;}
+.row-move:hover{border-color:var(--accent);color:var(--accent);background:#f0fff6;}
+.row-del:hover{border-color:#ffbfbf;color:var(--down);background:#fff5f5;}
+.rank-tools{display:flex;align-items:center;justify-content:space-between;gap:7px;min-width:62px;}
+.row-rank-index{display:inline-block;min-width:1.4em;}
 .sheet-input{
   display:block;width:100%;border:none;background:transparent;
   padding:7px 8px;font-size:.83rem;color:var(--text);outline:none;
@@ -442,7 +448,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     font-size:.72rem;font-weight:700;color:var(--text2);line-height:1.2;
   }
   .sheet-table tbody td.row-num{display:flex;justify-content:flex-end;width:100%;padding:4px 6px;background:#fff;}
-  .sheet-table tbody td.row-num::before{content:"삭제";margin-right:auto;}
+  .sheet-table tbody td.row-num::before{content:"정렬";margin-right:auto;}
   .sheet-input,select.sheet-input{
     width:100%!important;min-width:0!important;max-width:100%!important;
     white-space:normal;font-size:.82rem;padding:8px 6px;
@@ -547,7 +553,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   padding:5px!important;background:#fff;white-space:normal!important;
 }
 #sheet-table tbody td::before{font-size:.64rem;font-weight:700;color:var(--text2);line-height:1;}
-#sheet-table tbody td.row-num{grid-area:del;align-items:center;background:#fff8f8!important;cursor:pointer;}
+#sheet-table tbody td.row-num{grid-area:del;align-items:center;background:#fff8f8!important;cursor:default;}
 #sheet-table tbody td:nth-child(2){grid-area:date;}
 #sheet-table tbody td:nth-child(3){grid-area:broker;}
 #sheet-table tbody td:nth-child(4){grid-area:acct;}
@@ -1140,14 +1146,23 @@ let auth=null, db=null, me=null;
 firebase.initializeApp(FB);
 auth = firebase.auth();
 db   = firebase.firestore();
-auth.setPersistence(firebase.auth.Auth.Persistence.NONE).catch(()=>{});
-auth.onAuthStateChanged(async u=>{
-  if(u){
+const AUTH_SESSION_KEY='whaleTrackerExplicitLogin';
+auth.setPersistence(firebase.auth.Auth.Persistence.NONE)
+  .then(()=>auth.onAuthStateChanged(handleAuthState))
+  .catch(()=>auth.onAuthStateChanged(handleAuthState));
+async function handleAuthState(u){
+  const explicit=sessionStorage.getItem(AUTH_SESSION_KEY)==='1';
+  if(u && explicit){
     me = u; afterLogin(u);
   } else {
-    me = null; show('auth');
+    me = null;
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    if(u){
+      try{ await auth.signOut(); }catch(e){}
+    }
+    show('auth');
   }
-});
+}
 
 async function approved(email){
   return true;
@@ -1172,8 +1187,10 @@ async function doLogin(){
   if(!email||!pw){setAuthMsg("이메일과 비밀번호를 입력하세요.","error");return;}
   const btn=document.getElementById('login-btn');
   btn.disabled=true;btn.textContent='로그인 중...';
+  sessionStorage.setItem(AUTH_SESSION_KEY,'1');
   try{ await auth.signInWithEmailAndPassword(email,pw); }
   catch(e){
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
     const m={'auth/user-not-found':'등록되지 않은 이메일입니다.',
       'auth/wrong-password':'비밀번호가 올바르지 않습니다.',
       'auth/invalid-credential':'Firebase Authentication에 등록된 이메일/비밀번호를 확인하세요. 승인 절차는 사용하지 않습니다.',
@@ -1189,6 +1206,7 @@ async function doSignup(){
   if(!name||!email||!pw){setAuthMsg("모든 항목을 입력하세요.","error");return;}
   if(pw.length<6){setAuthMsg("비밀번호는 6자 이상이어야 합니다.","error");return;}
   const btn=document.getElementById('su-btn');btn.disabled=true;btn.textContent='가입 중...';
+  sessionStorage.setItem(AUTH_SESSION_KEY,'1');
   try{
     const c=await auth.createUserWithEmailAndPassword(email,pw);
     await c.user.updateProfile({displayName:name});
@@ -1197,18 +1215,21 @@ async function doSignup(){
   }catch(e){
     if(e.code==='auth/email-already-in-use'){
       try{
+        sessionStorage.setItem(AUTH_SESSION_KEY,'1');
         await auth.signInWithEmailAndPassword(email,pw);
         return;
       }catch(loginErr){
+        sessionStorage.removeItem(AUTH_SESSION_KEY);
         setAuthMsg('이미 가입된 이메일입니다. 기존 비밀번호로 로그인하세요. 승인 절차는 사용하지 않습니다.',"error");
       }
     }else{
+      sessionStorage.removeItem(AUTH_SESSION_KEY);
       setAuthMsg('가입 실패: '+e.message,"error");
     }
     btn.disabled=false;btn.textContent='회원가입';
   }
 }
-async function doLogout(){ await auth.signOut(); }
+async function doLogout(){ sessionStorage.removeItem(AUTH_SESSION_KEY); await auth.signOut(); }
 function setAuthMsg(msg,type){
   const el=document.getElementById('auth-msg');
   el.className=type==='error'?'auth-error':'auth-success';
@@ -1512,6 +1533,57 @@ function inferStockSector(name){
   if(/화학|정유|S-Oil|SK이노베이션/.test(name))return '화학/에너지';
   return '기타';
 }
+function rowMoveButtons(kind,idx,extra=''){
+  return `<div class="row-tools">${extra}
+    <button type="button" class="row-move" title="Move up" onclick="event.stopPropagation();moveTableRow('${kind}',${idx},-1)">&#9650;</button>
+    <button type="button" class="row-move" title="Move down" onclick="event.stopPropagation();moveTableRow('${kind}',${idx},1)">&#9660;</button>
+  </div>`;
+}
+function displayMoveButtons(){
+  return `<div class="row-tools">
+    <button type="button" class="row-move" title="Move up" onclick="moveRenderedRow(this,-1)">&#9650;</button>
+    <button type="button" class="row-move" title="Move down" onclick="moveRenderedRow(this,1)">&#9660;</button>
+  </div>`;
+}
+function rankedCell(n){
+  return `<div class="rank-tools"><span class="row-rank-index">${n}</span>${displayMoveButtons()}</div>`;
+}
+function nameMoveCell(name){
+  return `<div class="rank-tools"><span>${name}</span>${displayMoveButtons()}</div>`;
+}
+function moveRenderedRow(btn,dir){
+  const tr=btn.closest('tr');
+  const body=tr?.parentElement;
+  if(!tr||!body)return;
+  if(dir<0 && tr.previousElementSibling)body.insertBefore(tr,tr.previousElementSibling);
+  if(dir>0 && tr.nextElementSibling)body.insertBefore(tr.nextElementSibling,tr);
+  body.querySelectorAll('.row-rank-index').forEach((el,i)=>el.textContent=i+1);
+}
+function reorderList(list,idx,dir){
+  idx=Number(idx);
+  const next=idx+dir;
+  if(!Array.isArray(list)||idx<0||next<0||idx>=list.length||next>=list.length)return false;
+  [list[idx],list[next]]=[list[next],list[idx]];
+  return true;
+}
+function moveTableRow(kind,idx,dir){
+  if(kind==='sheet' && reorderList(_sheetRows,idx,dir)){
+    drawSheetRows(_sheetRows);
+    syncSheetRowsToMpData();
+    schedulePortfolioAutosave(true,120);
+  }
+  if(kind==='acct' && reorderList(_acctRows,idx,dir)){
+    drawAcctRows(_acctRows);
+    syncAcctRowsToMpData();
+    updateAcctSummaryBar();
+    schedulePortfolioAutosave(true,120);
+  }
+  if(kind==='div' && reorderList(_divRows,idx,dir)){
+    drawDivRows(_divRows);
+    syncDivRowsToMpData();
+    schedulePortfolioAutosave(true,120);
+  }
+}
 function renderQuant(rows=_quantAll){
   refreshQuantSectors();
   const scored=scoreQuantRows(rows,_quantFilter,_quantAll);
@@ -1543,7 +1615,7 @@ function renderQuant(rows=_quantAll){
   }
   if(!tbody)return;
   tbody.innerHTML=scored.map((d,i)=>`
-    <tr><td class="neutral">${i+1}</td>
+    <tr><td class="neutral">${rankedCell(i+1)}</td>
     <td><span class="quant-score ${scoreClass(d.score)}">${d.score}</span></td>
     <td class="ticker">${d.code}</td><td class="name">${d.name}</td>
     <td><span class="tag">${d.sector}</span></td><td>${quantSignal(d.score)}</td>
@@ -1603,7 +1675,7 @@ function renderNPS(data){
     return;
   }
   tbody.innerHTML=data.map((d,i)=>`
-    <tr><td class="neutral">${i+1}</td><td class="ticker">${d.code}</td>
+    <tr><td class="neutral">${rankedCell(i+1)}</td><td class="ticker">${d.code}</td>
     <td class="name">${d.name}</td><td><span class="tag">${d.market}</span></td>
     <td>${d.shares}</td>
     <td>${(d.pct||0).toFixed(2)}%<div class="pct-bar"><div class="pct-bar-fill" style="width:${Math.min((d.pct||0)/15*100,100)}%"></div></div></td>
@@ -1644,7 +1716,7 @@ function renderOVS(data){
     return;
   }
   tbody.innerHTML=data.map((d,i)=>`
-    <tr><td class="neutral">${i+1}</td><td class="ticker">${d.ticker}</td>
+    <tr><td class="neutral">${rankedCell(i+1)}</td><td class="ticker">${d.ticker}</td>
     <td class="name">${d.name}</td><td><span class="tag">${d.exch}</span></td>
     <td>${d.shares}</td><td>${d.value}</td><td>${(d.weight||0).toFixed(2)}%</td>
     <td>${trendTag(d.trend,d.delta)}</td></tr>`).join('');
@@ -1686,7 +1758,7 @@ function renderA10(data){
     return;
   }
   tbody.innerHTML=data.map(d=>`
-    <tr><td class="name">${d.name}</td><td>${d.holder}</td><td><strong>${d.pct}%</strong></td>
+    <tr><td class="name">${nameMoveCell(d.name)}</td><td>${d.holder}</td><td><strong>${d.pct}%</strong></td>
     <td class="${d.delta!==0?(d.delta>0?'up-chip':'down-chip'):'neutral'}">${d.delta===0?'-':sgn(d.delta)+d.delta+'%p'}</td>
     <td class="neutral">${d.date}</td><td><span class="tag">${d.note}</span></td></tr>`).join('');
 }
@@ -1738,7 +1810,7 @@ function showLegend(id){
   document.getElementById('detail-name').textContent=l.name;
   document.getElementById('detail-fund').textContent=`${l.fund} · ${l.aum}${l.filingDate?' · '+l.filingDate:''}${l.strategy?' · '+l.strategy:''}`;
   document.getElementById('detail-tbody').innerHTML=l.top.map((h,i)=>`
-    <tr><td class="neutral">${i+1}</td><td class="ticker">${h.ticker}</td><td class="name">${h.name}</td>
+    <tr><td class="neutral">${rankedCell(i+1)}</td><td class="ticker">${h.ticker}</td><td class="name">${h.name}</td>
     <td>${h.weight}%<div class="pct-bar"><div class="pct-bar-fill" style="width:${h.weight/50*100}%;background:var(--accent4)"></div></div></td>
     <td>${h.shares}</td><td>${h.value}</td>
     <td class="${(h.delta||0)>0?'up-chip':(h.delta||0)<0?'down-chip':'neutral'}">${(h.delta||0)===0?'-':sgn(h.delta||0)+h.delta.toFixed(1)+'%p'}</td>
@@ -2038,7 +2110,7 @@ function drawSheetRows(rows, filtered=false){
     const brokerOpts=BROKERS.map(b=>`<option${b===t.brokerage?' selected':''}>${b}</option>`).join('');
     const acctOpts=ACCT_TYPES.map(a=>`<option${a===(t.acctType||'위탁')?' selected':''}>${a}</option>`).join('');
     return`<tr data-idx="${rowIdx}">
-      <td class="row-num" title="이 행 삭제" onclick="deleteRow(${rowIdx})">🗑</td>
+      <td class="row-num" title="Delete or move row">${rowMoveButtons('sheet',rowIdx,`<button type="button" class="row-del" title="Delete" onclick="event.stopPropagation();deleteRow(${rowIdx})">&times;</button>`)}</td>
       <td><input class="sheet-input" type="date" value="${t.date||''}" data-field="date" onchange="cellChange(${rowIdx},this)"/></td>
       <td><select class="sheet-input" data-field="brokerage" onchange="cellChange(${rowIdx},this)"><option value="">선택</option>${brokerOpts}</select></td>
       <td><select class="sheet-input" data-field="acctType" onchange="cellChange(${rowIdx},this)"><option value="">선택</option>${acctOpts}</select></td>
@@ -2595,7 +2667,8 @@ function bestStockName(code, apiName='', fallback=''){
 }
 
 const quoteCache={};
-const codeLookupTimers={sheet:{},acct:{}};
+const codeLookupTimers={sheet:{},acct:{},div:{}};
+const QUOTE_LOOKUP_DELAY=180;
 let _showKrwConverted=false;
 let _fxTtsRate=Number(localStorage.getItem('fxTtsRate')||'1400');
 function initFxControls(){
@@ -2664,6 +2737,15 @@ function shouldFetchQuote(code){
   const clean=normalizeStockCode(code);
   return /^\d{6}$/.test(clean) || /^[A-Z.]{1,8}$/.test(clean);
 }
+function markQuotePending(codeInput){
+  const row=codeInput?.closest('tr');
+  const priceInput=row?.querySelector('input[data-field="price"], input[id^="ap-price-"]');
+  if(priceInput){
+    priceInput.classList.add('auto-price');
+    if(priceInput.type!=='number')priceInput.value='...';
+  }
+  setPriceApiStatus('Lookup', 'neutral');
+}
 function applyLocalSheetName(rowIdx, codeInput, overwrite=true){
   const code=normalizeStockCode(codeInput.value);
   const name=lookupCode(code);
@@ -2692,21 +2774,59 @@ function applyLocalAcctName(acctIdx, codeInput, overwrite=true){
   }
   return true;
 }
+function applyLocalDivName(divIdx, codeInput, overwrite=true){
+  const code=normalizeStockCode(codeInput.value);
+  const name=lookupCode(code);
+  if(!name)return false;
+  const row=codeInput.closest('tr');
+  fillInputValue(row,'name',name,overwrite);
+  const input=row?.querySelector('input[data-field="name"]');
+  if(input)input.classList.add('auto-filled');
+  if(_divRows[divIdx]){
+    _divRows[divIdx].name=name;
+    _divRows[divIdx]._autoName=true;
+  }
+  return true;
+}
 function queueSheetCodeLookup(rowIdx, codeInput){
   const code=normalizeStockCode(codeInput.value);
+  codeInput.value=code;
   if(_sheetRows[rowIdx])_sheetRows[rowIdx].code=code;
-  if(applyLocalSheetName(rowIdx, codeInput, true)) updateSheetFooter(_sheetRows);
+  if(applyLocalSheetName(rowIdx, codeInput, true)){
+    updateSheetFooter(_sheetRows);
+    syncSheetRowsToMpData();
+    schedulePortfolioAutosave(false);
+  }
   clearTimeout(codeLookupTimers.sheet[rowIdx]);
   if(!shouldFetchQuote(code))return;
-  codeLookupTimers.sheet[rowIdx]=setTimeout(()=>handleSheetCodeInput(rowIdx, codeInput),450);
+  markQuotePending(codeInput);
+  codeLookupTimers.sheet[rowIdx]=setTimeout(()=>handleSheetCodeInput(rowIdx, codeInput),QUOTE_LOOKUP_DELAY);
 }
 function queueAcctCodeLookup(acctIdx, codeInput){
   const code=normalizeStockCode(codeInput.value);
+  codeInput.value=code;
   if(_acctRows[acctIdx])_acctRows[acctIdx].code=code;
-  if(applyLocalAcctName(acctIdx, codeInput, true)) updateAcctSummaryBar();
+  if(applyLocalAcctName(acctIdx, codeInput, true)){
+    updateAcctSummaryBar();
+    syncAcctRowsToMpData();
+    schedulePortfolioAutosave(false);
+  }
   clearTimeout(codeLookupTimers.acct[acctIdx]);
   if(!shouldFetchQuote(code))return;
-  codeLookupTimers.acct[acctIdx]=setTimeout(()=>handleAcctCodeInput(acctIdx, codeInput),450);
+  markQuotePending(codeInput);
+  codeLookupTimers.acct[acctIdx]=setTimeout(()=>handleAcctCodeInput(acctIdx, codeInput),QUOTE_LOOKUP_DELAY);
+}
+function queueDivCodeLookup(divIdx, codeInput){
+  const code=normalizeStockCode(codeInput.value);
+  codeInput.value=code;
+  if(_divRows[divIdx])_divRows[divIdx].code=code;
+  if(applyLocalDivName(divIdx, codeInput, true)){
+    syncDivRowsToMpData();
+    schedulePortfolioAutosave(false);
+  }
+  clearTimeout(codeLookupTimers.div[divIdx]);
+  if(!shouldFetchQuote(code))return;
+  codeLookupTimers.div[divIdx]=setTimeout(()=>handleDivCodeInput(divIdx, codeInput),QUOTE_LOOKUP_DELAY);
 }
 async function fetchQuoteForCode(code){
   const clean=normalizeStockCode(code);
@@ -2784,6 +2904,7 @@ async function handleSheetCodeInput(rowIdx, codeInput){
   applyLocalSheetName(rowIdx, codeInput, true);
   try{
     const q=await fetchQuoteForCode(code);
+    if(normalizeStockCode(codeInput.value)!==code)return;
     const row=codeInput.closest('tr');
     const apiName=bestStockName(code,q.name,lookupCode(code));
     if(apiName){
@@ -2817,6 +2938,7 @@ async function handleAcctCodeInput(acctIdx, codeInput){
   applyLocalAcctName(acctIdx, codeInput, true);
   try{
     const q=await fetchQuoteForCode(code);
+    if(normalizeStockCode(codeInput.value)!==code)return;
     const row=codeInput.closest('tr');
     const apiName=bestStockName(code,q.name,lookupCode(code));
     if(apiName){
@@ -2842,6 +2964,32 @@ async function handleAcctCodeInput(acctIdx, codeInput){
   }catch(e){
     setPriceApiStatus('API 오류', 'err');
     showToast(`현재가 조회 실패: ${explainPriceError(e)}`, 'err');
+  }
+}
+async function handleDivCodeInput(divIdx, codeInput){
+  const code=normalizeStockCode(codeInput.value);
+  if(!code)return;
+  codeInput.value=code;
+  if(_divRows[divIdx])_divRows[divIdx].code=code;
+  applyLocalDivName(divIdx, codeInput, true);
+  try{
+    const q=await fetchQuoteForCode(code);
+    if(normalizeStockCode(codeInput.value)!==code)return;
+    const row=codeInput.closest('tr');
+    const apiName=bestStockName(code,q.name,lookupCode(code));
+    if(apiName){
+      fillInputValue(row,'name',apiName,true);
+      const nameInput=row?.querySelector('input[data-field="name"]');
+      if(nameInput)nameInput.classList.add('auto-filled');
+      if(_divRows[divIdx]){
+        _divRows[divIdx].name=apiName;
+        _divRows[divIdx]._autoName=true;
+      }
+    }
+    syncDivRowsToMpData();
+    schedulePortfolioAutosave(false);
+  }catch(e){
+    setPriceApiStatus('API error', 'err');
   }
 }
 
@@ -2923,7 +3071,7 @@ function drawAcctRows(rows) {
     const bOpts = BROKERS.map(b => `<option${b===a.brokerage?' selected':''}>${b}</option>`).join('');
     const aOpts = ACCT_TYPES.map(t => `<option${t===a.acctType?' selected':''}>${t}</option>`).join('');
     return `<tr data-aidx="${i}" onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))showHoldingDetail('${a.code||''}')">
-      <td class="row-num" onclick="event.stopPropagation();deleteAcctRow(${i})" title="삭제">🗑</td>
+      <td class="row-num" title="Delete or move row">${rowMoveButtons('acct',i,`<button type="button" class="row-del" title="Delete" onclick="event.stopPropagation();deleteAcctRow(${i})">&times;</button>`)}</td>
       <td><select class="sheet-input" data-field="brokerage" onchange="acctCellChange(${i},this)" style="min-width:100px"><option value="">선택</option>${bOpts}</select></td>
       <td><select class="sheet-input" data-field="acctType" onchange="acctCellChange(${i},this)" style="min-width:72px"><option value="">선택</option>${aOpts}</select></td>
       <td><input class="sheet-input" type="text" value="${a.code||''}" data-field="code" placeholder="005930"
@@ -3150,12 +3298,12 @@ function drawDivRows(rows) {
     const net   = calcDivNet(d);
     const bOpts = BROKERS_LIST.map(b => `<option${b===d.brokerage?' selected':''}>${b}</option>`).join('');
     return `<tr>
-      <td class="row-num" onclick="deleteDivRow(${i})" title="삭제">🗑</td>
+      <td class="row-num" title="Delete or move row">${rowMoveButtons('div',i,`<button type="button" class="row-del" title="Delete" onclick="event.stopPropagation();deleteDivRow(${i})">&times;</button>`)}</td>
       <td><input class="sheet-input" type="date" value="${d.date||''}" data-field="date" onchange="divCellChange(${i},this)"/></td>
       <td><select class="sheet-input" data-field="brokerage" onchange="divCellChange(${i},this)" style="min-width:95px"><option value="">선택</option>${bOpts}</select></td>
       <td><input class="sheet-input" type="text" value="${d.code||''}" data-field="code" placeholder="005930"
-          onchange="divCellChange(${i},this)" onblur="autoFillDivName(${i},this)" style="width:76px"/></td>
-      <td><input class="sheet-input" type="text" value="${d.name||''}" data-field="name" placeholder="삼성전자"
+          oninput="divCellChange(${i},this);queueDivCodeLookup(${i},this)" onchange="divCellChange(${i},this)" onblur="handleDivCodeInput(${i},this)" style="width:76px"/></td>
+      <td><input class="sheet-input${d._autoName?' auto-filled':''}" type="text" value="${d.name||''}" data-field="name" placeholder="삼성전자"
           onchange="divCellChange(${i},this)" style="min-width:100px"/></td>
       <td><input class="sheet-input" type="number" value="${d.dpq||''}" data-field="dpq" placeholder="주당"
           oninput="divCellChange(${i},this)" style="width:70px"/></td>
@@ -3186,6 +3334,8 @@ function divCellChange(idx, input) {
   if (field === 'isa')        _divRows[idx].isa = input.checked;
   else if (['dpq','qty','gross'].includes(field)) _divRows[idx][field] = parseFloat(input.value)||0;
   else                         _divRows[idx][field] = input.value;
+  if(field==='code')_divRows[idx]._autoName=false;
+  if(field==='name'){_divRows[idx]._autoName=false;input.classList.remove('auto-filled');}
   // 계산셀 업데이트
   const row = input.closest('tr'); if (!row) return;
   const d     = _divRows[idx];
