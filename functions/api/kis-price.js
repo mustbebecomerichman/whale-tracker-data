@@ -137,18 +137,51 @@ async function fetchOverseasPrice(code, market, token, env) {
   return { price, change, changeRate, name, source:'KIS', code, market:exch };
 }
 
+async function fetchYahooQuote(code) {
+  const res = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(code)}`, {
+    headers: { 'User-Agent': 'WhaleTrackerPro/1.0' },
+  });
+  const data = await res.json();
+  const q = data?.quoteResponse?.result?.[0] || {};
+  const price = Number(q.regularMarketPrice || 0);
+  if (!price) throw new Error('Yahoo 해외 현재가 데이터 없음');
+  const prev = Number(q.regularMarketPreviousClose || 0);
+  const change = Number(q.regularMarketChange ?? (prev ? price - prev : 0));
+  const changeRate = Number(q.regularMarketChangePercent ?? (prev ? change / prev * 100 : 0));
+  return {
+    price,
+    change,
+    changeRate,
+    name: q.longName || q.shortName || code,
+    source: 'Yahoo',
+    code,
+    market: q.fullExchangeName || q.exchange || 'US',
+  };
+}
+
 async function fetchOverseasPriceWithFallback(code, market, token, env) {
   const preferred = ['NAS','NYS','AMS','HKS','TSE','SHS'].includes(market) ? market : 'NAS';
   const markets = [preferred, ...['NAS','NYS','AMS'].filter(m => m !== preferred)];
   let lastError = null;
   for (const exch of markets) {
     try {
-      return await fetchOverseasPrice(code, exch, token, env);
+      const quote = await fetchOverseasPrice(code, exch, token, env);
+      if (!quote.name) {
+        try {
+          const yahoo = await fetchYahooQuote(code);
+          return { ...quote, name: yahoo.name || quote.name, market: quote.market || yahoo.market };
+        } catch (e) {}
+      }
+      return quote;
     } catch (e) {
       lastError = e;
     }
   }
-  throw lastError || new Error('해외 현재가 데이터 없음');
+  try {
+    return await fetchYahooQuote(code);
+  } catch (e) {
+    throw lastError || e || new Error('해외 현재가 데이터 없음');
+  }
 }
 
 function isTokenError(error) {
