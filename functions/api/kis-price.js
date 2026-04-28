@@ -134,7 +134,21 @@ async function fetchOverseasPrice(code, market, token, env) {
   const changeRate = parseFloat(out.rate) || 0;
   if (!price) throw new Error(data.msg1 || out.msg1 || `데이터 없음 (${data.rt_cd || res.status})`);
   const name = out.ovrs_item_name || out.ovrs_pdno_name || out.prdt_name || out.engl_name || '';
-  return { price, change, changeRate, name, source:'KIS', code };
+  return { price, change, changeRate, name, source:'KIS', code, market:exch };
+}
+
+async function fetchOverseasPriceWithFallback(code, market, token, env) {
+  const preferred = ['NAS','NYS','AMS','HKS','TSE','SHS'].includes(market) ? market : 'NAS';
+  const markets = [preferred, ...['NAS','NYS','AMS'].filter(m => m !== preferred)];
+  let lastError = null;
+  for (const exch of markets) {
+    try {
+      return await fetchOverseasPrice(code, exch, token, env);
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError || new Error('해외 현재가 데이터 없음');
 }
 
 function isTokenError(error) {
@@ -180,14 +194,14 @@ async function handlePriceRequest(request, env) {
       const isOverseas = ['NAS','NYS','AMS','HKS','TSE','SHS'].includes(market);
       try {
         results[key] = isOverseas
-          ? await fetchOverseasPrice(code, market, token, env)
+          ? await fetchOverseasPriceWithFallback(code, market, token, env)
           : await fetchDomesticPrice(code, token, env);
       } catch (e) {
         if (!isTokenError(e)) throw e;
         await clearStoredToken(env);
         token = await getKisToken(env);
         results[key] = isOverseas
-          ? await fetchOverseasPrice(code, market, token, env)
+          ? await fetchOverseasPriceWithFallback(code, market, token, env)
           : await fetchDomesticPrice(code, token, env);
       }
     } catch(e) {
