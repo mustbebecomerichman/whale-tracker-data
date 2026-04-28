@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-28-login-reset-v1"/>
+<meta name="whale-tracker-version" content="2026-04-28-split-currency-sort-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -242,11 +242,16 @@ td.name{font-weight:600;color:var(--text);}
 .sheet-table tbody td.row-num{background:#F8F9FA;text-align:center;color:var(--text2);font-size:.72rem;padding:3px 5px;width:50px;cursor:default;}
 .sheet-table tbody td.row-num:hover{background:#F8F9FA;}
 .row-tools{display:inline-flex;align-items:center;justify-content:center;gap:3px;vertical-align:middle;}
-.row-move,.row-del{width:21px;height:21px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text2);font-size:.67rem;line-height:1;cursor:pointer;transition:all .15s;}
-.row-move:hover{border-color:var(--accent);color:var(--accent);background:#f0fff6;}
+.row-del{width:23px;height:23px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text2);font-size:.8rem;line-height:1;cursor:pointer;transition:all .15s;}
 .row-del:hover{border-color:#ffbfbf;color:var(--down);background:#fff5f5;}
-.rank-tools{display:flex;align-items:center;justify-content:space-between;gap:7px;min-width:62px;}
 .row-rank-index{display:inline-block;min-width:1.4em;}
+.tbl-wrap table thead th,.sheet-table thead th{cursor:pointer;user-select:none;}
+.tbl-wrap table thead th.sort-active,.sheet-table thead th.sort-active{color:var(--accent4);}
+.tbl-wrap table thead th.sort-active::after,.sheet-table thead th.sort-active::after{content:" " attr(data-sort-mark);font-size:.68rem;color:var(--accent4);}
+.split-money{display:flex;flex-direction:column;gap:2px;line-height:1.08;}
+.split-money .krw{font-size:1em;}
+.split-money .usd{font-size:.62em;color:var(--text2);font-weight:800;}
+.mp-val.up .split-money .usd,.mp-val.down .split-money .usd{color:inherit;opacity:.72;}
 .sheet-input{
   display:block;width:100%;border:none;background:transparent;
   padding:7px 8px;font-size:.83rem;color:var(--text);outline:none;
@@ -451,7 +456,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     font-size:.72rem;font-weight:700;color:var(--text2);line-height:1.2;
   }
   .sheet-table tbody td.row-num{display:flex;justify-content:flex-end;width:100%;padding:4px 6px;background:#fff;}
-  .sheet-table tbody td.row-num::before{content:"정렬";margin-right:auto;}
+  .sheet-table tbody td.row-num::before{content:"삭제";margin-right:auto;}
   .sheet-input,select.sheet-input{
     width:100%!important;min-width:0!important;max-width:100%!important;
     white-space:normal;font-size:.82rem;padding:8px 6px;
@@ -1554,57 +1559,55 @@ function inferStockSector(name){
   if(/화학|정유|S-Oil|SK이노베이션/.test(name))return '화학/에너지';
   return '기타';
 }
-function rowMoveButtons(kind,idx,extra=''){
-  return `<div class="row-tools">${extra}
-    <button type="button" class="row-move" title="Move up" onclick="event.stopPropagation();moveTableRow('${kind}',${idx},-1)">&#9650;</button>
-    <button type="button" class="row-move" title="Move down" onclick="event.stopPropagation();moveTableRow('${kind}',${idx},1)">&#9660;</button>
-  </div>`;
+function rowDeleteButton(action){
+  return `<div class="row-tools"><button type="button" class="row-del" title="Delete" onclick="event.stopPropagation();${action}">&times;</button></div>`;
 }
-function displayMoveButtons(){
-  return `<div class="row-tools">
-    <button type="button" class="row-move" title="Move up" onclick="moveRenderedRow(this,-1)">&#9650;</button>
-    <button type="button" class="row-move" title="Move down" onclick="moveRenderedRow(this,1)">&#9660;</button>
-  </div>`;
+function rankedCell(n){ return `<span class="row-rank-index">${n}</span>`; }
+function nameMoveCell(name){ return `<span>${name}</span>`; }
+function sortableText(td){
+  const input=td?.querySelector('input,select');
+  const text=input ? (input.tagName==='SELECT' ? input.options[input.selectedIndex]?.text || input.value : input.value) : td?.innerText;
+  return String(text||'').replace(/\s+/g,' ').trim();
 }
-function rankedCell(n){
-  return `<div class="rank-tools"><span class="row-rank-index">${n}</span>${displayMoveButtons()}</div>`;
+function sortableValue(text){
+  const raw=String(text||'').trim();
+  const date=raw.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/);
+  if(date)return Number(date[1])*10000+Number(date[2])*100+Number(date[3]);
+  const numeric=raw.replace(/,/g,'').match(/[-+]?\$?\d+(?:\.\d+)?/);
+  if(numeric)return Number(numeric[0].replace('$',''));
+  return raw.toLowerCase();
 }
-function nameMoveCell(name){
-  return `<div class="rank-tools"><span>${name}</span>${displayMoveButtons()}</div>`;
+function refreshSortedRanks(tbody){
+  tbody.querySelectorAll('.row-rank-index').forEach((el,i)=>el.textContent=i+1);
 }
-function moveRenderedRow(btn,dir){
-  const tr=btn.closest('tr');
-  const body=tr?.parentElement;
-  if(!tr||!body)return;
-  if(dir<0 && tr.previousElementSibling)body.insertBefore(tr,tr.previousElementSibling);
-  if(dir>0 && tr.nextElementSibling)body.insertBefore(tr.nextElementSibling,tr);
-  body.querySelectorAll('.row-rank-index').forEach((el,i)=>el.textContent=i+1);
+function sortTableByColumn(table,col,dir){
+  const tbody=table.tBodies?.[0];
+  if(!tbody)return;
+  const rows=[...tbody.rows].filter(r=>r.cells.length>1);
+  if(rows.length<2)return;
+  rows.sort((a,b)=>{
+    const av=sortableValue(sortableText(a.cells[col]||a.cells[0]));
+    const bv=sortableValue(sortableText(b.cells[col]||b.cells[0]));
+    const cmp=(typeof av==='number'&&typeof bv==='number') ? av-bv : String(av).localeCompare(String(bv),'ko');
+    return dir==='asc'?cmp:-cmp;
+  });
+  rows.forEach(r=>tbody.appendChild(r));
+  refreshSortedRanks(tbody);
 }
-function reorderList(list,idx,dir){
-  idx=Number(idx);
-  const next=idx+dir;
-  if(!Array.isArray(list)||idx<0||next<0||idx>=list.length||next>=list.length)return false;
-  [list[idx],list[next]]=[list[next],list[idx]];
-  return true;
-}
-function moveTableRow(kind,idx,dir){
-  if(kind==='sheet' && reorderList(_sheetRows,idx,dir)){
-    drawSheetRows(_sheetRows);
-    syncSheetRowsToMpData();
-    schedulePortfolioAutosave(true,120);
-  }
-  if(kind==='acct' && reorderList(_acctRows,idx,dir)){
-    drawAcctRows(_acctRows);
-    syncAcctRowsToMpData();
-    updateAcctSummaryBar();
-    schedulePortfolioAutosave(true,120);
-  }
-  if(kind==='div' && reorderList(_divRows,idx,dir)){
-    drawDivRows(_divRows);
-    syncDivRowsToMpData();
-    schedulePortfolioAutosave(true,120);
-  }
-}
+document.addEventListener('click',e=>{
+  if(e.target.closest('button,input,select,textarea,a'))return;
+  const th=e.target.closest('th');
+  const table=th?.closest('table');
+  if(!th||!table||!table.tBodies?.[0])return;
+  const dir=th.dataset.sortDir==='asc'?'desc':'asc';
+  table.querySelectorAll('th.sort-active').forEach(x=>{
+    if(x!==th){x.classList.remove('sort-active');delete x.dataset.sortDir;delete x.dataset.sortMark;}
+  });
+  th.dataset.sortDir=dir;
+  th.dataset.sortMark=dir==='asc'?'▲':'▼';
+  th.classList.add('sort-active');
+  sortTableByColumn(table,th.cellIndex,dir);
+});
 function renderQuant(rows=_quantAll){
   refreshQuantSectors();
   const scored=scoreQuantRows(rows,_quantFilter,_quantAll);
@@ -1815,7 +1818,7 @@ function normalizeLegendData(rows){
 function renderLegends(){
   setText('legend-count',(_legendAll||[]).length+'명');
   const latest=[...new Set((_legendAll||[]).map(x=>x.filingDate).filter(Boolean))].sort().pop();
-  setText('legend-updated',latest?latest+' 신고':'분기 업데이트');
+  setText('legend-updated',latest?'SEC 13F '+latest+' 신고':'SEC 13F 분기 업데이트');
   document.getElementById('legend-grid').innerHTML=_legendAll.map(l=>`
     <div class="legend-card" onclick="showLegend('${l.id}')">
     <div class="legend-avatar">${l.emoji}</div>
@@ -1922,16 +1925,64 @@ function renderMp(data){
   if(el&&data.updatedAt) el.textContent='마지막 업데이트: '+data.updatedAt;
   if(snapshotChanged)schedulePortfolioAutosave(false,900);
 }
+function fmtKrwAmount(n){ return Math.round(Math.abs(Number(n)||0)).toLocaleString('ko-KR')+'원'; }
+function fmtUsdAmount(n){
+  const v=Math.abs(Number(n)||0);
+  return '$'+v.toLocaleString('en-US',{maximumFractionDigits:v>=100?2:4});
+}
+function signedText(n,formatter){
+  const v=Number(n)||0;
+  return (v>0?'+':v<0?'-':'')+formatter(v);
+}
+function splitMoneyHtml(krw,usd,{signed=false,forceUsd=false}={}){
+  const hasUsd=forceUsd || Math.abs(Number(usd)||0)>0.000001;
+  const krwText=signed?signedText(krw,fmtKrwAmount):fmtKrwAmount(krw);
+  const usdText=signed?signedText(usd,fmtUsdAmount):fmtUsdAmount(usd);
+  if(!hasUsd)return krwText;
+  return `<div class="split-money"><span class="krw">${krwText}</span><span class="usd">${usdText}</span></div>`;
+}
+function portfolioCurrencyTotals(rows=[]){
+  const totals={KRW:{eval:0,purchase:0,pnl:0},USD:{eval:0,purchase:0,pnl:0}};
+  (rows||[]).forEach(a=>{
+    const cur=currencyForCode(a.code||'');
+    const ev=Number(a.price&&a.qty?a.price*a.qty:(a.eval||0))||0;
+    const pur=Number(a.avgBuy&&a.qty?a.avgBuy*a.qty:(a.purchase||0))||0;
+    totals[cur].eval+=ev;
+    totals[cur].purchase+=pur;
+  });
+  totals.KRW.pnl=totals.KRW.eval-totals.KRW.purchase;
+  totals.USD.pnl=totals.USD.eval-totals.USD.purchase;
+  return totals;
+}
+function getSummaryCurrencyTotals(data){
+  const saved=data?.summary?.currencyTotals;
+  if(saved?.KRW && saved?.USD)return saved;
+  const source=(data?.accounts&&data.accounts.length)?data.accounts:(_acctRows||[]);
+  const totals=portfolioCurrencyTotals(source);
+  if(!totals.KRW.eval&&!totals.KRW.purchase&&!totals.USD.eval&&!totals.USD.purchase){
+    totals.KRW.eval=Number(data?.summary?.total)||0;
+    totals.KRW.purchase=Number(data?.summary?.purchase)||0;
+    totals.KRW.pnl=Number(data?.summary?.pnl)||totals.KRW.eval-totals.KRW.purchase;
+  }
+  return totals;
+}
 function renderMpSummary(data){
   const s=data.summary||{};
   const W=n=>n?Math.abs(n).toLocaleString('ko-KR')+'원':'-';
-  document.getElementById('mp-total').textContent=W(s.total);
+  const parts=getSummaryCurrencyTotals(data);
+  const hasUsd=!!(parts.USD.eval||parts.USD.purchase);
+  const totalEl=document.getElementById('mp-total');
+  if(totalEl)totalEl.innerHTML=(parts.KRW.eval||parts.USD.eval||hasUsd)?splitMoneyHtml(parts.KRW.eval,parts.USD.eval,{forceUsd:hasUsd}):W(s.total);
   document.getElementById('mp-updated-date').textContent=data.updatedAt?'기준일: '+data.updatedAt:'';
   const rEl=document.getElementById('mp-rate');
   if(s.returnRate!==undefined){rEl.textContent=sgn(s.returnRate)+s.returnRate.toFixed(1)+'%';rEl.className='mp-val '+(s.returnRate>=0?'up':'down');}
-  document.getElementById('mp-purchase-sub').textContent=s.purchase?'총 투자: '+W(s.purchase):'';
+  const purEl=document.getElementById('mp-purchase-sub');
+  if(purEl)purEl.innerHTML=(parts.KRW.purchase||parts.USD.purchase||hasUsd)
+    ?'총 투자: '+splitMoneyHtml(parts.KRW.purchase,parts.USD.purchase,{forceUsd:hasUsd})
+    :(s.purchase?'총 투자: '+W(s.purchase):'');
   const pEl=document.getElementById('mp-pnl');
-  if(s.pnl!==undefined){pEl.textContent=(s.pnl>=0?'+':'')+W(s.pnl);pEl.className='mp-val '+(s.pnl>=0?'up':'down');}
+  const nativePnl=(parts.KRW.pnl||0)+(parts.USD.pnl||0)*_fxTtsRate;
+  if(s.pnl!==undefined){pEl.innerHTML=splitMoneyHtml(parts.KRW.pnl,parts.USD.pnl,{signed:true,forceUsd:hasUsd});pEl.className='mp-val '+(nativePnl>=0?'up':'down');}
   document.getElementById('mp-stock-stats').innerHTML=s.numStocks?
     `<span class="status-chip">${s.numStocks}개</span><span class="status-chip" style="color:var(--up)">▲${s.profitCount||0}</span><span class="status-chip" style="color:var(--down)">▼${s.lossCount||0}</span>`:'';
 }
@@ -2131,7 +2182,7 @@ function drawSheetRows(rows, filtered=false){
     const brokerOpts=BROKERS.map(b=>`<option${b===t.brokerage?' selected':''}>${b}</option>`).join('');
     const acctOpts=ACCT_TYPES.map(a=>`<option${a===(t.acctType||'위탁')?' selected':''}>${a}</option>`).join('');
     return`<tr data-idx="${rowIdx}">
-      <td class="row-num" title="Delete or move row">${rowMoveButtons('sheet',rowIdx,`<button type="button" class="row-del" title="Delete" onclick="event.stopPropagation();deleteRow(${rowIdx})">&times;</button>`)}</td>
+      <td class="row-num" title="Delete row">${rowDeleteButton(`deleteRow(${rowIdx})`)}</td>
       <td><input class="sheet-input" type="date" value="${t.date||''}" data-field="date" onchange="cellChange(${rowIdx},this)"/></td>
       <td><select class="sheet-input" data-field="brokerage" onchange="cellChange(${rowIdx},this)"><option value="">선택</option>${brokerOpts}</select></td>
       <td><select class="sheet-input" data-field="acctType" onchange="cellChange(${rowIdx},this)"><option value="">선택</option>${acctOpts}</select></td>
@@ -3092,7 +3143,7 @@ function drawAcctRows(rows) {
     const bOpts = BROKERS.map(b => `<option${b===a.brokerage?' selected':''}>${b}</option>`).join('');
     const aOpts = ACCT_TYPES.map(t => `<option${t===a.acctType?' selected':''}>${t}</option>`).join('');
     return `<tr data-aidx="${i}" onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))showHoldingDetail('${a.code||''}')">
-      <td class="row-num" title="Delete or move row">${rowMoveButtons('acct',i,`<button type="button" class="row-del" title="Delete" onclick="event.stopPropagation();deleteAcctRow(${i})">&times;</button>`)}</td>
+      <td class="row-num" title="Delete row">${rowDeleteButton(`deleteAcctRow(${i})`)}</td>
       <td><select class="sheet-input" data-field="brokerage" onchange="acctCellChange(${i},this)" style="min-width:100px"><option value="">선택</option>${bOpts}</select></td>
       <td><select class="sheet-input" data-field="acctType" onchange="acctCellChange(${i},this)" style="min-width:72px"><option value="">선택</option>${aOpts}</select></td>
       <td><input class="sheet-input" type="text" value="${a.code||''}" data-field="code" placeholder="005930"
@@ -3186,13 +3237,14 @@ function updateAcctSummaryBar() {
 function updateMpSummaryFromAccountRows(rows) {
   if(!mpData) return;
   const active=rows.filter(a=>a.eval||a.purchase);
-  const total=active.reduce((s,a)=>s+displayCurrencyValue(a.eval||0,a.code),0);
-  const purchase=active.reduce((s,a)=>s+displayCurrencyValue(a.purchase||0,a.code),0);
+  const currencyTotals=portfolioCurrencyTotals(active);
+  const total=currencyTotals.KRW.eval+(currencyTotals.USD.eval*_fxTtsRate);
+  const purchase=currencyTotals.KRW.purchase+(currencyTotals.USD.purchase*_fxTtsRate);
   const pnl=total-purchase;
   const returnRate=purchase>0?Math.round(pnl/purchase*10000)/100:0;
   mpData.summary={
     ...(mpData.summary||{}),
-    total,purchase,pnl,returnRate,
+    total,purchase,pnl,returnRate,currencyTotals,
     numStocks:active.length,
     profitCount:active.filter(a=>(a.rate||0)>=0).length,
     lossCount:active.filter(a=>(a.rate||0)<0).length
@@ -3319,7 +3371,7 @@ function drawDivRows(rows) {
     const net   = calcDivNet(d);
     const bOpts = BROKERS_LIST.map(b => `<option${b===d.brokerage?' selected':''}>${b}</option>`).join('');
     return `<tr>
-      <td class="row-num" title="Delete or move row">${rowMoveButtons('div',i,`<button type="button" class="row-del" title="Delete" onclick="event.stopPropagation();deleteDivRow(${i})">&times;</button>`)}</td>
+      <td class="row-num" title="Delete row">${rowDeleteButton(`deleteDivRow(${i})`)}</td>
       <td><input class="sheet-input" type="date" value="${d.date||''}" data-field="date" onchange="divCellChange(${i},this)"/></td>
       <td><select class="sheet-input" data-field="brokerage" onchange="divCellChange(${i},this)" style="min-width:95px"><option value="">선택</option>${bOpts}</select></td>
       <td><input class="sheet-input" type="text" value="${d.code||''}" data-field="code" placeholder="005930"

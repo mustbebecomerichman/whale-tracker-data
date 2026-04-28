@@ -58,7 +58,7 @@ ALERT_LOOKBACK_DAYS = int(os.environ.get("ALERT_LOOKBACK_DAYS", "90"))
 ALERT_LIMIT = int(os.environ.get("ALERT_LIMIT", "300"))
 DISCLOSURE_SCAN_KOSPI_LIMIT = int(os.environ.get("DISCLOSURE_SCAN_KOSPI_LIMIT", str(QUANT_KOSPI_LIMIT)))
 DISCLOSURE_SCAN_KOSDAQ_LIMIT = int(os.environ.get("DISCLOSURE_SCAN_KOSDAQ_LIMIT", str(QUANT_KOSDAQ_LIMIT)))
-GLOBAL_WHALE_TOP_N = int(os.environ.get("GLOBAL_WHALE_TOP_N", "30"))
+GLOBAL_WHALE_TOP_N = int(os.environ.get("GLOBAL_WHALE_TOP_N", "100"))
 NPS_13F_CIK = "0001608046"
 
 # ──────────────────────────────────────────────────────

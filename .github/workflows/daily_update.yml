@@ -40,6 +40,7 @@ jobs:
       - name: 🌍 SEC 13F 글로벌 고래 수집
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GLOBAL_WHALE_TOP_N: "100"
         run: |
           python - << 'EOF'
           import sys
