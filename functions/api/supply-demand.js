@@ -45,6 +45,11 @@ function parseKisTokenExpiry(data) {
   return Math.min(...expiries) - TOKEN_EXPIRY_BUFFER_MS;
 }
 
+function num(value) {
+  const n = Number(String(value ?? 0).replace(/,/g, '').trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
 async function readStoredToken(env) {
   if (_cachedToken && Date.now() < _tokenExpiry) return _cachedToken;
   const store = getTokenStore(env);
@@ -118,15 +123,15 @@ async function fetchInvestorData(code, token, env) {
   }
 
   return {
-    individual: parseInt(row.prsn_ntby_qty || row.ind_ntby_qty || 0, 10),
-    foreign: parseInt(row.frgn_ntby_qty || row.for_ntby_qty || 0, 10),
-    institution: parseInt(row.orgn_ntby_qty || row.ins_ntby_qty || 0, 10),
-    financialInst: parseInt(row.fnnc_ntby_qty || 0, 10),
-    insurance: parseInt(row.insn_ntby_qty || 0, 10),
-    trust: parseInt(row.mrkt_ntby_qty || 0, 10),
-    individualAmt: parseInt(row.prsn_ntby_tr_pbmn || row.ind_ntby_tr_pbmn || 0, 10),
-    foreignAmt: parseInt(row.frgn_ntby_tr_pbmn || row.for_ntby_tr_pbmn || 0, 10),
-    institutionAmt: parseInt(row.orgn_ntby_tr_pbmn || row.ins_ntby_tr_pbmn || 0, 10),
+    individual: num(row.prsn_ntby_qty || row.ind_ntby_qty || row.indv_ntby_qty),
+    foreign: num(row.frgn_ntby_qty || row.for_ntby_qty || row.frgn_seln_qty),
+    institution: num(row.orgn_ntby_qty || row.ins_ntby_qty || row.inst_ntby_qty),
+    financialInst: num(row.fnnc_ntby_qty),
+    insurance: num(row.insn_ntby_qty),
+    trust: num(row.mrkt_ntby_qty || row.trst_ntby_qty),
+    individualAmt: num(row.prsn_ntby_tr_pbmn || row.ind_ntby_tr_pbmn),
+    foreignAmt: num(row.frgn_ntby_tr_pbmn || row.for_ntby_tr_pbmn),
+    institutionAmt: num(row.orgn_ntby_tr_pbmn || row.ins_ntby_tr_pbmn),
     date: row.stck_bsop_date || '',
   };
 }

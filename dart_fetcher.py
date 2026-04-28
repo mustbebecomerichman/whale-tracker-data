@@ -49,6 +49,16 @@ START_DATE     = (TODAY - timedelta(days=90)).strftime("%Y%m%d")
 LONG_START     = (TODAY - timedelta(days=180)).strftime("%Y%m%d")
 YEAR_START     = TODAY.strftime("%Y") + "0101"
 
+QUANT_KOSPI_LIMIT = int(os.environ.get("QUANT_KOSPI_LIMIT", "200"))
+QUANT_KOSDAQ_LIMIT = int(os.environ.get("QUANT_KOSDAQ_LIMIT", "150"))
+NPS_DOMESTIC_LOOKBACK_DAYS = int(os.environ.get("NPS_DOMESTIC_LOOKBACK_DAYS", "730"))
+NPS_DOMESTIC_LIMIT = int(os.environ.get("NPS_DOMESTIC_LIMIT", "500"))
+NPS_OVERSEAS_LIMIT = int(os.environ.get("NPS_OVERSEAS_LIMIT", "120"))
+ALERT_LOOKBACK_DAYS = int(os.environ.get("ALERT_LOOKBACK_DAYS", "90"))
+ALERT_LIMIT = int(os.environ.get("ALERT_LIMIT", "300"))
+GLOBAL_WHALE_TOP_N = int(os.environ.get("GLOBAL_WHALE_TOP_N", "30"))
+NPS_13F_CIK = "0001608046"
+
 # ──────────────────────────────────────────────────────
 #  유틸
 # ──────────────────────────────────────────────────────
@@ -79,6 +89,17 @@ def fmt_date(raw):
         return f"{raw[:4]}.{raw[4:6]}.{raw[6:8]}"
     except:
         return raw
+
+def date_windows(days, chunk_days=90):
+    end = TODAY
+    start = TODAY - timedelta(days=days)
+    windows = []
+    cur = start
+    while cur <= end:
+        nxt = min(cur + timedelta(days=chunk_days - 1), end)
+        windows.append((cur.strftime("%Y%m%d"), nxt.strftime("%Y%m%d")))
+        cur = nxt + timedelta(days=1)
+    return windows
 
 def pn(s):
     if not s or str(s).strip() in ("","0","-","#N/A"):
@@ -182,8 +203,8 @@ def fetch_naver_market_sum(market="KOSPI", limit=200):
 def fetch_quant_universe():
     print("\n📡 [DART 3/3] 퀀트 스크리너 유니버스 수집 중...")
     try:
-        kospi = fetch_naver_market_sum("KOSPI", 200)
-        kosdaq = fetch_naver_market_sum("KOSDAQ", 150)
+        kospi = fetch_naver_market_sum("KOSPI", QUANT_KOSPI_LIMIT)
+        kosdaq = fetch_naver_market_sum("KOSDAQ", QUANT_KOSDAQ_LIMIT)
         universe = kospi + kosdaq
         print(f"  ✅ 퀀트 유니버스: KOSPI {len(kospi)}개, KOSDAQ {len(kosdaq)}개")
         return universe
@@ -198,30 +219,31 @@ def fetch_quant_universe():
 def fetch_nps_portfolio():
     print("\n📡 [DART 1/2] 국민연금 포트폴리오 수집 중...")
     portfolio = {}
-    for corp_cls, market in [("Y","KOSPI"),("K","KOSDAQ")]:
-        page = 1
-        while True:
-            data = dart_get("majorstock", {
-                "corp_cls":corp_cls,"bgn_de":LONG_START,
-                "end_de":END_DATE,"page_no":page,"page_count":100,
-            })
-            if not data or data.get("status") not in ("000",):
-                break
-            for item in data.get("list",[]):
-                rn = item.get("report_nm","")
-                rr = item.get("rcpter_nm","")
-                if "국민연금" not in rn and "국민연금" not in rr:
-                    continue
-                name = item.get("corp_name","")
-                dt   = item.get("rcept_dt","")
-                if name not in portfolio or dt > portfolio[name].get("_dt",""):
-                    portfolio[name] = {**item,"_dt":dt,"_market":market}
-            total = int(data.get("total_count",0))
-            if page * 100 >= total:
-                break
-            page += 1
-            time.sleep(0.4)
-        print(f"  {market}: 완료")
+    for bgn_de, end_de in date_windows(NPS_DOMESTIC_LOOKBACK_DAYS, 90):
+        for corp_cls, market in [("Y","KOSPI"),("K","KOSDAQ")]:
+            page = 1
+            while True:
+                data = dart_get("majorstock", {
+                    "corp_cls":corp_cls,"bgn_de":bgn_de,
+                    "end_de":end_de,"page_no":page,"page_count":100,
+                })
+                if not data or data.get("status") not in ("000",):
+                    break
+                for item in data.get("list",[]):
+                    rn = item.get("report_nm","")
+                    rr = item.get("rcpter_nm","")
+                    if "국민연금" not in rn and "국민연금" not in rr:
+                        continue
+                    code = item.get("stock_code","") or item.get("corp_code","") or item.get("corp_name","")
+                    dt   = item.get("rcept_dt","")
+                    if code not in portfolio or dt > portfolio[code].get("_dt",""):
+                        portfolio[code] = {**item,"_dt":dt,"_market":market}
+                total = int(data.get("total_count",0))
+                if page * 100 >= total:
+                    break
+                page += 1
+                time.sleep(0.35)
+        print(f"  {fmt_date(bgn_de)}~{fmt_date(end_de)}: 완료")
 
     result = []
     for item in portfolio.values():
@@ -245,23 +267,30 @@ def fetch_nps_portfolio():
         })
     result.sort(key=lambda x: x["pct"], reverse=True)
     print(f"  ✅ 국민연금 보유 종목: {len(result)}개")
-    return result[:200]
+    return result[:NPS_DOMESTIC_LIMIT]
 
 def fetch_alert5():
     print("\n📡 [DART 2/2] 5%↑ 대량보유 알림 수집 중...")
-    recent = (TODAY - timedelta(days=30)).strftime("%Y%m%d")
     alerts = {}
-    for corp_cls in ["Y","K"]:
-        data = dart_get("majorstock", {
-            "corp_cls":corp_cls,"bgn_de":recent,"end_de":END_DATE,
-            "page_no":1,"page_count":100,
-        })
-        if data and data.get("status") == "000":
-            for item in data.get("list",[]):
-                n = item.get("corp_name","")
-                if n not in alerts:
-                    alerts[n] = item
-        time.sleep(0.4)
+    for bgn_de, end_de in date_windows(ALERT_LOOKBACK_DAYS, 30):
+        for corp_cls in ["Y","K"]:
+            page = 1
+            while True:
+                data = dart_get("majorstock", {
+                    "corp_cls":corp_cls,"bgn_de":bgn_de,"end_de":end_de,
+                    "page_no":page,"page_count":100,
+                })
+                if not data or data.get("status") != "000":
+                    break
+                for item in data.get("list",[]):
+                    key = "|".join([item.get("rcept_dt",""), item.get("corp_name",""), item.get("rcpter_nm","")])
+                    alerts[key] = item
+                total = int(data.get("total_count",0))
+                if page * 100 >= total:
+                    break
+                page += 1
+                time.sleep(0.35)
+        time.sleep(0.2)
     result = []
     for item in alerts.values():
         after  = parse_pct(item.get("stkqy_irds",0))
@@ -276,7 +305,23 @@ def fetch_alert5():
         })
     result.sort(key=lambda x: x["date"], reverse=True)
     print(f"  ✅ 대량보유 공시: {len(result)}건")
-    return result[:30]
+    return result[:ALERT_LIMIT]
+
+def build_alert10(alerts):
+    rows = []
+    for item in alerts:
+        if item.get("after", 0) < 10:
+            continue
+        rows.append({
+            "name": item.get("name",""),
+            "holder": item.get("holder",""),
+            "pct": item.get("after",0),
+            "delta": item.get("delta",0),
+            "date": item.get("date",""),
+            "note": "5% 보고 중 10% 이상",
+        })
+    rows.sort(key=lambda x: (x["date"], x["pct"]), reverse=True)
+    return rows[:100]
 
 # ──────────────────────────────────────────────────────
 #  [B] 한국투자증권 포트폴리오
@@ -446,18 +491,28 @@ def run_dart(auto=False):
     print("═"*52)
     nps  = fetch_nps_portfolio()
     al5  = fetch_alert5()
+    al10 = build_alert10(al5)
+    nps_overseas = fetch_nps_overseas_portfolio(limit=NPS_OVERSEAS_LIMIT)
     quant = fetch_quant_universe()
     out  = {
-        "updated_at": TODAY.isoformat(),
+        "data_updated_at": TODAY.isoformat(),
         "nps_portfolio": nps,
+        "nps_overseas": nps_overseas,
         "alert5": al5,
+        "alert10": al10,
+        "meta": {
+            "schedule": "매일 10:00 KST",
+            "nps_domestic_lookback_days": NPS_DOMESTIC_LOOKBACK_DAYS,
+            "alert_lookback_days": ALERT_LOOKBACK_DAYS,
+            "quant_target": f"KOSPI {QUANT_KOSPI_LIMIT} + KOSDAQ {QUANT_KOSDAQ_LIMIT}",
+        },
     }
     if quant:
         out["quant_universe"] = quant
     # JSON 저장
     with open("whale_data.json","w",encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
-    print(f"\n  💾 whale_data.json 저장 완료 (국민연금 {len(nps)}개, 알림 {len(al5)}건, 퀀트 {len(quant)}개)")
+    print(f"\n  💾 whale_data.json 저장 완료 (국민연금 국내 {len(nps)}개, 해외 {len(nps_overseas)}개, 알림 {len(al5)}건, 퀀트 {len(quant)}개)")
 
     # Firebase 자동 업로드 (--auto 모드 또는 서비스 계정 파일 있을 때)
     if auto or Path(FB_CRED_FILE).exists() or FB_SERVICE_ACCOUNT_JSON:
@@ -496,37 +551,6 @@ def run_kis():
         print(f"\n  ❌ KIS 오류: {e}")
         if "401" in str(e): print("     → App Key/Secret을 확인하세요.")
 
-if __name__ == "__main__":
-    args = sys.argv[1:]
-    auto = "--auto" in args
-    do_dart = "--dart" in args or not [a for a in args if a.startswith("--")]
-    do_kis  = "--kis"  in args
-
-    # --auto 는 DART만 (GitHub Actions용)
-    if auto:
-        do_dart = True
-        do_kis  = False
-
-    print("╔══════════════════════════════════════════════════╗")
-    print("║   🐋 Whale Tracker Pro — 데이터 수집기            ║")
-    print(f"║   {TODAY.strftime('%Y-%m-%d %H:%M')}                                ║")
-    print("║   모드: " + ("자동(GitHub Actions)" if auto else "수동") + " " * 30 + "║")
-    print("╚══════════════════════════════════════════════════╝")
-
-    if do_dart:
-        try:
-            run_dart(auto=auto)
-        except Exception as e:
-            print(f"\n  ❌ DART 오류: {e}")
-
-    if do_kis:
-        run_kis()
-
-    print("\n" + "═"*52)
-    print("  🎉 완료!")
-    print("═"*52)
-
-
 # ──────────────────────────────────────────────────────
 #  [D] SEC EDGAR 13F — 글로벌 고래 포트폴리오 수집
 # ──────────────────────────────────────────────────────
@@ -563,8 +587,18 @@ def get_latest_13f_accession(cik: str) -> tuple:
             return accnos[i], dates[i]
     return None, None
 
-def get_13f_holdings(cik: str, accession: str, top_n: int = 15) -> list:
-    """13F 보고서에서 상위 보유 종목 파싱"""
+def format_13f_value(value_thousand):
+    dollars = value_thousand * 1000
+    if dollars >= 1_000_000_000_000:
+        return f"{dollars/1_000_000_000_000:.2f}조$"
+    if dollars >= 1_000_000_000:
+        return f"{dollars/1_000_000_000:.2f}B$"
+    if dollars >= 1_000_000:
+        return f"{dollars/1_000_000:.1f}M$"
+    return f"{dollars:,.0f}$"
+
+def get_13f_report(cik: str, accession: str, top_n: int = 30) -> dict:
+    """13F 보고서에서 전체 보유 종목 수, 총액, 상위 종목을 파싱"""
     import xml.etree.ElementTree as ET
     acc_clean = accession.replace("-", "")
     # 인덱스 페이지에서 XML 파일명 확인
@@ -577,7 +611,7 @@ def get_13f_holdings(cik: str, accession: str, top_n: int = 15) -> list:
         if not xml_files:
             xml_files = re_mod.findall(r'href="([^"]*\.xml)"', r.text, re_mod.I)
         if not xml_files:
-            return []
+            return {"top": [], "count": 0, "total_value_thousand": 0}
         xml_url = "https://www.sec.gov" + xml_files[0] if xml_files[0].startswith("/") else \
                   f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc_clean}/{xml_files[0]}"
         xr = requests.get(xml_url, headers=SEC_AGENTS, timeout=15)
@@ -593,12 +627,14 @@ def get_13f_holdings(cik: str, accession: str, top_n: int = 15) -> list:
         for info in root.iter():
             if info.tag.split("}")[-1].lower() == "infotable":
                 name    = (info.find(".//{*}nameOfIssuer") or info.find(".//{*}NAMEOFISSUER"))
+                cusip   = (info.find(".//{*}cusip") or info.find(".//{*}CUSIP"))
                 value   = (info.find(".//{*}value") or info.find(".//{*}VALUE"))
                 shares  = (info.find(".//{*}sshPrnamt") or info.find(".//{*}SSHPRNAMT"))
                 cls     = (info.find(".//{*}titleOfClass") or info.find(".//{*}TITLEOFCLASS"))
                 if name is not None and value is not None:
                     holdings.append({
                         "name":   (name.text or "").strip(),
+                        "cusip":  (cusip.text or "").strip() if cusip is not None else "",
                         "class":  (cls.text or "").strip() if cls is not None else "",
                         "value":  int(value.text.replace(",","")) if value.text else 0,  # $천 단위
                         "shares": int(shares.text.replace(",","")) if shares is not None and shares.text else 0,
@@ -609,22 +645,47 @@ def get_13f_holdings(cik: str, accession: str, top_n: int = 15) -> list:
         result = []
         for h in holdings[:top_n]:
             pct = round(h["value"] / total_val * 100, 2) if total_val else 0
-            val_b = round(h["value"] / 1_000_000, 2)  # 십억 달러로 변환
             result.append({
-                "ticker": "",  # SEC는 ticker 미포함, 종목명으로 대체
+                "ticker": h.get("cusip") or "",  # SEC 13F XML은 보통 ticker 대신 CUSIP을 제공
                 "name":   h["name"],
                 "weight": pct,
                 "shares": f"{h['shares']//10000}만주" if h['shares']>=10000 else f"{h['shares']:,}주",
-                "value":  f"{val_b}억$",
+                "value":  format_13f_value(h["value"]),
                 "delta":  0,
                 "trend":  "hold",
             })
-        return result
+        return {"top": result, "count": len(holdings), "total_value_thousand": total_val}
     except Exception as e:
         print(f"    ⚠ XML 파싱 오류: {e}")
+        return {"top": [], "count": 0, "total_value_thousand": 0}
+
+def get_13f_holdings(cik: str, accession: str, top_n: int = 15) -> list:
+    """13F 보고서에서 상위 보유 종목 파싱"""
+    return get_13f_report(cik, accession, top_n).get("top", [])
+
+def fetch_nps_overseas_portfolio(limit: int = 120) -> list:
+    """국민연금 해외 13F 포트폴리오 수집"""
+    print("\n📡 [SEC] 국민연금 해외 13F 포트폴리오 수집 중...")
+    try:
+        acc, date = get_latest_13f_accession(NPS_13F_CIK)
+        if not acc:
+            print("  ⚠ 국민연금 13F 없음")
+            return []
+        report = get_13f_report(NPS_13F_CIK, acc, limit)
+        rows = []
+        for h in report.get("top", []):
+            rows.append({
+                **h,
+                "exch": "US",
+                "date": date,
+            })
+        print(f"  ✅ 국민연금 해외 13F: 전체 {report.get('count',0)}개 중 {len(rows)}개 표시, 신고일 {date}")
+        return rows
+    except Exception as e:
+        print(f"  ⚠ 국민연금 해외 13F 수집 실패: {e}")
         return []
 
-def fetch_global_whales(top_n: int = 10) -> list:
+def fetch_global_whales(top_n: int = GLOBAL_WHALE_TOP_N) -> list:
     """전체 글로벌 고래 13F 데이터 수집"""
     print("\n📡 [D] SEC EDGAR 13F — 글로벌 고래 수집 중...")
     results = []
@@ -635,21 +696,20 @@ def fetch_global_whales(top_n: int = 10) -> list:
             if not acc:
                 print("13F 없음")
                 continue
-            holdings = get_13f_holdings(w["cik"], acc, top_n)
-            total_val = sum(
-                float(h["value"].replace("억$","")) for h in holdings
-            ) if holdings else 0
+            report = get_13f_report(w["cik"], acc, top_n)
+            holdings = report.get("top", [])
+            total_val = report.get("total_value_thousand", 0)
             results.append({
                 "id":       w["cik"],
                 "emoji":    w["emoji"],
                 "name":     w["name"],
                 "fund":     w["name"],
-                "aum":      f"{total_val:.0f}억$" if total_val < 10000 else f"{total_val/10000:.1f}조$",
-                "holdings": top_n,
+                "aum":      format_13f_value(total_val),
+                "holdings": report.get("count", len(holdings)),
                 "filingDate": date,
                 "top":      holdings,
             })
-            print(f"✅ {len(holdings)}개 종목, 신고일 {date}")
+            print(f"✅ 전체 {report.get('count',0)}개 중 {len(holdings)}개 표시, 신고일 {date}")
             time.sleep(0.5)  # SEC rate limit 준수
         except Exception as e:
             print(f"오류: {e}")
@@ -664,10 +724,14 @@ def run_global_whales(auto: bool = False):
     print("\n" + "═"*52)
     print("  🌍 SEC 13F — 글로벌 고래 포트폴리오 수집")
     print("═"*52)
-    whales = fetch_global_whales(top_n=10)
+    whales = fetch_global_whales(top_n=GLOBAL_WHALE_TOP_N)
     out = {
-        "updated_at": TODAY.isoformat(),
+        "data_updated_at": TODAY.isoformat(),
         "global_whales": whales,
+        "meta": {
+            "schedule": "SEC 13F 분기 공시 기준, GitHub Actions 매일 10:00 KST 확인",
+            "top_n": GLOBAL_WHALE_TOP_N,
+        },
     }
     with open("global_whales.json","w",encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
@@ -681,3 +745,34 @@ def run_global_whales(auto: bool = False):
     else:
         print("  💡 global_whales.json → 관리자 패널에서 업로드하거나")
         print("     Firestore에 'whale_data/global' 컬렉션으로 저장하세요.")
+
+
+if __name__ == "__main__":
+    args = sys.argv[1:]
+    auto = "--auto" in args
+    do_dart = "--dart" in args or not [a for a in args if a.startswith("--")]
+    do_kis  = "--kis"  in args
+
+    # --auto 는 DART만 (GitHub Actions용)
+    if auto:
+        do_dart = True
+        do_kis  = False
+
+    print("╔══════════════════════════════════════════════════╗")
+    print("║   🐋 Whale Tracker Pro — 데이터 수집기            ║")
+    print(f"║   {TODAY.strftime('%Y-%m-%d %H:%M')}                                ║")
+    print("║   모드: " + ("자동(GitHub Actions)" if auto else "수동") + " " * 30 + "║")
+    print("╚══════════════════════════════════════════════════╝")
+
+    if do_dart:
+        try:
+            run_dart(auto=auto)
+        except Exception as e:
+            print(f"\n  ❌ DART 오류: {e}")
+
+    if do_kis:
+        run_kis()
+
+    print("\n" + "═"*52)
+    print("  🎉 완료!")
+    print("═"*52)

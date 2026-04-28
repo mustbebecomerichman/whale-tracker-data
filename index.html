@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-28-admin-nps-auth-v4"/>
+<meta name="whale-tracker-version" content="2026-04-28-expanded-data-v5"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -206,6 +206,7 @@ td.name{font-weight:600;color:var(--text);}
 .acct-bar{height:100%;border-radius:4px;background:var(--accent);transition:width .4s;}
 .acct-pct{font-size:.75rem;color:var(--text2);text-align:right;}
 .acct-rate{font-size:.83rem;font-weight:700;text-align:right;}
+.acct-meta{font-size:.7rem;color:var(--text2);margin-top:2px;font-weight:600;}
 
 /* YEAR SUMMARY */
 .year-chips{display:flex;gap:9px;margin-bottom:12px;flex-wrap:wrap;}
@@ -261,6 +262,9 @@ select.sheet-input{cursor:pointer;}
 .price-card-change.up{color:var(--up);}
 .price-card-change.down{color:var(--down);}
 .price-card-change.flat{color:var(--text2);}
+.price-card-supply{margin-top:7px;display:grid;gap:3px;font-size:.68rem;color:var(--text2);}
+.price-card-supply div{display:flex;justify-content:space-between;gap:6px;}
+.price-card-supply strong{font-weight:800;}
 .price-loading{text-align:center;padding:20px;color:var(--text2);font-size:.84rem;}
 .stock-detail-panel{display:none;background:#fff;border:1px solid var(--border);border-radius:12px;
   padding:14px 16px;margin-top:12px;box-shadow:var(--shadow);}
@@ -638,13 +642,14 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <div class="hero-stat"><div class="num" id="qs-universe">-</div><div class="lbl">분석 종목</div></div>
       <div class="hero-stat"><div class="num">5개</div><div class="lbl">퀀트 전략</div></div>
       <div class="hero-stat"><div class="num" id="qs-top">-</div><div class="lbl">최고 점수</div></div>
-      <div class="hero-stat"><div class="num" id="qs-updated">실시간</div><div class="lbl">계산 방식</div></div>
+      <div class="hero-stat"><div class="num" id="qs-updated">매일</div><div class="lbl">업데이트</div></div>
     </div>
   </div>
   <div class="section">
     <div class="section-title">
-      <div class="section-title-left">전략 선택 <span class="badge">KOSPI & KOSDAQ</span>
-        <span class="update-badge"><span class="dot-pulse"></span>자동 점수화</span></div>
+      <div class="section-title-left">전략 선택 <span class="badge">KOSPI200 · KOSDAQ150</span>
+        <span class="update-badge"><span class="dot-pulse"></span>자동 점수화</span>
+        <span class="badge" id="qs-update-cycle">매일 10:00 KST</span></div>
     </div>
     <div class="tab-row" id="quant-tabs">
       <div class="tab active" onclick="filterQuant('balanced',this)">종합</div>
@@ -674,10 +679,11 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
 <div class="page" id="page-national">
   <div class="hero">
     <h1>지금 <span>국민연금</span>은 무엇을 사고 있을까?</h1>
-    <p>DART 공시 기반 · 자동 업데이트 · 국내 대형 자금 흐름 추적</p>
+    <p>DART 공시와 SEC 13F 기반 · 국내/해외 보유 흐름 추적</p>
     <div class="hero-stats">
       <div class="hero-stat"><div class="num" id="nps-aum">1,027조</div><div class="lbl">국내 운용 자산</div></div>
       <div class="hero-stat"><div class="num" id="nps-count-stat">-</div><div class="lbl">보유 종목 수</div></div>
+      <div class="hero-stat"><div class="num" id="nps-overseas-stat">-</div><div class="lbl">해외 13F 종목</div></div>
       <div class="hero-stat"><div class="num" id="nps-kospi-stat">-</div><div class="lbl">KOSPI 편입 비중</div></div>
       <div class="hero-stat"><div class="num" id="nps-updated-stat">-</div><div class="lbl">최근 업데이트</div></div>
     </div>
@@ -685,7 +691,8 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   <div class="section">
     <div class="section-title">
       <div class="section-title-left">국내 포트폴리오 <span class="badge">KOSPI & KOSDAQ</span>
-        <span class="update-badge"><span class="dot-pulse"></span>자동 업데이트</span></div>
+        <span class="update-badge"><span class="dot-pulse"></span>자동 업데이트</span>
+        <span class="badge" id="nps-update-cycle">매일 10:00 KST</span></div>
     </div>
     <div class="tab-row" id="alert-nps-tabs">
       <div class="tab active" onclick="filterAlertNPS('all',this)">전체</div>
@@ -702,6 +709,17 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <tbody id="alert-nps-tbody"></tbody>
     </table></div></div>
   </div>
+  <div class="section">
+    <div class="section-title">
+      <div class="section-title-left">해외 포트폴리오 <span class="badge">SEC 13F</span>
+        <span class="badge" id="nps-overseas-count">-</span>
+        <span class="badge" id="nps-overseas-updated">분기 업데이트</span></div>
+    </div>
+    <div class="card" style="padding:0"><div class="tbl-wrap"><table>
+      <thead><tr><th>#</th><th>티커/CUSIP</th><th>종목명</th><th>거래소</th><th>보유 주식</th><th>평가액</th><th>비중</th><th>상태</th></tr></thead>
+      <tbody id="nps-overseas-tbody"></tbody>
+    </table></div></div>
+  </div>
 </div>
 
 <!-- ── 대량보유 PAGE ── -->
@@ -711,7 +729,8 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     <p>5% 이상 지분 취득·처분·변동 공시를 실시간으로 추적합니다</p>
   </div>
   <div class="section">
-    <div class="section-title"><div class="section-title-left">지분 5%↑ 대량 보유 <span class="badge">최근 30일</span></div></div>
+    <div class="section-title"><div class="section-title-left">지분 5%↑ 대량 보유 <span class="badge">최근 90일</span>
+      <span class="badge" id="alert5-count">-</span><span class="badge">매일 10:00 KST</span></div></div>
     <div class="tab-row" id="alert5-tabs">
       <div class="tab active" onclick="filterA5('all',this)">전체</div>
       <div class="tab" onclick="filterA5('buy',this)">신규 취득</div>
@@ -736,7 +755,8 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     <p>미 SEC 13F 공시 기반 · 분기별 업데이트 · 대가들의 포트폴리오 추적</p>
   </div>
   <div class="section">
-    <div class="section-title"><div class="section-title-left">투자 대가 선택</div></div>
+    <div class="section-title"><div class="section-title-left">투자 대가 선택
+      <span class="badge" id="legend-count">-</span><span class="badge" id="legend-updated">분기 업데이트</span></div></div>
     <div class="grid-3" id="legend-grid"></div>
   </div>
   <div class="detail-panel" id="legend-detail" style="display:none">
@@ -837,7 +857,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         </tr></thead>
         <tbody id="acct-body"></tbody>
         <tfoot><tr>
-          <td colspan="7" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
+          <td colspan="8" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
           <td id="af-eval" style="padding:8px 10px;font-weight:700;"></td>
           <td id="af-purchase" style="padding:8px 10px;font-weight:700;"></td>
           <td id="af-rate" style="padding:8px 10px;font-weight:700;"></td>
@@ -1280,9 +1300,23 @@ const S_PORT={
 // ═══════════════════════════════════════════════════════
 //  고래 데이터 로드 (국민연금·대량보유)
 // ═══════════════════════════════════════════════════════
-let _npsAll=S_NPS.slice(), _npsFilter='all', _a5All=S_A5.slice();
+let _npsAll=S_NPS.slice(), _npsOverseas=S_OVS.slice(), _npsFilter='all', _a5All=S_A5.slice();
 let _quantAll=S_QUANT.slice(), _quantFilter='balanced';
 let _legendAll=LEGENDS.slice();
+let _whaleMeta={}, _globalMeta={};
+function formatDataDate(v){
+  if(!v)return '';
+  if(v?.toDate)return v.toDate().toLocaleDateString('ko-KR');
+  if(v instanceof Date)return v.toLocaleDateString('ko-KR');
+  const s=String(v);
+  const parsed=Date.parse(s);
+  if(Number.isFinite(parsed))return new Date(parsed).toLocaleDateString('ko-KR');
+  return s.slice(0,10);
+}
+function setText(id,value){
+  const el=document.getElementById(id);
+  if(el)el.textContent=value;
+}
 function normalizeNpsMarket(v){
   const s=String(v||'').toUpperCase();
   if(s==='Y')return 'KOSPI';
@@ -1302,6 +1336,20 @@ function normalizeNpsRows(rows){
     date:x.date||x.rcept_dt||x.updatedAt||''
   })).filter(x=>x.code||x.name);
 }
+function normalizeNpsOverseasRows(rows){
+  if(!Array.isArray(rows))return [];
+  return rows.map(x=>({
+    ticker:normalizeStockCode(x.ticker||x.symbol||x.code||x.cusip||''),
+    name:x.name||x.company||x.issuer||x.ticker||'-',
+    exch:x.exch||x.exchange||x.market||'US',
+    shares:x.shares||x.share||x.quantity||'-',
+    value:x.value||x.marketValue||x.market_value||'-',
+    weight:Number(x.weight ?? x.pct ?? x.ratio ?? 0),
+    delta:Number(x.delta ?? x.change ?? 0),
+    trend:x.trend||((Number(x.delta ?? x.change ?? 0)>0)?'increase':(Number(x.delta ?? x.change ?? 0)<0?'decrease':'hold')),
+    date:x.date||x.filingDate||x.updatedAt||''
+  })).filter(x=>x.ticker||x.name);
+}
 async function loadWhaleData(){
   let d={nps_portfolio:S_NPS,overseas:S_OVS,alert5:S_A5,alert10:S_A10,quant_universe:S_QUANT};
   let g={global_whales:LEGENDS};
@@ -1313,16 +1361,26 @@ async function loadWhaleData(){
     const s=await db.collection('whale_data').doc('global').get();
     if(s.exists) g={...g,...s.data()};
   }catch(e){}
+  _whaleMeta={...(d.meta||{}),updated_at:d.updated_at,data_updated_at:d.data_updated_at||d.updatedAt};
+  _globalMeta={...(g.meta||{}),updated_at:g.updated_at,data_updated_at:g.data_updated_at||g.updatedAt};
   const npsRows=normalizeNpsRows(d.nps_portfolio||d.nps||d.national_pension||d.npsPortfolio);
+  const overseasRows=normalizeNpsOverseasRows(d.nps_overseas||d.overseas||d.overseas_portfolio||d.npsOverseas);
   _npsAll=npsRows.length?npsRows:S_NPS.slice();
+  _npsOverseas=overseasRows.length?overseasRows:S_OVS.slice();
   _quantAll=(Array.isArray(d.quant_universe)&&d.quant_universe.length?d.quant_universe:S_QUANT).slice();
   _a5All=(Array.isArray(d.alert5)&&d.alert5.length?d.alert5:S_A5).slice();
   _legendAll=normalizeLegendData(g.global_whales||g.legends||LEGENDS);
   filterAlertNPSSearch();
+  renderOVS(_npsOverseas);
   renderQuant();
   renderA5(_a5All);
   renderA10(d.alert10||S_A10);
   renderLegends();
+  const dataDate=formatDataDate(d.data_updated_at||d.updated_at||d.updatedAt);
+  if(dataDate){
+    setText('qs-updated',dataDate);
+    setText('nps-updated-stat',dataDate);
+  }
 }
 
 // ── 렌더: 공통 ─────────────────────────────────────────
@@ -1434,9 +1492,10 @@ function renderQuant(rows=_quantAll){
   const universe=document.getElementById('qs-universe');
   const topEl=document.getElementById('qs-top');
   const updated=document.getElementById('qs-updated');
+  const dataDate=formatDataDate(_whaleMeta.updated_at||_whaleMeta.data_updated_at);
   if(universe)universe.textContent=_quantAll.length+'개';
   if(topEl)topEl.textContent=top?top.score+'점':'-';
-  if(updated)updated.textContent=(QUANT_METHODS[_quantFilter]||QUANT_METHODS.balanced).label;
+  if(updated)updated.textContent=dataDate||'매일';
   renderQuantResult(scored);
   if(picks){
     picks.innerHTML=scored.slice(0,3).map((d,i)=>`
@@ -1501,12 +1560,14 @@ function renderNPS(data){
   if(count)count.textContent=(data||[]).length+'개';
   const statCount=document.getElementById('nps-count-stat');
   if(statCount)statCount.textContent=(_npsAll||[]).length+'개';
+  setText('nps-overseas-stat',(_npsOverseas||[]).length+'개');
   const kospiCnt=(_npsAll||[]).filter(x=>x.market==='KOSPI').length;
   const kospiStat=document.getElementById('nps-kospi-stat');
   if(kospiStat)kospiStat.textContent=_npsAll.length?Math.round(kospiCnt/_npsAll.length*1000)/10+'%':'-';
   const dates=(_npsAll||[]).map(x=>x.date||x.updatedAt||x.disclosureDate).filter(Boolean).sort();
   const up=document.getElementById('nps-updated-stat');
-  if(up)up.textContent=dates.length?dates[dates.length-1]:'자동';
+  const dataDate=formatDataDate(_whaleMeta.updated_at||_whaleMeta.data_updated_at);
+  if(up)up.textContent=dates.length?dates[dates.length-1]:(dataDate||'자동');
   if(!tbody)return;
   if(!data.length){
     tbody.innerHTML='<tr><td colspan="8" class="neutral" style="text-align:center;padding:18px;">표시할 국민연금 보유 종목이 없습니다.</td></tr>';
@@ -1543,15 +1604,32 @@ function filterAlertNPSSearch(){
   renderNPS(d);
 }
 function renderOVS(data){
-  document.getElementById('overseas-tbody').innerHTML=data.map((d,i)=>`
+  const tbody=document.getElementById('nps-overseas-tbody')||document.getElementById('overseas-tbody');
+  if(!tbody)return;
+  data=data||[];
+  setText('nps-overseas-count',data.length+'개');
+  const latest=[...new Set(data.map(x=>x.date).filter(Boolean))].sort().pop();
+  setText('nps-overseas-updated',latest?latest+' 신고':'분기 업데이트');
+  if(!data.length){
+    tbody.innerHTML='<tr><td colspan="8" class="neutral" style="text-align:center;padding:18px;">표시할 해외 포트폴리오가 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML=data.map((d,i)=>`
     <tr><td class="neutral">${i+1}</td><td class="ticker">${d.ticker}</td>
     <td class="name">${d.name}</td><td><span class="tag">${d.exch}</span></td>
-    <td>${d.shares}</td><td>${d.value}</td>
-    <td class="${(d.delta||0)>0?'up-chip':(d.delta||0)<0?'down-chip':'neutral'}">${sgn(d.delta||0)}${(d.delta||0).toFixed(2)}%p</td>
+    <td>${d.shares}</td><td>${d.value}</td><td>${(d.weight||0).toFixed(2)}%</td>
     <td>${trendTag(d.trend,d.delta)}</td></tr>`).join('');
 }
 function renderA5(data){
-  document.getElementById('alert5-list').innerHTML=data.map(d=>{
+  const el=document.getElementById('alert5-list');
+  data=data||[];
+  setText('alert5-count',data.length+'건');
+  if(!el)return;
+  if(!data.length){
+    el.innerHTML='<div class="mp-empty"><div class="ei">📡</div><p>최근 대량보유 공시가 없습니다.</p></div>';
+    return;
+  }
+  el.innerHTML=data.map(d=>{
     const up=d.type==='buy'||d.type==='increase';
     return`<div class="alert-card">
       <div class="alert-icon ${up?'buy':'sell'}">${up?'📈':'📉'}</div>
@@ -1571,7 +1649,14 @@ function filterA5(type,btn){
   renderA5(d);
 }
 function renderA10(data){
-  document.getElementById('alert10-tbody').innerHTML=data.map(d=>`
+  const tbody=document.getElementById('alert10-tbody');
+  data=data||[];
+  if(!tbody)return;
+  if(!data.length){
+    tbody.innerHTML='<tr><td colspan="6" class="neutral" style="text-align:center;padding:18px;">표시할 핵심 주주 변동이 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML=data.map(d=>`
     <tr><td class="name">${d.name}</td><td>${d.holder}</td><td><strong>${d.pct}%</strong></td>
     <td class="${d.delta!==0?(d.delta>0?'up-chip':'down-chip'):'neutral'}">${d.delta===0?'-':sgn(d.delta)+d.delta+'%p'}</td>
     <td class="neutral">${d.date}</td><td><span class="tag">${d.note}</span></td></tr>`).join('');
@@ -1599,11 +1684,14 @@ function normalizeLegendData(rows){
         value:h.value||h.marketValue||h.market_value||'-',
         delta:Number(h.delta ?? h.change ?? 0),
         trend:h.trend||((Number(h.delta ?? h.change ?? 0)>0)?'increase':(Number(h.delta ?? h.change ?? 0)<0?'decrease':'hold'))
-      })).slice(0,20)
+      })).slice(0,50)
     };
   });
 }
 function renderLegends(){
+  setText('legend-count',(_legendAll||[]).length+'명');
+  const latest=[...new Set((_legendAll||[]).map(x=>x.filingDate).filter(Boolean))].sort().pop();
+  setText('legend-updated',latest?latest+' 신고':'분기 업데이트');
   document.getElementById('legend-grid').innerHTML=_legendAll.map(l=>`
     <div class="legend-card" onclick="showLegend('${l.id}')">
     <div class="legend-avatar">${l.emoji}</div>
@@ -1719,17 +1807,36 @@ function renderMpSummary(data){
   document.getElementById('mp-stock-stats').innerHTML=s.numStocks?
     `<span class="status-chip">${s.numStocks}개</span><span class="status-chip" style="color:var(--up)">▲${s.profitCount||0}</span><span class="status-chip" style="color:var(--down)">▼${s.lossCount||0}</span>`:'';
 }
+function accountSummaryRows(rows){
+  const grouped={};
+  (rows||[]).forEach(a=>{
+    const name=[a.brokerage||a.name||'미지정',a.acctType].filter(Boolean).join(' ');
+    const ev=displayCurrencyValue(a.price&&a.qty?a.qty*a.price:(a.eval||0),a.code);
+    const pur=displayCurrencyValue(a.avgBuy&&a.qty?a.qty*a.avgBuy:(a.purchase||0),a.code);
+    if(!ev&&!pur)return;
+    if(!grouped[name])grouped[name]={name,eval:0,purchase:0,count:0};
+    grouped[name].eval+=ev;
+    grouped[name].purchase+=pur;
+    grouped[name].count+=1;
+  });
+  return Object.values(grouped).map(a=>({
+    ...a,
+    pnl:a.eval-a.purchase,
+    rate:a.purchase>0?Math.round((a.eval-a.purchase)/a.purchase*10000)/100:0
+  })).sort((a,b)=>b.eval-a.eval);
+}
 function renderMpAccounts(accounts){
   const wrap=document.getElementById('acct-wrap');
-  const active=accounts.filter(a=>a.eval>0);
+  const summary=(accounts||[]).some(a=>a.count!==undefined && a.name && !a.code)?accounts:accountSummaryRows(accounts);
+  const active=summary.filter(a=>a.eval>0);
   if(!active.length){wrap.innerHTML='<div class="mp-empty"><div class="ei">🏦</div><p>데이터를 입력하면 계좌별 현황이 표시됩니다.</p></div>';return;}
   const maxE=Math.max(...active.map(a=>a.eval),1);
   const totE=active.reduce((s,a)=>s+a.eval,0);
-  wrap.innerHTML=accounts.map(a=>{
+  wrap.innerHTML=summary.map(a=>{
     if(!a.eval&&!a.purchase)return '';
     const pct=totE>0?(a.eval/totE*100).toFixed(1):0;
     return`<div class="acct-row">
-      <div class="acct-name">${a.name}</div>
+      <div class="acct-name">${a.name}<div class="acct-meta">${a.count}종목 · 매입 ${fmt(Math.round(a.purchase))}원</div></div>
       <div class="acct-amt">${fmt(a.eval)}원</div>
       <div class="acct-bar-wrap"><div class="acct-bar" style="width:${(a.eval/maxE*100).toFixed(1)}%"></div></div>
       <div class="acct-pct">${pct}%</div>
@@ -2035,6 +2142,7 @@ async function fetchAllPrices(){
     const res=await fetch('/api/kis-price',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:holdings})});
     if(!res.ok)throw new Error('HTTP '+res.status);
     const prices=await res.json();
+    const supplies=await fetchSupplyDemandMap(holdings.filter(h=>!isOverseasCode(h.code)).map(h=>h.code));
     holdings.forEach(h=>{
       const key=h.market+':'+h.code;const p=normalizeQuote(extractQuote(prices,key,h.code),h.code,h.market);
       const card=document.getElementById('pc-'+h.code);if(!card)return;
@@ -2042,20 +2150,42 @@ async function fetchAllPrices(){
       const cls=p.changeRate>0?'up':p.changeRate<0?'down':'flat';
       const sym=p.changeRate>0?'▲':p.changeRate<0?'▼':'-';
       const pnl=h.qty>0?Math.round((p.price-h.avgBuy)*h.qty):null;
-      const displayName=p.name||h.name||lookupCode(h.code)||h.code;
+      const displayName=bestStockName(h.code,p.name,h.name);
       card.innerHTML=`<div class="price-card-name">${displayName}</div>
         <div class="price-card-code">${h.code}${h.qty?' · '+h.qty+'주':''}</div>
         <div class="price-card-price">${formatPriceByQuote(p,h.code)}</div>
         <div class="price-card-change ${cls}">${sym} ${formatMoneyByCode(Math.abs(p.change),h.code)} (${p.changeRate>=0?'+':''}${p.changeRate.toFixed(2)}%)</div>
-        ${pnl!==null?`<div style="margin-top:3px;font-size:.72rem;font-weight:700;color:${pnl>=0?'var(--up)':'var(--down)'}">손익 ${pnl>=0?'+':'-'}${formatMoneyByCode(Math.abs(pnl),h.code)}</div>`:''}`;
+        ${pnl!==null?`<div style="margin-top:3px;font-size:.72rem;font-weight:700;color:${pnl>=0?'var(--up)':'var(--down)'}">손익 ${pnl>=0?'+':'-'}${formatMoneyByCode(Math.abs(pnl),h.code)}</div>`:''}
+        ${supplyMiniHtml(supplies[h.code],h.code)}`;
     });
     const now=new Date();
     document.getElementById('price-last-update').textContent=now.getHours()+':'+String(now.getMinutes()).padStart(2,'0')+' 업데이트';
+    setPriceApiStatus('API 정상', 'ok');
   }catch(e){
     setPriceApiStatus('API 오류', 'err');
     grid.innerHTML=`<div class="price-loading" style="color:var(--down)">⚠ ${explainPriceError(e)}<br><small>현재가는 Cloudflare Pages Functions에서만 동작합니다.</small></div>`;
   }
   _priceBusy=false;
+}
+async function fetchSupplyDemandMap(codes){
+  const clean=[...new Set((codes||[]).map(normalizeStockCode).filter(c=>/^\d{6}$/.test(c)))];
+  if(!clean.length)return {};
+  try{
+    setPriceApiStatus('수급 조회 중', 'neutral');
+    const res=await fetch('/api/supply-demand',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codes:clean})});
+    const data=await safeJson(res);
+    if(!res.ok)return Object.fromEntries(clean.map(c=>[c,{error:data?.error||('HTTP '+res.status)}]));
+    return data||{};
+  }catch(e){
+    return Object.fromEntries(clean.map(c=>[c,{error:e.message}]));
+  }
+}
+function supplyMiniHtml(s,code){
+  if(isOverseasCode(code))return '';
+  if(!s)return '<div class="price-card-supply"><div><span>수급</span><strong class="neutral">데이터 없음</strong></div></div>';
+  if(s.error)return `<div class="price-card-supply"><div><span>수급</span><strong class="down-chip">${s.error}</strong></div></div>`;
+  const item=(label,val)=>`<div><span>${label}</span><strong class="${Number(val)>=0?'up-chip':'down-chip'}">${Number(val)>=0?'+':''}${fmt(Number(val)||0)}주</strong></div>`;
+  return `<div class="price-card-supply">${item('외국인',s.foreign)}${item('기관',s.institution)}</div>`;
 }
 async function fetchSupplyDemandForCode(code){
   if(isOverseasCode(code))return null;
@@ -2074,8 +2204,8 @@ function findHoldingByCode(code){
     || Object.values(mpData?.transactions||{}).flat().find(t=>normalizeStockCode(t.code)===clean)
     || {code:clean,name:lookupCode(clean),stockName:lookupCode(clean)};
 }
-function supplyDemandHtml(s){
-  if(!s)return '<div class="stock-detail-list-row"><span>투자자 수급</span><strong class="neutral">국내 종목만 지원</strong></div>';
+function supplyDemandHtml(s,code){
+  if(!s)return `<div class="stock-detail-list-row"><span>투자자 수급</span><strong class="neutral">${isOverseasCode(code)?'국내 종목만 지원':'데이터 없음'}</strong></div>`;
   if(s.error)return `<div class="stock-detail-list-row"><span>투자자 수급</span><strong class="down-chip">${s.error}</strong></div>`;
   const row=(label,val)=>`<div class="stock-detail-list-row"><span>${label}</span><strong class="${Number(val)>=0?'up-chip':'down-chip'}">${Number(val)>=0?'+':''}${fmt(Number(val)||0)}주</strong></div>`;
   return row('개인 순매수',s.individual)+row('외국인 순매수',s.foreign)+row('기관 순매수',s.institution);
@@ -2106,7 +2236,7 @@ async function showHoldingDetail(code){
   const qty=Number(h.qty)||0;
   const avg=Number(h.avgBuy)||0;
   const pnl=quote?.price&&qty?Math.round((quote.price-avg)*qty*100)/100:null;
-  const displayName=quote?.name||localName;
+  const displayName=bestStockName(clean,quote?.name,localName);
   panel.innerHTML=`<div class="stock-detail-head">
     <div><div class="stock-detail-name">${displayName}</div><div class="stock-detail-meta">${clean} · ${isOverseasCode(clean)?'USD 표시':'KRW 표시'}${quote?.source?' · '+quote.source:''}</div></div>
     <button class="btn btn-outline btn-sm" onclick="document.getElementById('stock-detail-panel').classList.remove('show')">닫기</button>
@@ -2118,7 +2248,7 @@ async function showHoldingDetail(code){
     <div class="stock-detail-metric"><div class="k">보유 손익</div><div class="v ${pnl===null?'neutral':pnl>=0?'up-chip':'down-chip'}">${pnl===null?'-':(pnl>=0?'+':'-')+formatMoneyByCode(Math.abs(pnl),clean)}</div></div>
   </div>`}
   <div style="font-size:.82rem;font-weight:900;margin-bottom:7px;">투자자 수급</div>
-  <div class="stock-detail-list">${supplyDemandHtml(supply)}</div>
+  <div class="stock-detail-list">${supplyDemandHtml(supply,clean)}</div>
   ${etfHoldingsHtml(clean)}`;
 }
 
@@ -2323,6 +2453,13 @@ function lookupCode(code) {
   }
   return '';
 }
+function bestStockName(code, apiName='', fallback=''){
+  const clean=normalizeStockCode(code);
+  const local=lookupCode(clean);
+  if(isOverseasCode(clean))return apiName||local||fallback||clean;
+  if(local && (!apiName || /^[A-Z0-9 .,&()-]+$/.test(String(apiName))))return local;
+  return apiName||local||fallback||clean;
+}
 
 const quoteCache={};
 const codeLookupTimers={sheet:{},acct:{}};
@@ -2498,7 +2635,7 @@ async function handleSheetCodeInput(rowIdx, codeInput){
   try{
     const q=await fetchQuoteForCode(code);
     const row=codeInput.closest('tr');
-    const apiName=q.name||lookupCode(code);
+    const apiName=bestStockName(code,q.name,lookupCode(code));
     if(apiName){
       fillInputValue(row,'name',apiName,true);
       const nameInput=row?.querySelector('input[data-field="name"]');
@@ -2531,7 +2668,7 @@ async function handleAcctCodeInput(acctIdx, codeInput){
   try{
     const q=await fetchQuoteForCode(code);
     const row=codeInput.closest('tr');
-    const apiName=q.name||lookupCode(code);
+    const apiName=bestStockName(code,q.name,lookupCode(code));
     if(apiName){
       fillInputValue(row,'stockName',apiName,true);
       const nameInput=row?.querySelector('input[data-field="stockName"]');
@@ -2724,18 +2861,9 @@ function updateAcctFooter(rows) {
 }
 
 function updateAcctSummaryBar() {
-  const rows=_acctRows.map(a => ({
-    name: a.brokerage + (a.acctType?' ('+a.acctType+')':''),
-    eval: displayCurrencyValue(a.price&&a.qty ? a.qty*a.price : (a.eval||0),a.code),
-    purchase: displayCurrencyValue(a.avgBuy&&a.qty ? a.qty*a.avgBuy : (a.purchase||0),a.code),
-    rate: (() => {
-      const ev=displayCurrencyValue(a.price&&a.qty?a.qty*a.price:(a.eval||0),a.code);
-      const pur=displayCurrencyValue(a.avgBuy&&a.qty?a.qty*a.avgBuy:(a.purchase||0),a.code);
-      return pur>0?Math.round((ev-pur)/pur*10000)/100:0;
-    })()
-  }));
+  const rows=accountSummaryRows(_acctRows);
   renderMpAccounts(rows);
-  updateMpSummaryFromAccountRows(rows);
+  updateMpSummaryFromAccountRows(_acctRows.map(accountRowToData));
 }
 
 function updateMpSummaryFromAccountRows(rows) {
@@ -2796,8 +2924,9 @@ async function fetchAndUpdateAcctPrices() {
         _acctRows[i].price = p.price;
         _acctRows[i].eval  = (a.qty||0) * p.price;
         _acctRows[i]._autoPrice = !!p.price;
-        if(p.name){
-          _acctRows[i].stockName = p.name;
+        const apiName=bestStockName(a.code,p.name,a.stockName);
+        if(apiName){
+          _acctRows[i].stockName = apiName;
           _acctRows[i]._autoName = true;
         }
         // 현재가 셀 업데이트

@@ -8,7 +8,7 @@ on:
 jobs:
   update-whale-data:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: 📥 코드 체크아웃
@@ -49,9 +49,11 @@ jobs:
           try:
             d = json.load(open('whale_data.json'))
             print(f'국민연금 종목: {len(d.get(\"nps_portfolio\",[]))}개')
+            print(f'국민연금 해외 13F: {len(d.get(\"nps_overseas\",[]))}개')
             print(f'대량보유 알림: {len(d.get(\"alert5\",[]))}건')
+            print(f'10% 핵심 주주: {len(d.get(\"alert10\",[]))}건')
             print(f'퀀트 유니버스: {len(d.get(\"quant_universe\",[]))}개')
-            print(f'업데이트: {d.get(\"updated_at\",\"-\")}')
+            print(f'업데이트: {d.get(\"data_updated_at\", d.get(\"updated_at\",\"-\"))}')
           except: print('파일 없음')
           "
           echo "=== global_whales.json ==="
