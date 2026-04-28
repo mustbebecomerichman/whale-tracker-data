@@ -112,7 +112,7 @@ async function fetchDomesticPrice(code, token, env) {
   const price = parseInt(out.stck_prpr) || 0;
   const change = parseInt(out.prdy_vrss) || 0;
   const changeRate = parseFloat(out.prdy_ctrt) || 0;
-  const name = out.prdt_abrv_name || out.stck_kor_isnm || '';
+  const name = out.prdt_abrv_name || out.stck_kor_isnm || out.hts_kor_isnm || out.prdt_name || out.kor_isnm || '';
   if (!price) throw new Error(data.msg1 || out.msg1 || `데이터 없음 (${data.rt_cd || res.status})`);
   return { price, change, changeRate, name, source:'KIS', code };
 }
@@ -133,7 +133,8 @@ async function fetchOverseasPrice(code, market, token, env) {
   const change = parseFloat(out.diff) || 0;
   const changeRate = parseFloat(out.rate) || 0;
   if (!price) throw new Error(data.msg1 || out.msg1 || `데이터 없음 (${data.rt_cd || res.status})`);
-  return { price, change, changeRate, source:'KIS', code };
+  const name = out.ovrs_item_name || out.ovrs_pdno_name || out.prdt_name || out.engl_name || '';
+  return { price, change, changeRate, name, source:'KIS', code };
 }
 
 function isTokenError(error) {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-28-sector-detail-us-v3"/>
+<meta name="whale-tracker-version" content="2026-04-28-admin-nps-auth-v4"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -990,7 +990,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <div class="admin-section">
         <div class="admin-title">👥 사용자 관리</div>
         <p style="font-size:.78rem;color:var(--text2);margin-bottom:10px;line-height:1.6;">
-          로그인은 Firebase Authentication 계정이면 바로 허용됩니다. 아래 목록은 운영 메모용이며 승인 게이트로 사용하지 않습니다.
+          가입한 회원 목록을 표시합니다. 로그인은 Firebase Authentication 계정이면 바로 허용되며 승인 게이트는 사용하지 않습니다.
         </p>
         <div class="admin-form-row">
           <input class="admin-input" id="new-user-email" placeholder="이메일 주소" type="email"/>
@@ -1091,7 +1091,7 @@ let auth=null, db=null, me=null;
 firebase.initializeApp(FB);
 auth = firebase.auth();
 db   = firebase.firestore();
-auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
+auth.setPersistence(firebase.auth.Auth.Persistence.NONE).catch(()=>{});
 auth.onAuthStateChanged(async u=>{
   if(u){
     me = u; afterLogin(u);
@@ -1174,6 +1174,13 @@ async function afterLogin(u){
   document.getElementById('admin-nav-btn').style.display=isAdm?'inline-block':'none';
   document.getElementById('admin-badge').style.display=isAdm?'inline-block':'none';
   show('app');
+  try{
+    await db.collection('users').doc(ekey(u.email)).set({
+      email:u.email,
+      name:u.displayName||u.email.split('@')[0],
+      lastLoginAt:firebase.firestore.FieldValue.serverTimestamp()
+    },{merge:true});
+  }catch(e){}
   await loadWhaleData();
   if(isAdm){loadUserList();loadChangelog();}
 }
@@ -1276,6 +1283,25 @@ const S_PORT={
 let _npsAll=S_NPS.slice(), _npsFilter='all', _a5All=S_A5.slice();
 let _quantAll=S_QUANT.slice(), _quantFilter='balanced';
 let _legendAll=LEGENDS.slice();
+function normalizeNpsMarket(v){
+  const s=String(v||'').toUpperCase();
+  if(s==='Y')return 'KOSPI';
+  if(s==='K')return 'KOSDAQ';
+  return s||'KOSPI';
+}
+function normalizeNpsRows(rows){
+  if(!Array.isArray(rows))return [];
+  return rows.map(x=>({
+    code:normalizeStockCode(x.code||x.stock_code||x.stockCode||x.isin||''),
+    name:x.name||x.corp_name||x.stockName||x.company||'',
+    market:normalizeNpsMarket(x.market||x._market||x.corp_cls),
+    shares:x.shares||x.stkqy||x.quantity||'-',
+    pct:Number(x.pct ?? x.stkqy_irds ?? x.ratio ?? x.holdingRate ?? 0),
+    delta:Number(x.delta ?? x.stkqy_irds_change ?? x.change ?? 0),
+    trend:x.trend||((Number(x.delta ?? x.stkqy_irds_change ?? x.change ?? 0)>0)?'increase':(Number(x.delta ?? x.stkqy_irds_change ?? x.change ?? 0)<0?'decrease':'hold')),
+    date:x.date||x.rcept_dt||x.updatedAt||''
+  })).filter(x=>x.code||x.name);
+}
 async function loadWhaleData(){
   let d={nps_portfolio:S_NPS,overseas:S_OVS,alert5:S_A5,alert10:S_A10,quant_universe:S_QUANT};
   let g={global_whales:LEGENDS};
@@ -1287,9 +1313,10 @@ async function loadWhaleData(){
     const s=await db.collection('whale_data').doc('global').get();
     if(s.exists) g={...g,...s.data()};
   }catch(e){}
-  _npsAll=(d.nps_portfolio||S_NPS).slice();
-  _quantAll=(d.quant_universe||S_QUANT).slice();
-  _a5All=(d.alert5||S_A5).slice();
+  const npsRows=normalizeNpsRows(d.nps_portfolio||d.nps||d.national_pension||d.npsPortfolio);
+  _npsAll=npsRows.length?npsRows:S_NPS.slice();
+  _quantAll=(Array.isArray(d.quant_universe)&&d.quant_universe.length?d.quant_universe:S_QUANT).slice();
+  _a5All=(Array.isArray(d.alert5)&&d.alert5.length?d.alert5:S_A5).slice();
   _legendAll=normalizeLegendData(g.global_whales||g.legends||LEGENDS);
   filterAlertNPSSearch();
   renderQuant();
@@ -1952,8 +1979,8 @@ function renderBrokerPnlChart(rows=_acctRows){
   const grouped={};
   (rows||[]).forEach(a=>{
     const broker=a.brokerage||'미지정';
-    const ev=a.price&&a.qty?a.qty*a.price:(a.eval||0);
-    const pur=a.avgBuy&&a.qty?a.qty*a.avgBuy:(a.purchase||0);
+    const ev=displayCurrencyValue(a.price&&a.qty?a.qty*a.price:(a.eval||0),a.code);
+    const pur=displayCurrencyValue(a.avgBuy&&a.qty?a.qty*a.avgBuy:(a.purchase||0),a.code);
     if(!ev&&!pur)return;
     if(!grouped[broker])grouped[broker]={eval:0,purchase:0,pnl:0,count:0};
     grouped[broker].eval+=ev;
@@ -1971,10 +1998,12 @@ function renderBrokerPnlChart(rows=_acctRows){
     return;
   }
   const max=Math.max(...data.map(x=>Math.abs(x.pnl)),1);
+  const hasUsd=(rows||[]).some(a=>currencyForCode(a.code)==='USD');
+  const suffix=hasUsd?(_showKrwConverted?` · TTS ${_fxTtsRate.toLocaleString('ko-KR')}`:' · USD 포함'):'';
   el.innerHTML=`<div class="broker-pnl-list">${data.map(x=>{
     const cls=x.pnl>=0?'up-chip':'down-chip';
     return `<div class="broker-pnl-row">
-      <div class="broker-pnl-name">${x.broker}<div style="font-size:.7rem;color:var(--text2);font-weight:600">${x.count}종목 · ${x.rate>=0?'+':''}${x.rate.toFixed(2)}%</div></div>
+      <div class="broker-pnl-name">${x.broker}<div style="font-size:.7rem;color:var(--text2);font-weight:600">${x.count}종목 · ${x.rate>=0?'+':''}${x.rate.toFixed(2)}%${suffix}</div></div>
       <div class="broker-pnl-bar-wrap"><div class="broker-pnl-bar ${x.pnl<0?'down':''}" style="width:${Math.max(4,Math.abs(x.pnl)/max*100).toFixed(1)}%"></div></div>
       <div class="broker-pnl-value ${cls}">${x.pnl>=0?'+':''}${fmt(Math.round(x.pnl))}원</div>
     </div>`;
@@ -2121,14 +2150,40 @@ function downloadMpTemplate(){
 async function loadUserList(){
   const list=document.getElementById('user-list');
   try{
-    const s=await db.collection('approved_users').get();
-    if(s.empty){list.innerHTML='<p style="color:var(--text2);text-align:center;padding:14px;font-size:.82rem;">등록된 사용자 없음</p>';return;}
-    list.innerHTML='';
-    s.forEach(doc=>{
-      const d=doc.data(),dt=d.addedAt?.toDate?d.addedAt.toDate().toLocaleDateString('ko-KR'):'-';
-      const isAdm=d.email===ADMIN;
-      list.innerHTML+=`<div class="user-row"><div><div class="user-email">${d.name||d.email}${isAdm?' <span class="admin-badge">ADMIN</span>':''}</div><div class="user-meta">${d.email} · ${dt}</div></div><div>${!isAdm?`<button class="btn btn-danger btn-sm" onclick="removeUser('${doc.id}','${d.email}')">삭제</button>`:''}</div></div>`;
-    });
+    const rowsByEmail=new Map();
+    const errors=[];
+    for(const col of ['users','approved_users']){
+      try{
+        const snap=await db.collection(col).get();
+        snap.forEach(doc=>{
+          const d=doc.data()||{};
+          const email=(d.email||doc.id.replace(/__dot__/g,'.').replace(/__at__/g,'@')).trim();
+          if(!email)return;
+          const prev=rowsByEmail.get(email)||{};
+          rowsByEmail.set(email,{...prev,...d,id:doc.id,email,_source:[...(prev._source||[]),col]});
+        });
+      }catch(e){
+        errors.push(`${col}: ${e.message}`);
+      }
+    }
+    const rows=[...rowsByEmail.values()].sort((a,b)=>String(a.email).localeCompare(String(b.email)));
+    if(!rows.length){
+      list.innerHTML='<p style="color:var(--text2);text-align:center;padding:14px;font-size:.82rem;">표시할 회원이 없습니다. Firestore users 컬렉션 권한을 확인하세요.</p>';
+      return;
+    }
+    const dt=v=>v?.toDate?v.toDate().toLocaleString('ko-KR'):(v||'-');
+    const errHtml=errors.length?`<div style="color:var(--down);font-size:.74rem;margin-bottom:8px;line-height:1.5">일부 목록을 읽지 못했습니다: ${errors.join(' / ')}</div>`:'';
+    list.innerHTML=errHtml+`<div class="status-chip" style="display:inline-flex;margin-bottom:8px;">전체 회원 ${rows.length}명</div>`+
+      rows.map(d=>{
+        const isAdm=d.email===ADMIN;
+        const joined=dt(d.joinedAt||d.addedAt);
+        const last=dt(d.lastLoginAt);
+        const src=(d._source||[]).includes('users')?'회원':'운영 메모';
+        return `<div class="user-row"><div>
+          <div class="user-email">${d.name||d.displayName||d.email}${isAdm?' <span class="admin-badge">ADMIN</span>':''}</div>
+          <div class="user-meta">${d.email} · ${src} · 가입 ${joined} · 최근 로그인 ${last}</div>
+        </div><div>${!isAdm&&(d._source||[]).includes('approved_users')?`<button class="btn btn-danger btn-sm" onclick="removeUser('${d.id||ekey(d.email)}','${d.email}')">메모 삭제</button>`:''}</div></div>`;
+      }).join('');
   }catch(e){list.innerHTML=`<p style="color:var(--down);font-size:.82rem;">오류: ${e.message}</p>`;}
 }
 async function addUser(){
@@ -2295,6 +2350,10 @@ function formatMoneyByCode(value,code){
 function formatPriceByQuote(q,code){
   return formatMoneyByCode(q?.price||0,code);
 }
+function displayCurrencyValue(value,code){
+  const n=Number(value)||0;
+  return currencyForCode(code)==='USD' && _showKrwConverted ? n*_fxTtsRate : n;
+}
 function toggleKrwView(btn){
   if(!_showKrwConverted){
     const raw=prompt('미국 종목 원화 환산에 적용할 당일 시초가 TTS 환율을 입력하세요.', String(_fxTtsRate));
@@ -2418,6 +2477,8 @@ function normalizeQuote(raw,code,market){
   const price=Number(String(raw.price ?? raw.stck_prpr ?? raw.last ?? '').replace(/,/g,''));
   const change=Number(String(raw.change ?? raw.prdy_vrss ?? raw.diff ?? 0).replace(/,/g,''));
   const changeRate=Number(String(raw.changeRate ?? raw.prdy_ctrt ?? raw.rate ?? 0).replace(/,/g,''));
+  const apiName=raw.name || raw.prdt_abrv_name || raw.stck_kor_isnm || raw.hts_kor_isnm ||
+    raw.prdt_name || raw.ovrs_item_name || raw.ovrs_pdno_name || raw.kor_isnm || raw.engl_name;
   return {
     ...raw,
     code,
@@ -2425,7 +2486,7 @@ function normalizeQuote(raw,code,market){
     price,
     change,
     changeRate,
-    name:raw.name || raw.prdt_abrv_name || raw.stck_kor_isnm || lookupCode(code)
+    name:apiName || lookupCode(code)
   };
 }
 async function handleSheetCodeInput(rowIdx, codeInput){
@@ -2647,25 +2708,31 @@ function acctCellChange(idx, input) {
 }
 
 function updateAcctFooter(rows) {
-  const sumEv  = rows.reduce((s,a) => s+(a.price&&a.qty?a.qty*a.price:(a.eval||0)), 0);
-  const sumPur = rows.reduce((s,a) => s+(a.avgBuy&&a.qty?a.qty*a.avgBuy:(a.purchase||0)), 0);
+  const sumEv  = rows.reduce((s,a) => s+displayCurrencyValue(a.price&&a.qty?a.qty*a.price:(a.eval||0),a.code), 0);
+  const sumPur = rows.reduce((s,a) => s+displayCurrencyValue(a.avgBuy&&a.qty?a.qty*a.avgBuy:(a.purchase||0),a.code), 0);
   const sumPnl = sumEv - sumPur;
   const sumRate = sumPur>0 ? Math.round(sumPnl/sumPur*10000)/100 : 0;
   const set = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
-  set('af-eval',    sumEv  ? sumEv.toLocaleString('ko-KR')+'원' : '-');
-  set('af-purchase',sumPur ? sumPur.toLocaleString('ko-KR')+'원' : '-');
+  const hasUsd=rows.some(a=>currencyForCode(a.code)==='USD');
+  const suffix=hasUsd?(_showKrwConverted?` (TTS ${_fxTtsRate.toLocaleString('ko-KR')})`:' (USD 포함)'):'';
+  set('af-eval',    sumEv  ? sumEv.toLocaleString('ko-KR')+'원'+suffix : '-');
+  set('af-purchase',sumPur ? sumPur.toLocaleString('ko-KR')+'원'+suffix : '-');
   const rEl = document.getElementById('af-rate');
   if(rEl) { rEl.textContent=(sumPur||sumEv?(sumRate>=0?'+':'')+sumRate.toFixed(2)+'%':'-'); rEl.style.color=sumRate>=0?'var(--up)':'var(--down)'; }
   const pEl = document.getElementById('af-pnl');
-  if(pEl) { pEl.textContent=(sumPur||sumEv?(sumPnl>=0?'+':'')+sumPnl.toLocaleString('ko-KR')+'원':'-'); pEl.style.color=sumPnl>=0?'var(--up)':'var(--down)'; }
+  if(pEl) { pEl.textContent=(sumPur||sumEv?(sumPnl>=0?'+':'')+sumPnl.toLocaleString('ko-KR')+'원'+suffix:'-'); pEl.style.color=sumPnl>=0?'var(--up)':'var(--down)'; }
 }
 
 function updateAcctSummaryBar() {
   const rows=_acctRows.map(a => ({
     name: a.brokerage + (a.acctType?' ('+a.acctType+')':''),
-    eval: a.price&&a.qty ? a.qty*a.price : (a.eval||0),
-    purchase: a.avgBuy&&a.qty ? a.qty*a.avgBuy : (a.purchase||0),
-    rate: (() => { const ev=a.price&&a.qty?a.qty*a.price:(a.eval||0); const pur=a.avgBuy&&a.qty?a.qty*a.avgBuy:(a.purchase||0); return pur>0?Math.round((ev-pur)/pur*10000)/100:0; })()
+    eval: displayCurrencyValue(a.price&&a.qty ? a.qty*a.price : (a.eval||0),a.code),
+    purchase: displayCurrencyValue(a.avgBuy&&a.qty ? a.qty*a.avgBuy : (a.purchase||0),a.code),
+    rate: (() => {
+      const ev=displayCurrencyValue(a.price&&a.qty?a.qty*a.price:(a.eval||0),a.code);
+      const pur=displayCurrencyValue(a.avgBuy&&a.qty?a.qty*a.avgBuy:(a.purchase||0),a.code);
+      return pur>0?Math.round((ev-pur)/pur*10000)/100:0;
+    })()
   }));
   renderMpAccounts(rows);
   updateMpSummaryFromAccountRows(rows);

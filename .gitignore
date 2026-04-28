@@ -1,0 +1,10 @@
+# 절대 GitHub에 올라가면 안 되는 파일
+secrets_local.py
+serviceAccountKey.json
+*.env
+.env*
+my_portfolio.json
+whale_data.json
+global_whales.json
+__pycache__/
+*.pyc
