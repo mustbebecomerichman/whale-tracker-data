@@ -10,6 +10,10 @@ on:
     - cron: '0 1 * * *'     # 매일 오전 10시 KST (UTC 01:00)
   workflow_dispatch:          # GitHub에서 수동 실행 버튼
 
+concurrency:
+  group: whale-data-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   update-whale-data:
     runs-on: ubuntu-latest
