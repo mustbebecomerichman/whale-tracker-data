@@ -16,7 +16,7 @@ dart_fetcher.py — Whale Tracker Pro 데이터 수집기
 ══════════════════════════════════════════════════════
 """
 
-import os, sys, json, time, requests
+import os, sys, json, time, re, html, requests
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -87,6 +87,109 @@ def pn(s):
         return float(str(s).replace(",","").strip())
     except:
         return 0
+
+def clean_html_text(raw):
+    text = re.sub(r"<[^>]+>", " ", str(raw or ""))
+    text = html.unescape(text).replace("\xa0", " ")
+    return re.sub(r"\s+", " ", text).strip()
+
+def nf(raw, default=0.0):
+    text = clean_html_text(raw).replace(",", "").replace("%", "")
+    m = re.search(r"[-+]?\d+(?:\.\d+)?", text)
+    if not m:
+        return default
+    try:
+        return float(m.group(0))
+    except:
+        return default
+
+def infer_sector(name):
+    rules = [
+        (r"삼성전자|하이닉스|반도체|DB하이텍|한미반도체", "반도체"),
+        (r"현대차|기아|모비스|글로비스|HL만도", "자동차"),
+        (r"금융|은행|증권|보험|카드|지주|KB|신한|하나|우리", "금융"),
+        (r"바이오|셀트리온|제약|알테오젠|유한양행|삼성바이오", "바이오"),
+        (r"에코프로|SDI|전지|배터리|엘앤에프|포스코퓨처엠", "2차전지"),
+        (r"NAVER|카카오|엔씨|넷마블|게임|펄어비스", "인터넷/게임"),
+        (r"엔터|SM|JYP|와이지|하이브", "엔터"),
+        (r"텔레콤|KT|LG유플러스", "통신"),
+        (r"조선|중공업|오션|미포", "조선"),
+        (r"전력|일렉트릭|LS|효성중공업", "전력기기"),
+        (r"화학|정유|S-Oil|SK이노베이션", "화학/에너지"),
+        (r"식품|오리온|농심|CJ|삼양식품|KT&G", "필수소비재"),
+        (r"건설|건설기계|현대건설|대우건설", "건설"),
+        (r"철강|POSCO|포스코|현대제철", "철강"),
+    ]
+    for pat, sector in rules:
+        if re.search(pat, name, re.I):
+            return sector
+    return "기타"
+
+def fetch_naver_market_sum(market="KOSPI", limit=200):
+    """네이버 시가총액 페이지에서 KOSPI/KOSDAQ 상위 종목을 수집한다."""
+    sosok = "0" if market == "KOSPI" else "1"
+    rows, seen = [], set()
+    headers = {"User-Agent": "Mozilla/5.0 WhaleTrackerPro"}
+    max_pages = (limit // 50) + 3
+    for page in range(1, max_pages + 1):
+        url = f"https://finance.naver.com/sise/sise_market_sum.naver?sosok={sosok}&page={page}"
+        r = requests.get(url, headers=headers, timeout=15)
+        r.encoding = "euc-kr"
+        blocks = re.findall(r"<tr[^>]*>(.*?)</tr>", r.text, re.S | re.I)
+        added = 0
+        for block in blocks:
+            m = re.search(r"code=(\d{6})[^>]*class=\"tltle\"[^>]*>(.*?)</a>", block, re.S | re.I)
+            if not m:
+                continue
+            code, name = m.group(1), clean_html_text(m.group(2))
+            if code in seen:
+                continue
+            nums = [clean_html_text(x) for x in re.findall(r"<td[^>]*class=\"number\"[^>]*>(.*?)</td>", block, re.S | re.I)]
+            price = nf(nums[0]) if len(nums) > 0 else 0
+            momentum = nf(nums[2]) if len(nums) > 2 else 0
+            market_cap = nf(nums[4]) if len(nums) > 4 else 0
+            volume = nf(nums[7]) if len(nums) > 7 else 0
+            per = nf(nums[8], 20) if len(nums) > 8 else 20
+            roe = nf(nums[9], 8) if len(nums) > 9 else 8
+            if per <= 0:
+                per = 35
+            rows.append({
+                "code": code,
+                "name": name,
+                "market": market,
+                "sector": infer_sector(name),
+                "price": int(price) if price else 0,
+                "marketCap": int(market_cap) if market_cap else 0,
+                "per": round(per, 2),
+                "pbr": 1.5,
+                "roe": round(roe, 2),
+                "dividend": 0,
+                "momentum": round(momentum, 2),
+                "volatility": round(min(65, max(18, abs(momentum) * 8 + 25)), 1),
+                "debt": 50,
+                "volume": int(volume) if volume else 0,
+                "note": "네이버 시총 상위 자동수집",
+            })
+            seen.add(code)
+            added += 1
+            if len(rows) >= limit:
+                break
+        if len(rows) >= limit or added == 0:
+            break
+        time.sleep(0.25)
+    return rows[:limit]
+
+def fetch_quant_universe():
+    print("\n📡 [DART 3/3] 퀀트 스크리너 유니버스 수집 중...")
+    try:
+        kospi = fetch_naver_market_sum("KOSPI", 200)
+        kosdaq = fetch_naver_market_sum("KOSDAQ", 150)
+        universe = kospi + kosdaq
+        print(f"  ✅ 퀀트 유니버스: KOSPI {len(kospi)}개, KOSDAQ {len(kosdaq)}개")
+        return universe
+    except Exception as e:
+        print(f"  ⚠ 퀀트 유니버스 수집 실패: {e}")
+        return []
 
 # ──────────────────────────────────────────────────────
 #  [A] DART 국민연금 포트폴리오 수집
@@ -195,7 +298,7 @@ def kis_get_token():
     if "access_token" not in data:
         raise RuntimeError(f"토큰 발급 실패: {data}")
     _kis_token = data["access_token"]
-    _kis_token_exp = datetime.now() + timedelta(hours=1, minutes=50)
+    _kis_token_exp = datetime.now() + timedelta(hours=23, minutes=50)
     print("  ✅ 토큰 발급 완료")
     return _kis_token
 
@@ -343,15 +446,18 @@ def run_dart(auto=False):
     print("═"*52)
     nps  = fetch_nps_portfolio()
     al5  = fetch_alert5()
+    quant = fetch_quant_universe()
     out  = {
         "updated_at": TODAY.isoformat(),
         "nps_portfolio": nps,
         "alert5": al5,
     }
+    if quant:
+        out["quant_universe"] = quant
     # JSON 저장
     with open("whale_data.json","w",encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
-    print(f"\n  💾 whale_data.json 저장 완료 (국민연금 {len(nps)}개, 알림 {len(al5)}건)")
+    print(f"\n  💾 whale_data.json 저장 완료 (국민연금 {len(nps)}개, 알림 {len(al5)}건, 퀀트 {len(quant)}개)")
 
     # Firebase 자동 업로드 (--auto 모드 또는 서비스 계정 파일 있을 때)
     if auto or Path(FB_CRED_FILE).exists() or FB_SERVICE_ACCOUNT_JSON:

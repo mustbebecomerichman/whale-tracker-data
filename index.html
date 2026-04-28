@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta name="whale-tracker-version" content="2026-04-28-kis-kv-quant-v2"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -238,8 +239,11 @@ td.name{font-weight:600;color:var(--text);}
 .sheet-input.calc-input{background:#F0F7FF;color:var(--accent4);font-weight:700;pointer-events:none;cursor:default;}
 .sheet-input.calc-input.up{color:var(--up);}
 .sheet-input.calc-input.down{color:var(--down);}
+.sheet-input.calc-input.money-neutral{background:#F8F9FA!important;color:var(--text)!important;}
 .sheet-input.auto-filled{background:#fff8e6!important;border-left:3px solid #f4b400!important;color:#5f4600!important;font-weight:700;}
 .sheet-input.auto-price{background:#eaf7ff!important;border-left:3px solid var(--accent4)!important;color:var(--accent4)!important;font-weight:800;}
+.sheet-input.auto-price.up{background:#fff5f5!important;border-left-color:var(--up)!important;color:var(--up)!important;}
+.sheet-input.auto-price.down{background:#eaf7ff!important;border-left-color:var(--down)!important;color:var(--down)!important;}
 select.sheet-input{cursor:pointer;}
 .sheet-table tfoot td{background:#F5F7FA;border:1px solid #E0E2E7;padding:8px 10px;font-size:.78rem;}
 .sheet-add-row{display:flex;align-items:center;gap:8px;padding:10px 14px;
@@ -954,7 +958,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <p style="font-size:.8rem;color:var(--text2);margin-bottom:10px;line-height:1.6;">
           <code>dart_fetcher.py</code> 실행 후 생성된 <code>whale_data.json</code> 내용을 붙여넣으세요.
         </p>
-        <textarea class="json-textarea" id="json-paste" placeholder='{"nps_portfolio":[...],"alert5":[]}'></textarea>
+        <textarea class="json-textarea" id="json-paste" placeholder='{"nps_portfolio":[...],"alert5":[],"quant_universe":[...]}'></textarea>
         <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
           <input type="file" id="json-file" accept=".json" style="display:none" onchange="loadJSONFile(event)"/>
           <button class="btn btn-outline btn-sm" onclick="document.getElementById('json-file').click()">📁 파일</button>
@@ -1294,7 +1298,32 @@ function filterQuantSearch(){
   let rows=_quantAll.slice();
   if(sector&&!exactCode)rows=rows.filter(x=>x.sector===sector);
   if(q)rows=rows.filter(x=>(x.name||'').toLowerCase().includes(q)||(x.code||'').includes(q)||(x.sector||'').toLowerCase().includes(q));
+  if(exactCode && !rows.length) rows=[makeQuantFallback(rawQ)];
   renderQuant(rows);
+}
+function makeQuantFallback(code){
+  const clean=normalizeStockCode(code);
+  const cached=quoteCache['J:'+clean]?.data || quoteCache['NAS:'+clean]?.data || {};
+  const name=lookupCode(clean) || cached.name || `종목 ${clean}`;
+  const momentum=Number(cached.changeRate)||0;
+  return {
+    code:clean,name,market:'KOSPI',sector:inferStockSector(name),per:20,pbr:1.5,roe:8,dividend:0,
+    momentum,volatility:Math.min(65,Math.max(18,Math.abs(momentum)*8+25)),debt:50,volume:50,
+    note:'백데이터 없음 · 임시 점수'
+  };
+}
+function inferStockSector(name){
+  if(/삼성전자|하이닉스|반도체|DB하이텍|한미반도체/.test(name))return '반도체';
+  if(/현대차|기아|모비스|글로비스/.test(name))return '자동차';
+  if(/금융|은행|증권|보험|카드|지주/.test(name))return '금융';
+  if(/바이오|셀트리온|제약|알테오젠|유한양행/.test(name))return '바이오';
+  if(/에코프로|SDI|전지|배터리|엘앤에프|포스코퓨처엠/.test(name))return '2차전지';
+  if(/NAVER|카카오|엔씨|넷마블|게임/.test(name))return '인터넷/게임';
+  if(/텔레콤|KT|LG유플러스/.test(name))return '통신';
+  if(/조선|중공업|오션|미포/.test(name))return '조선';
+  if(/전력|일렉트릭|LS|효성중공업/.test(name))return '전력기기';
+  if(/화학|정유|S-Oil|SK이노베이션/.test(name))return '화학/에너지';
+  return '기타';
 }
 function renderQuant(rows=_quantAll){
   refreshQuantSectors();
@@ -1686,7 +1715,9 @@ function drawSheetRows(rows, filtered=false){
   tbody.innerHTML=rows.map((t,i)=>{
     const rowIdx=filtered?_sheetRows.indexOf(t):i;
     const pnl=calcPnl(t), pur=calcPurchase(t), ev=calcEval(t), rate=calcRate(t);
-    const pc=pnl>=0?'up':'down', rc=rate>=0?'up':'down';
+    const pc=pnl>0?'up':pnl<0?'down':'money-neutral';
+    const rc=rate>0?'up':rate<0?'down':'money-neutral';
+    const valueCls=pnl>0?'up':pnl<0?'down':'money-neutral';
     const brokerOpts=BROKERS.map(b=>`<option${b===t.brokerage?' selected':''}>${b}</option>`).join('');
     const acctOpts=ACCT_TYPES.map(a=>`<option${a===(t.acctType||'위탁')?' selected':''}>${a}</option>`).join('');
     return`<tr data-idx="${rowIdx}">
@@ -1698,9 +1729,9 @@ function drawSheetRows(rows, filtered=false){
       <td><input class="sheet-input${t._autoName?' auto-filled':''}" type="text" value="${t.name||''}" data-field="name" placeholder="종목명" onchange="cellChange(${rowIdx},this)" style="min-width:120px"/></td>
       <td><input class="sheet-input" type="number" value="${t.qty||''}" data-field="qty" placeholder="100" oninput="cellChange(${rowIdx},this)" style="width:70px"/></td>
       <td><input class="sheet-input" type="number" value="${t.avgBuy||''}" data-field="avgBuy" placeholder="70000" oninput="cellChange(${rowIdx},this)" style="width:90px"/></td>
-      <td><input class="sheet-input${t._autoPrice?' auto-price':''}" type="number" value="${t.price||''}" data-field="price" placeholder="85000" oninput="cellChange(${rowIdx},this)" style="width:90px"/></td>
-      <td><input class="sheet-input calc-input" type="text" value="${pur?fmt(pur)+'원':''}" readonly style="width:100px"/></td>
-      <td><input class="sheet-input calc-input" type="text" value="${ev?fmt(ev)+'원':''}" readonly style="width:100px"/></td>
+      <td><input class="sheet-input${t._autoPrice?' auto-price':''} ${valueCls}" type="number" value="${t.price||''}" data-field="price" placeholder="85000" oninput="cellChange(${rowIdx},this)" style="width:90px"/></td>
+      <td><input class="sheet-input calc-input money-neutral" type="text" value="${pur?fmt(pur)+'원':''}" readonly style="width:100px"/></td>
+      <td><input class="sheet-input calc-input ${valueCls}" type="text" value="${ev?fmt(ev)+'원':''}" readonly style="width:100px"/></td>
       <td><input class="sheet-input calc-input ${pc}" type="text" value="${pnl||pur?(pnl>=0?'+':'')+fmt(pnl)+'원':''}" readonly style="width:100px"/></td>
       <td><input class="sheet-input calc-input ${rc}" type="text" value="${pur||ev?(rate>=0?'+':'')+rate.toFixed(2)+'%':''}" readonly style="width:72px"/></td>
       <td><input class="sheet-input" type="number" value="${t.fee||''}" data-field="fee" placeholder="0" onchange="cellChange(${rowIdx},this)" style="width:70px"/></td>
@@ -1742,10 +1773,17 @@ function cellChange(idx, input){
   }
   const pnl=calcPnl(_sheetRows[idx]), pur=calcPurchase(_sheetRows[idx]);
   const ev=calcEval(_sheetRows[idx]), rate=calcRate(_sheetRows[idx]);
-  const pc=pnl>=0?'up':'down', rc=rate>=0?'up':'down';
+  const pc=pnl>0?'up':pnl<0?'down':'money-neutral';
+  const rc=rate>0?'up':rate<0?'down':'money-neutral';
+  const valueCls=pnl>0?'up':pnl<0?'down':'money-neutral';
+  const priceInput=row.querySelector('input[data-field="price"]');
+  if(priceInput){
+    priceInput.classList.remove('up','down','money-neutral');
+    priceInput.classList.add(valueCls);
+  }
   const calcs=row.querySelectorAll('.calc-input');
-  if(calcs[0]) calcs[0].value=pur?fmt(pur)+'원':'';
-  if(calcs[1]) calcs[1].value=ev?fmt(ev)+'원':'';
+  if(calcs[0]){calcs[0].value=pur?fmt(pur)+'원':'';calcs[0].className='sheet-input calc-input money-neutral';}
+  if(calcs[1]){calcs[1].value=ev?fmt(ev)+'원':'';calcs[1].className='sheet-input calc-input '+valueCls;}
   if(calcs[2]){calcs[2].value=pur||ev?(pnl>=0?'+':'')+fmt(pnl)+'원':'';calcs[2].className='sheet-input calc-input '+pc;}
   if(calcs[3]){calcs[3].value=pur||ev?(rate>=0?'+':'')+rate.toFixed(2)+'%':'';calcs[3].className='sheet-input calc-input '+rc;}
   updateSheetFooter(_sheetRows);
@@ -2284,8 +2322,9 @@ function drawAcctRows(rows) {
     const pur  = a.avgBuy && a.qty ? a.qty * a.avgBuy : (a.purchase || 0);
     const pnl  = ev - pur;
     const rate = pur > 0 ? Math.round(pnl / pur * 10000) / 100 : 0;
-    const pc   = pnl >= 0 ? 'up' : 'down';
-    const rc   = rate >= 0 ? 'up' : 'down';
+    const pc   = pnl > 0 ? 'up' : pnl < 0 ? 'down' : 'money-neutral';
+    const rc   = rate > 0 ? 'up' : rate < 0 ? 'down' : 'money-neutral';
+    const valueCls = pnl > 0 ? 'up' : pnl < 0 ? 'down' : 'money-neutral';
     const bOpts = BROKERS.map(b => `<option${b===a.brokerage?' selected':''}>${b}</option>`).join('');
     const aOpts = ACCT_TYPES.map(t => `<option${t===a.acctType?' selected':''}>${t}</option>`).join('');
     return `<tr data-aidx="${i}">
@@ -2300,9 +2339,9 @@ function drawAcctRows(rows) {
           oninput="acctCellChange(${i},this)" style="width:65px"/></td>
       <td><input class="sheet-input" type="number" value="${a.avgBuy||''}" data-field="avgBuy" placeholder="70000"
           oninput="acctCellChange(${i},this)" style="width:88px"/></td>
-      <td><input class="sheet-input calc-input${a._autoPrice?' auto-price':''}" id="ap-price-${i}" value="${a.price ? a.price.toLocaleString('ko-KR')+'원' : ''}" readonly style="width:90px"/></td>
-      <td><input class="sheet-input calc-input" value="${ev ? ev.toLocaleString('ko-KR')+'원' : ''}" readonly style="width:95px"/></td>
-      <td><input class="sheet-input calc-input" value="${pur ? pur.toLocaleString('ko-KR')+'원' : ''}" readonly style="width:95px"/></td>
+      <td><input class="sheet-input calc-input${a._autoPrice?' auto-price':''} ${valueCls}" id="ap-price-${i}" value="${a.price ? a.price.toLocaleString('ko-KR')+'원' : ''}" readonly style="width:90px"/></td>
+      <td><input class="sheet-input calc-input ${valueCls}" value="${ev ? ev.toLocaleString('ko-KR')+'원' : ''}" readonly style="width:95px"/></td>
+      <td><input class="sheet-input calc-input money-neutral" value="${pur ? pur.toLocaleString('ko-KR')+'원' : ''}" readonly style="width:95px"/></td>
       <td><input class="sheet-input calc-input ${rc}" value="${pur||ev ? (rate>=0?'+':'')+rate.toFixed(2)+'%' : ''}" readonly style="width:68px"/></td>
       <td><input class="sheet-input calc-input ${pc}" value="${pur||ev ? (pnl>=0?'+':'')+pnl.toLocaleString('ko-KR')+'원' : ''}" readonly style="width:95px"/></td>
     </tr>`;
@@ -2328,15 +2367,19 @@ function acctCellChange(idx, input) {
   const pur = a.avgBuy && a.qty ? a.qty * a.avgBuy : (a.purchase || 0);
   const pnl = ev - pur;
   const rate = pur > 0 ? Math.round(pnl/pur*10000)/100 : 0;
+  const pc = pnl > 0 ? 'up' : pnl < 0 ? 'down' : 'money-neutral';
+  const rc = rate > 0 ? 'up' : rate < 0 ? 'down' : 'money-neutral';
+  const valueCls = pnl > 0 ? 'up' : pnl < 0 ? 'down' : 'money-neutral';
   a.eval = ev;
   a.purchase = pur;
   a.rate = rate;
   const calcs = row.querySelectorAll('.calc-input');
   // calcs: 현재가(0), 평가금액(1), 매입금액(2), 수익률(3), 평가손익(4)
-  if(calcs[1]) calcs[1].value = ev  ? ev.toLocaleString('ko-KR')+'원' : '';
-  if(calcs[2]) calcs[2].value = pur ? pur.toLocaleString('ko-KR')+'원' : '';
-  if(calcs[3]) { calcs[3].value=(pur||ev?(rate>=0?'+':'')+rate.toFixed(2)+'%':''); calcs[3].className='sheet-input calc-input '+(rate>=0?'up':'down'); }
-  if(calcs[4]) { calcs[4].value=(pur||ev?(pnl>=0?'+':'')+pnl.toLocaleString('ko-KR')+'원':''); calcs[4].className='sheet-input calc-input '+(pnl>=0?'up':'down'); }
+  if(calcs[0]) calcs[0].className='sheet-input calc-input '+(a._autoPrice?'auto-price ':'')+valueCls;
+  if(calcs[1]) { calcs[1].value = ev  ? ev.toLocaleString('ko-KR')+'원' : ''; calcs[1].className='sheet-input calc-input '+valueCls; }
+  if(calcs[2]) { calcs[2].value = pur ? pur.toLocaleString('ko-KR')+'원' : ''; calcs[2].className='sheet-input calc-input money-neutral'; }
+  if(calcs[3]) { calcs[3].value=(pur||ev?(rate>=0?'+':'')+rate.toFixed(2)+'%':''); calcs[3].className='sheet-input calc-input '+rc; }
+  if(calcs[4]) { calcs[4].value=(pur||ev?(pnl>=0?'+':'')+pnl.toLocaleString('ko-KR')+'원':''); calcs[4].className='sheet-input calc-input '+pc; }
   updateAcctFooter(_acctRows);
   // 계좌별 요약 바 차트 업데이트
   updateAcctSummaryBar();
