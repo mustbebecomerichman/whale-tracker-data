@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-28-split-currency-sort-v1"/>
+<meta name="whale-tracker-version" content="2026-04-28-auto-fx-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -249,8 +249,8 @@ td.name{font-weight:600;color:var(--text);}
 .tbl-wrap table thead th.sort-active,.sheet-table thead th.sort-active{color:var(--accent4);}
 .tbl-wrap table thead th.sort-active::after,.sheet-table thead th.sort-active::after{content:" " attr(data-sort-mark);font-size:.68rem;color:var(--accent4);}
 .split-money{display:flex;flex-direction:column;gap:2px;line-height:1.08;}
-.split-money .krw{font-size:1em;}
-.split-money .usd{font-size:.62em;color:var(--text2);font-weight:800;}
+.split-money .krw,.split-money .usd{font-size:1em;}
+.split-money .usd{color:var(--text2);font-weight:800;}
 .mp-val.up .split-money .usd,.mp-val.down .split-money .usd{color:inherit;opacity:.72;}
 .sheet-input{
   display:block;width:100%;border:none;background:transparent;
@@ -863,6 +863,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <button class="btn btn-outline btn-sm mobile-toggle" onclick="toggleMobileSection('acct-detail',this)">숨기기</button>
         <label class="fx-control"><input type="checkbox" id="krw-toggle-check" onchange="toggleKrwView(this)"> 달러 원화환산</label>
         <label class="fx-control">TTS <input type="number" id="fx-tts-input" min="1" step="0.01" onchange="setFxTtsRate(this.value)" /></label>
+        <span class="badge" id="fx-tts-status">자동 조회</span>
         <button class="btn btn-outline btn-sm" onclick="fetchAndUpdateAcctPrices()">📈 현재가 일괄 조회</button>
         <button class="btn btn-primary btn-sm" onclick="addAcctRow()">＋ 종목 추가</button>
       </div>
@@ -1851,6 +1852,7 @@ let _autosaveTimer=null;
 let _autosaveBusy=false;
 
 async function initMyPage(){
+  await loadAutoFxRate();
   await loadMpData();
 }
 function emptyPortfolio(){
@@ -1971,18 +1973,20 @@ function renderMpSummary(data){
   const W=n=>n?Math.abs(n).toLocaleString('ko-KR')+'원':'-';
   const parts=getSummaryCurrencyTotals(data);
   const hasUsd=!!(parts.USD.eval||parts.USD.purchase);
+  const convertedTotal=parts.KRW.eval+(parts.USD.eval*_fxTtsRate);
+  const convertedPurchase=parts.KRW.purchase+(parts.USD.purchase*_fxTtsRate);
+  const convertedPnl=parts.KRW.pnl+(parts.USD.pnl*_fxTtsRate);
   const totalEl=document.getElementById('mp-total');
-  if(totalEl)totalEl.innerHTML=(parts.KRW.eval||parts.USD.eval||hasUsd)?splitMoneyHtml(parts.KRW.eval,parts.USD.eval,{forceUsd:hasUsd}):W(s.total);
+  if(totalEl)totalEl.innerHTML=(convertedTotal||hasUsd)?splitMoneyHtml(convertedTotal,parts.USD.eval,{forceUsd:hasUsd}):W(s.total);
   document.getElementById('mp-updated-date').textContent=data.updatedAt?'기준일: '+data.updatedAt:'';
   const rEl=document.getElementById('mp-rate');
   if(s.returnRate!==undefined){rEl.textContent=sgn(s.returnRate)+s.returnRate.toFixed(1)+'%';rEl.className='mp-val '+(s.returnRate>=0?'up':'down');}
   const purEl=document.getElementById('mp-purchase-sub');
-  if(purEl)purEl.innerHTML=(parts.KRW.purchase||parts.USD.purchase||hasUsd)
-    ?'총 투자: '+splitMoneyHtml(parts.KRW.purchase,parts.USD.purchase,{forceUsd:hasUsd})
+  if(purEl)purEl.innerHTML=(convertedPurchase||hasUsd)
+    ?'총 투자: '+splitMoneyHtml(convertedPurchase,parts.USD.purchase,{forceUsd:hasUsd})
     :(s.purchase?'총 투자: '+W(s.purchase):'');
   const pEl=document.getElementById('mp-pnl');
-  const nativePnl=(parts.KRW.pnl||0)+(parts.USD.pnl||0)*_fxTtsRate;
-  if(s.pnl!==undefined){pEl.innerHTML=splitMoneyHtml(parts.KRW.pnl,parts.USD.pnl,{signed:true,forceUsd:hasUsd});pEl.className='mp-val '+(nativePnl>=0?'up':'down');}
+  if(s.pnl!==undefined){pEl.innerHTML=splitMoneyHtml(convertedPnl,parts.USD.pnl,{signed:true,forceUsd:hasUsd});pEl.className='mp-val '+(convertedPnl>=0?'up':'down');}
   document.getElementById('mp-stock-stats').innerHTML=s.numStocks?
     `<span class="status-chip">${s.numStocks}개</span><span class="status-chip" style="color:var(--up)">▲${s.profitCount||0}</span><span class="status-chip" style="color:var(--down)">▼${s.lossCount||0}</span>`:'';
 }
@@ -2741,24 +2745,102 @@ function bestStockName(code, apiName='', fallback=''){
 const quoteCache={};
 const codeLookupTimers={sheet:{},acct:{},div:{}};
 const QUOTE_LOOKUP_DELAY=180;
+const FX_META_KEY='fxTtsMetaV1';
 let _showKrwConverted=false;
 let _fxTtsRate=Number(localStorage.getItem('fxTtsRate')||'1400');
+let _fxAutoLoading=false;
 function initFxControls(){
   const input=document.getElementById('fx-tts-input');
   const chk=document.getElementById('krw-toggle-check');
   if(input)input.value=String(_fxTtsRate);
   if(chk)chk.checked=_showKrwConverted;
+  const meta=readFxMeta();
+  if(meta?.rate)setFxStatus(fxStatusText(meta),'ok');
 }
-function setFxTtsRate(raw){
+function fxTodayKey(d=new Date()){
+  const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'})
+    .formatToParts(d).reduce((acc,p)=>{acc[p.type]=p.value;return acc;},{});
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+function readFxMeta(){
+  try{return JSON.parse(localStorage.getItem(FX_META_KEY)||'null')||null;}catch(e){return null;}
+}
+function saveFxMeta(meta){
+  if(meta)localStorage.setItem(FX_META_KEY,JSON.stringify(meta));
+}
+function fxStatusText(meta){
+  if(!meta)return 'TTS 자동';
+  if(meta.manual)return 'TTS 수동';
+  const src=meta.sourceDate||meta.requestedDate||'';
+  return meta.stale?`직전 TTS ${src}`:`최초 TTS ${src}`;
+}
+function setFxStatus(text,type='neutral'){
+  const el=document.getElementById('fx-tts-status');
+  if(!el)return;
+  el.textContent=text;
+  el.style.color=type==='ok'?'#1a8a4a':type==='err'?'#c0392b':'var(--text2)';
+  el.style.borderColor=type==='ok'?'#abe5c3':type==='err'?'#ffbfbf':'var(--border)';
+  el.style.background=type==='ok'?'#f0fff6':type==='err'?'#fff5f5':'var(--bg3)';
+}
+function refreshFxDependentViews(){
+  initFxControls();
+  drawAcctRows(_acctRows);
+  updateAcctFooter(_acctRows);
+  updateAcctSummaryBar();
+  renderBrokerPnlChart(_acctRows);
+  renderTotalHistoryChart(mpData?.history||[]);
+}
+function setFxTtsRate(raw,meta=null){
   const v=Number(String(raw||'').replace(/,/g,''));
   if(v>0){
     _fxTtsRate=v;
     localStorage.setItem('fxTtsRate',String(v));
-    drawAcctRows(_acctRows);
-    updateAcctFooter(_acctRows);
-    updateAcctSummaryBar();
-    renderBrokerPnlChart(_acctRows);
-    renderTotalHistoryChart(mpData?.history||[]);
+    const fxMeta=meta||{rate:v,requestedDate:fxTodayKey(),sourceDate:fxTodayKey(),manual:true,fetchedAt:new Date().toISOString()};
+    saveFxMeta(fxMeta);
+    setFxStatus(fxStatusText(fxMeta),meta?'ok':'neutral');
+    refreshFxDependentViews();
+  }
+}
+async function loadAutoFxRate(force=false){
+  const today=fxTodayKey();
+  const saved=readFxMeta();
+  if(!force && saved?.rate && saved.requestedDate===today){
+    _fxTtsRate=Number(saved.rate)||_fxTtsRate;
+    localStorage.setItem('fxTtsRate',String(_fxTtsRate));
+    initFxControls();
+    return saved;
+  }
+  if(_fxAutoLoading)return saved;
+  _fxAutoLoading=true;
+  setFxStatus('TTS 조회 중','neutral');
+  try{
+    const res=await fetch('/api/fx-rate');
+    const data=await safeJson(res);
+    if(!res.ok || !data?.rate)throw new Error(data?.error||`HTTP ${res.status}`);
+    const meta={
+      rate:Number(data.rate),
+      requestedDate:data.requestedDate||today,
+      sourceDate:data.sourceDate||data.requestedDate||today,
+      announcedAt:data.announcedAt||'',
+      stale:!!data.stale,
+      source:data.source||'Hana Bank',
+      fetchedAt:new Date().toISOString()
+    };
+    setFxTtsRate(meta.rate,meta);
+    return meta;
+  }catch(e){
+    const fallback=readFxMeta();
+    if(fallback?.rate){
+      _fxTtsRate=Number(fallback.rate)||_fxTtsRate;
+      localStorage.setItem('fxTtsRate',String(_fxTtsRate));
+      setFxStatus(`마지막 TTS ${fallback.sourceDate||fallback.requestedDate||''}`,'err');
+      initFxControls();
+      return fallback;
+    }
+    setFxStatus('TTS 수동 입력','err');
+    return null;
+  }finally{
+    _fxAutoLoading=false;
   }
 }
 function normalizeStockCode(code){
