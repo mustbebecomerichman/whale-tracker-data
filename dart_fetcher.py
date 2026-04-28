@@ -612,33 +612,31 @@ def get_13f_report(cik: str, accession: str, top_n: int = 30) -> dict:
             xml_files = re_mod.findall(r'href="([^"]*\.xml)"', r.text, re_mod.I)
         if not xml_files:
             return {"top": [], "count": 0, "total_value_thousand": 0}
-        xml_url = "https://www.sec.gov" + xml_files[0] if xml_files[0].startswith("/") else \
-                  f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc_clean}/{xml_files[0]}"
-        xr = requests.get(xml_url, headers=SEC_AGENTS, timeout=15)
-        root = ET.fromstring(xr.content)
-        # 네임스페이스 처리
-        ns = {}
-        for tag in root.iter():
-            if "}" in tag.tag:
-                ns_uri = tag.tag.split("}")[0].strip("{")
-                ns["ns"] = ns_uri
-                break
         holdings = []
-        for info in root.iter():
-            if info.tag.split("}")[-1].lower() == "infotable":
-                name    = (info.find(".//{*}nameOfIssuer") or info.find(".//{*}NAMEOFISSUER"))
-                cusip   = (info.find(".//{*}cusip") or info.find(".//{*}CUSIP"))
-                value   = (info.find(".//{*}value") or info.find(".//{*}VALUE"))
-                shares  = (info.find(".//{*}sshPrnamt") or info.find(".//{*}SSHPRNAMT"))
-                cls     = (info.find(".//{*}titleOfClass") or info.find(".//{*}TITLEOFCLASS"))
-                if name is not None and value is not None:
-                    holdings.append({
-                        "name":   (name.text or "").strip(),
-                        "cusip":  (cusip.text or "").strip() if cusip is not None else "",
-                        "class":  (cls.text or "").strip() if cls is not None else "",
-                        "value":  int(value.text.replace(",","")) if value.text else 0,  # $천 단위
-                        "shares": int(shares.text.replace(",","")) if shares is not None and shares.text else 0,
-                    })
+        for xml_file in xml_files:
+            xml_url = "https://www.sec.gov" + xml_file if xml_file.startswith("/") else \
+                      f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc_clean}/{xml_file}"
+            xr = requests.get(xml_url, headers=SEC_AGENTS, timeout=15)
+            root = ET.fromstring(xr.content)
+            parsed = []
+            for info in root.iter():
+                if info.tag.split("}")[-1].lower() == "infotable":
+                    name    = (info.find(".//{*}nameOfIssuer") or info.find(".//{*}NAMEOFISSUER"))
+                    cusip   = (info.find(".//{*}cusip") or info.find(".//{*}CUSIP"))
+                    value   = (info.find(".//{*}value") or info.find(".//{*}VALUE"))
+                    shares  = (info.find(".//{*}sshPrnamt") or info.find(".//{*}SSHPRNAMT"))
+                    cls     = (info.find(".//{*}titleOfClass") or info.find(".//{*}TITLEOFCLASS"))
+                    if name is not None and value is not None:
+                        parsed.append({
+                            "name":   (name.text or "").strip(),
+                            "cusip":  (cusip.text or "").strip() if cusip is not None else "",
+                            "class":  (cls.text or "").strip() if cls is not None else "",
+                            "value":  int(value.text.replace(",","")) if value.text else 0,  # $천 단위
+                            "shares": int(shares.text.replace(",","")) if shares is not None and shares.text else 0,
+                        })
+            if parsed:
+                holdings = parsed
+                break
         # 가치 기준 내림차순 정렬, 상위 N개
         holdings.sort(key=lambda x: x["value"], reverse=True)
         total_val = sum(h["value"] for h in holdings)
