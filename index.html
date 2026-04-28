@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-28-instant-quote-order-v1"/>
+<meta name="whale-tracker-version" content="2026-04-28-login-reset-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -43,6 +43,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
   color:#fff;font-size:.95rem;font-weight:800;cursor:pointer;margin-top:6px;transition:background .2s;}
 .auth-btn:hover{background:var(--accent-h);}
 .auth-btn:disabled{opacity:.5;cursor:not-allowed;}
+.auth-link-btn{display:block;width:100%;background:none;border:none;color:var(--text2);font-size:.78rem;font-weight:700;
+  text-align:center;padding:9px 6px;margin-top:6px;cursor:pointer;}
+.auth-link-btn:hover{color:var(--accent);}
 .auth-note{font-size:.75rem;color:var(--text2);text-align:center;margin-top:12px;line-height:1.6;}
 .auth-error{background:#fff5f5;border:1px solid #ffbfbf;color:#c0392b;border-radius:8px;
   padding:10px 14px;font-size:.82rem;margin-top:14px;text-align:center;}
@@ -608,6 +611,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <div class="auth-field"><label>비밀번호</label>
         <input type="password" id="login-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
       <button class="auth-btn" id="login-btn" onclick="doLogin()">로그인</button>
+      <button type="button" class="auth-link-btn" id="reset-pw-btn" onclick="resetLoginPassword()">비밀번호 재설정 메일 보내기</button>
     </div>
     <div id="signup-form" style="display:none">
       <div class="auth-field"><label>이름</label>
@@ -1193,10 +1197,27 @@ async function doLogin(){
     sessionStorage.removeItem(AUTH_SESSION_KEY);
     const m={'auth/user-not-found':'등록되지 않은 이메일입니다.',
       'auth/wrong-password':'비밀번호가 올바르지 않습니다.',
-      'auth/invalid-credential':'Firebase Authentication에 등록된 이메일/비밀번호를 확인하세요. 승인 절차는 사용하지 않습니다.',
+      'auth/invalid-credential':'이메일 또는 비밀번호가 맞지 않습니다. 브라우저에 저장된 비밀번호가 예전 값일 수 있으니 직접 다시 입력하거나 비밀번호 재설정 메일을 보내세요.',
       'auth/too-many-requests':'잠시 후 다시 시도하세요.'};
     setAuthMsg(m[e.code]||'로그인 실패: '+e.message,"error");
     btn.disabled=false;btn.textContent='로그인';
+  }
+}
+async function resetLoginPassword(){
+  const email=document.getElementById('login-email').value.trim();
+  if(!email){setAuthMsg("비밀번호를 재설정할 이메일을 먼저 입력하세요.","error");return;}
+  const btn=document.getElementById('reset-pw-btn');
+  if(btn){btn.disabled=true;btn.textContent='메일 전송 중...';}
+  try{
+    await auth.sendPasswordResetEmail(email);
+    setAuthMsg("비밀번호 재설정 메일을 보냈습니다. 메일함에서 링크를 눌러 새 비밀번호를 만든 뒤 다시 로그인하세요.","success");
+  }catch(e){
+    const m={'auth/user-not-found':'등록되지 않은 이메일입니다.',
+      'auth/invalid-email':'이메일 형식을 확인하세요.',
+      'auth/too-many-requests':'요청이 많습니다. 잠시 후 다시 시도하세요.'};
+    setAuthMsg(m[e.code]||'재설정 메일 전송 실패: '+e.message,"error");
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='비밀번호 재설정 메일 보내기';}
   }
 }
 async function doSignup(){
