@@ -9,7 +9,7 @@
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
@@ -81,7 +81,7 @@ async function fetchOverseasPrice(code, market, token, env) {
 async function handlePriceRequest(request, env) {
   const { appKey, appSecret } = getKisCreds(env);
   if (!appKey || !appSecret)
-    throw new Error('KIS_APP_KEY/KIS_APPSECRET 환경변수가 설정되지 않았습니다.');
+    throw new Error('KIS_APP_KEY/KIS_APP_SECRET 환경변수가 설정되지 않았습니다.');
 
   let items = [];
   if (request.method === 'GET') {

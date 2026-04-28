@@ -128,6 +128,8 @@ td.ticker{font-weight:800;color:var(--accent4);}
 td.name{font-weight:600;color:var(--text);}
 .up-chip{color:var(--up);font-weight:700;}
 .down-chip{color:var(--down);font-weight:700;}
+.up-chip,.mp-val.up,.sheet-input.calc-input.up,.price-card-change.up,.alert-pct.up{color:var(--up)!important;}
+.down-chip,.mp-val.down,.sheet-input.calc-input.down,.price-card-change.down,.alert-pct.down{color:var(--down)!important;}
 .neutral{color:var(--text2);}
 .pct-bar{height:4px;background:var(--bg3);border-radius:4px;margin-top:4px;overflow:hidden;}
 .pct-bar-fill{height:100%;border-radius:4px;background:var(--accent);}
@@ -236,6 +238,8 @@ td.name{font-weight:600;color:var(--text);}
 .sheet-input.calc-input{background:#F0F7FF;color:var(--accent4);font-weight:700;pointer-events:none;cursor:default;}
 .sheet-input.calc-input.up{color:var(--up);}
 .sheet-input.calc-input.down{color:var(--down);}
+.sheet-input.auto-filled{background:#fff8e6!important;border-left:3px solid #f4b400!important;color:#5f4600!important;font-weight:700;}
+.sheet-input.auto-price{background:#eaf7ff!important;border-left:3px solid var(--accent4)!important;color:var(--accent4)!important;font-weight:800;}
 select.sheet-input{cursor:pointer;}
 .sheet-table tfoot td{background:#F5F7FA;border:1px solid #E0E2E7;padding:8px 10px;font-size:.78rem;}
 .sheet-add-row{display:flex;align-items:center;gap:8px;padding:10px 14px;
@@ -269,6 +273,17 @@ select.sheet-input{cursor:pointer;}
 .quant-metric{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 8px;}
 .quant-metric .k{font-size:.68rem;color:var(--text2);}
 .quant-metric .v{font-size:.86rem;font-weight:800;margin-top:1px;}
+.quant-result{display:none;background:#fff;border:1px solid #c0d8f5;border-left:4px solid var(--accent4);
+  border-radius:10px;padding:12px 14px;margin-bottom:12px;box-shadow:var(--shadow);gap:10px;align-items:center;
+  grid-template-columns:minmax(0,1fr) auto;}
+.quant-result.show{display:grid;}
+.quant-result-main{min-width:0;}
+.quant-result-name{font-size:.95rem;font-weight:900;color:var(--text);margin-bottom:4px;}
+.quant-result-meta{display:flex;gap:6px;flex-wrap:wrap;font-size:.72rem;color:var(--text2);}
+.quant-result-score{text-align:right;}
+.quant-result-score .label{font-size:.68rem;color:var(--text2);font-weight:700;margin-bottom:3px;}
+.quant-result-metrics{grid-column:1 / -1;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;}
+.quant-result-metrics .quant-metric{margin:0;}
 
 /* ADMIN */
 .admin-section{background:#fff;border:1px solid var(--border);border-radius:12px;
@@ -358,6 +373,9 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .kis-status .btn{width:100%;}
   .price-grid{grid-template-columns:1fr;}
   .quant-metrics{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .quant-result{grid-template-columns:1fr;}
+  .quant-result-score{text-align:left;}
+  .quant-result-metrics{grid-template-columns:repeat(2,minmax(0,1fr));}
   .acct-row{grid-template-columns:1fr;gap:6px;padding:10px 0;}
   .acct-amt,.acct-pct,.acct-rate{text-align:left;}
   .toast{left:12px;right:12px;bottom:14px;transform:translateY(20px);white-space:normal;text-align:center;}
@@ -407,6 +425,15 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   #alert10-tbody td:nth-child(4)::before{content:"변동";}
   #alert10-tbody td:nth-child(5)::before{content:"공시일";}
   #alert10-tbody td:nth-child(6)::before{content:"비고";}
+
+  #alert-nps-tbody td:nth-child(1)::before{content:"순위";}
+  #alert-nps-tbody td:nth-child(2)::before{content:"코드";}
+  #alert-nps-tbody td:nth-child(3)::before{content:"종목명";}
+  #alert-nps-tbody td:nth-child(4)::before{content:"시장";}
+  #alert-nps-tbody td:nth-child(5)::before{content:"보유주식";}
+  #alert-nps-tbody td:nth-child(6)::before{content:"지분율";}
+  #alert-nps-tbody td:nth-child(7)::before{content:"전분기 대비";}
+  #alert-nps-tbody td:nth-child(8)::before{content:"상태";}
 
   #detail-tbody td:nth-child(1)::before{content:"순위";}
   #detail-tbody td:nth-child(2)::before{content:"티커";}
@@ -540,8 +567,8 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <input type="email" id="su-email" placeholder="your@email.com"/></div>
       <div class="auth-field"><label>비밀번호 (6자 이상)</label>
         <input type="password" id="su-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doSignup()"/></div>
-      <button class="auth-btn" id="su-btn" onclick="doSignup()">가입 신청</button>
-      <p class="auth-note">관리자가 승인한 이메일만 가입 가능합니다</p>
+      <button class="auth-btn" id="su-btn" onclick="doSignup()">회원가입</button>
+      <p class="auth-note">회원가입 후 바로 이용할 수 있습니다</p>
     </div>
     <div id="auth-msg"></div>
   </div>
@@ -601,6 +628,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <option value="">전체 업종</option>
       </select>
     </div>
+    <div class="quant-result" id="quant-result"></div>
     <div class="grid-3" id="quant-picks"></div>
     <div class="card" style="padding:0"><div class="tbl-wrap"><table>
       <thead><tr><th>#</th><th>점수</th><th>코드</th><th>종목명</th><th>업종</th><th>전략</th><th>PER</th><th>PBR</th><th>ROE</th><th>배당</th><th>6M</th><th>변동성</th><th>코멘트</th></tr></thead>
@@ -614,6 +642,26 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   <div class="hero">
     <h1>대량 보유 <span>변동</span> 알림</h1>
     <p>5% 이상 지분 취득·처분·변동 공시를 실시간으로 추적합니다</p>
+  </div>
+  <div class="section">
+    <div class="section-title">
+      <div class="section-title-left">국민연금 보유 현황 <span class="badge" id="alert-nps-count">-</span>
+        <span class="update-badge"><span class="dot-pulse"></span>핵심 정보</span></div>
+    </div>
+    <div class="tab-row" id="alert-nps-tabs">
+      <div class="tab active" onclick="filterAlertNPS('all',this)">전체</div>
+      <div class="tab" onclick="filterAlertNPS('kospi',this)">KOSPI</div>
+      <div class="tab" onclick="filterAlertNPS('kosdaq',this)">KOSDAQ</div>
+      <div class="tab" onclick="filterAlertNPS('increase',this)">지분 증가</div>
+      <div class="tab" onclick="filterAlertNPS('decrease',this)">지분 감소</div>
+    </div>
+    <div class="search-row">
+      <input class="search-input" id="alert-nps-search" placeholder="국민연금 종목명, 코드 검색..." oninput="filterAlertNPSSearch()"/>
+    </div>
+    <div class="card" style="padding:0"><div class="tbl-wrap"><table>
+      <thead><tr><th>#</th><th>코드</th><th>종목명</th><th>시장</th><th>보유주식</th><th>지분율</th><th>전분기 대비</th><th>상태</th></tr></thead>
+      <tbody id="alert-nps-tbody"></tbody>
+    </table></div></div>
   </div>
   <div class="section">
     <div class="section-title"><div class="section-title-left">지분 5%↑ 대량 보유 <span class="badge">최근 30일</span></div></div>
@@ -889,6 +937,9 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     <div>
       <div class="admin-section">
         <div class="admin-title">👥 사용자 관리</div>
+        <p style="font-size:.78rem;color:var(--text2);margin-bottom:10px;line-height:1.6;">
+          로그인은 Firebase Authentication 계정이면 바로 허용됩니다. 아래 목록은 운영 메모용이며 승인 게이트로 사용하지 않습니다.
+        </p>
         <div class="admin-form-row">
           <input class="admin-input" id="new-user-email" placeholder="이메일 주소" type="email"/>
           <input class="admin-input" id="new-user-name" placeholder="이름" style="max-width:130px"/>
@@ -963,6 +1014,7 @@ const BROKERS = ["키움증권","미래에셋증권","NH투자증권","삼성증
   "신한투자증권","하나증권","대신증권","메리츠증권","한화투자증권","교보증권","토스증권","카카오페이증권","기타"];
 const ACCT_TYPES = ["위탁","ISA","연금저축","IRP","퇴직연금"];
 const OVERSEAS_CODES = new Set(['AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','PLTR','ARKK']);
+const IS_GITHUB_PAGES = /\.github\.io$/i.test(location.hostname);
 
 // ── Firebase ───────────────────────────────────────────
 let auth=null, db=null, me=null;
@@ -972,8 +1024,6 @@ db   = firebase.firestore();
 auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
 auth.onAuthStateChanged(async u=>{
   if(u){
-    const ok = await approved(u.email);
-    if(!ok){ await auth.signOut(); setAuthMsg("⛔ 승인되지 않은 계정입니다.","error"); return; }
     me = u; afterLogin(u);
   } else {
     me = null; show('auth');
@@ -981,11 +1031,7 @@ auth.onAuthStateChanged(async u=>{
 });
 
 async function approved(email){
-  if(email===ADMIN) return true;
-  try{
-    const s=await db.collection('approved_users').doc(ekey(email)).get();
-    return s.exists;
-  }catch(e){ return e.code!=='permission-denied'; }
+  return true;
 }
 function ekey(e){ return e.replace(/\./g,'__dot__').replace(/@/g,'__at__'); }
 
@@ -1011,7 +1057,7 @@ async function doLogin(){
   catch(e){
     const m={'auth/user-not-found':'등록되지 않은 이메일입니다.',
       'auth/wrong-password':'비밀번호가 올바르지 않습니다.',
-      'auth/invalid-credential':'이메일 또는 비밀번호가 올바르지 않습니다.',
+      'auth/invalid-credential':'Firebase Authentication에 등록된 이메일/비밀번호를 확인하세요. 승인 절차는 사용하지 않습니다.',
       'auth/too-many-requests':'잠시 후 다시 시도하세요.'};
     setAuthMsg(m[e.code]||'로그인 실패: '+e.message,"error");
     btn.disabled=false;btn.textContent='로그인';
@@ -1023,7 +1069,6 @@ async function doSignup(){
   const pw=document.getElementById('su-pw').value;
   if(!name||!email||!pw){setAuthMsg("모든 항목을 입력하세요.","error");return;}
   if(pw.length<6){setAuthMsg("비밀번호는 6자 이상이어야 합니다.","error");return;}
-  if(!(await approved(email))){setAuthMsg("⛔ 관리자에게 먼저 이메일 등록을 요청하세요.","error");return;}
   const btn=document.getElementById('su-btn');btn.disabled=true;btn.textContent='가입 중...';
   try{
     const c=await auth.createUserWithEmailAndPassword(email,pw);
@@ -1031,9 +1076,17 @@ async function doSignup(){
     await db.collection('users').doc(ekey(email)).set({name,email,joinedAt:firebase.firestore.FieldValue.serverTimestamp()});
     setAuthMsg("✅ 가입 완료! 로그인됩니다.","success");
   }catch(e){
-    const m={'auth/email-already-in-use':'이미 사용 중인 이메일입니다.'};
-    setAuthMsg(m[e.code]||'가입 실패: '+e.message,"error");
-    btn.disabled=false;btn.textContent='가입 신청';
+    if(e.code==='auth/email-already-in-use'){
+      try{
+        await auth.signInWithEmailAndPassword(email,pw);
+        return;
+      }catch(loginErr){
+        setAuthMsg('이미 가입된 이메일입니다. 기존 비밀번호로 로그인하세요. 승인 절차는 사용하지 않습니다.',"error");
+      }
+    }else{
+      setAuthMsg('가입 실패: '+e.message,"error");
+    }
+    btn.disabled=false;btn.textContent='회원가입';
   }
 }
 async function doLogout(){ await auth.signOut(); }
@@ -1161,6 +1214,7 @@ async function loadWhaleData(){
   _npsAll=(d.nps_portfolio||S_NPS).slice();
   _quantAll=(d.quant_universe||S_QUANT).slice();
   _a5All=(d.alert5||S_A5).slice();
+  filterAlertNPSSearch();
   renderQuant();
   renderA5(_a5All);
   renderA10(d.alert10||S_A10);
@@ -1196,16 +1250,18 @@ function quantRankMap(rows,field){
   });
   return map;
 }
-function scoreQuantRows(rows,methodKey=_quantFilter){
+function scoreQuantRows(rows,methodKey=_quantFilter,baseRows=_quantAll){
+  if(!rows.length)return [];
   const method=QUANT_METHODS[methodKey]||QUANT_METHODS.balanced;
+  const rankingBase=(baseRows&&baseRows.length?baseRows:rows);
   const rankMaps={};
-  Object.keys(method.weights).forEach(f=>rankMaps[f]=quantRankMap(rows,f));
+  Object.keys(method.weights).forEach(f=>rankMaps[f]=quantRankMap(rankingBase,f));
   const rawRows=rows.map(r=>({
     ...r,
     rawScore:Object.entries(method.weights).reduce((sum,[field,w])=>sum+((rankMaps[field]?.[r.code]??50)*w),0),
     method:method.label
   }));
-  const vals=rawRows.map(r=>r.rawScore);
+  const vals=rankingBase.map(r=>Object.entries(method.weights).reduce((sum,[field,w])=>sum+((rankMaps[field]?.[r.code]??50)*w),0));
   const min=Math.min(...vals), max=Math.max(...vals), range=max-min||1;
   return rawRows.map(r=>({...r,score:Math.round(40+((r.rawScore-min)/range)*60)}))
     .sort((a,b)=>b.score-a.score);
@@ -1231,16 +1287,18 @@ function filterQuant(type,btn){
   filterQuantSearch();
 }
 function filterQuantSearch(){
-  const q=(document.getElementById('quant-search')?.value||'').toLowerCase();
+  const rawQ=(document.getElementById('quant-search')?.value||'').trim();
+  const q=rawQ.toLowerCase();
+  const exactCode=/^\d{6}$/.test(rawQ.toUpperCase());
   const sector=document.getElementById('quant-sector-filter')?.value||'';
   let rows=_quantAll.slice();
-  if(sector)rows=rows.filter(x=>x.sector===sector);
+  if(sector&&!exactCode)rows=rows.filter(x=>x.sector===sector);
   if(q)rows=rows.filter(x=>(x.name||'').toLowerCase().includes(q)||(x.code||'').includes(q)||(x.sector||'').toLowerCase().includes(q));
   renderQuant(rows);
 }
 function renderQuant(rows=_quantAll){
   refreshQuantSectors();
-  const scored=scoreQuantRows(rows);
+  const scored=scoreQuantRows(rows,_quantFilter,_quantAll);
   const top=scored[0];
   const tbody=document.getElementById('quant-tbody');
   const picks=document.getElementById('quant-picks');
@@ -1250,6 +1308,7 @@ function renderQuant(rows=_quantAll){
   if(universe)universe.textContent=_quantAll.length+'개';
   if(topEl)topEl.textContent=top?top.score+'점':'-';
   if(updated)updated.textContent=(QUANT_METHODS[_quantFilter]||QUANT_METHODS.balanced).label;
+  renderQuantResult(scored);
   if(picks){
     picks.innerHTML=scored.slice(0,3).map((d,i)=>`
       <div class="quant-pick" onclick="document.getElementById('quant-search').value='${d.code}';filterQuantSearch();">
@@ -1277,9 +1336,46 @@ function renderQuant(rows=_quantAll){
     <td class="${d.momentum>=0?'up-chip':'down-chip'}">${d.momentum>=0?'+':''}${d.momentum.toFixed(1)}%</td>
     <td>${d.volatility.toFixed(0)}%</td><td>${d.note}</td></tr>`).join('');
 }
+function renderQuantResult(scored){
+  const el=document.getElementById('quant-result');
+  if(!el)return;
+  const q=(document.getElementById('quant-search')?.value||'').trim().toUpperCase();
+  const exact=q?scored.find(d=>normalizeStockCode(d.code)===q):null;
+  if(!exact){
+    el.classList.remove('show');
+    el.innerHTML='';
+    return;
+  }
+  el.classList.add('show');
+  el.innerHTML=`
+    <div class="quant-result-main">
+      <div class="quant-result-name">${exact.name}</div>
+      <div class="quant-result-meta"><span class="tag">${exact.code}</span><span class="tag">${exact.sector}</span>${quantSignal(exact.score)}<span class="tag">${exact.method}</span></div>
+    </div>
+    <div class="quant-result-score">
+      <div class="label">퀀트 점수</div>
+      <span class="quant-score ${scoreClass(exact.score)}">${exact.score}</span>
+    </div>
+    <div class="quant-result-metrics">
+      <div class="quant-metric"><div class="k">PER</div><div class="v">${exact.per.toFixed(1)}</div></div>
+      <div class="quant-metric"><div class="k">PBR</div><div class="v">${exact.pbr.toFixed(2)}</div></div>
+      <div class="quant-metric"><div class="k">ROE</div><div class="v ${exact.roe>=12?'up-chip':'neutral'}">${exact.roe.toFixed(1)}%</div></div>
+      <div class="quant-metric"><div class="k">배당</div><div class="v">${exact.dividend.toFixed(1)}%</div></div>
+      <div class="quant-metric"><div class="k">6M</div><div class="v ${exact.momentum>=0?'up-chip':'down-chip'}">${exact.momentum>=0?'+':''}${exact.momentum.toFixed(1)}%</div></div>
+    </div>`;
+}
 
 function renderNPS(data){
-  document.getElementById('nps-tbody').innerHTML=data.map((d,i)=>`
+  data=data||[];
+  const tbody=document.getElementById('alert-nps-tbody')||document.getElementById('nps-tbody');
+  const count=document.getElementById('alert-nps-count');
+  if(count)count.textContent=(data||[]).length+'개';
+  if(!tbody)return;
+  if(!data.length){
+    tbody.innerHTML='<tr><td colspan="8" class="neutral" style="text-align:center;padding:18px;">표시할 국민연금 보유 종목이 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML=data.map((d,i)=>`
     <tr><td class="neutral">${i+1}</td><td class="ticker">${d.code}</td>
     <td class="name">${d.name}</td><td><span class="tag">${d.market}</span></td>
     <td>${d.shares}</td>
@@ -1288,18 +1384,25 @@ function renderNPS(data){
     <td>${trendTag(d.trend,d.delta)}</td></tr>`).join('');
 }
 function filterNPS(type,btn){
+  filterAlertNPS(type,btn);
+}
+function filterAlertNPS(type,btn){
   _npsFilter=type;
-  document.querySelectorAll('#nps-tabs .tab').forEach(t=>t.classList.remove('active'));
-  btn.classList.add('active'); filterNPSSearch();
+  document.querySelectorAll('#alert-nps-tabs .tab,#nps-tabs .tab').forEach(t=>t.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  filterAlertNPSSearch();
 }
 function filterNPSSearch(){
-  const q=document.getElementById('nps-search').value.toLowerCase();
+  filterAlertNPSSearch();
+}
+function filterAlertNPSSearch(){
+  const q=(document.getElementById('alert-nps-search')?.value||document.getElementById('nps-search')?.value||'').toLowerCase();
   let d=_npsAll;
   if(_npsFilter==='kospi') d=d.filter(x=>x.market==='KOSPI');
   if(_npsFilter==='kosdaq') d=d.filter(x=>x.market==='KOSDAQ');
   if(_npsFilter==='increase') d=d.filter(x=>x.trend==='increase');
   if(_npsFilter==='decrease') d=d.filter(x=>x.trend==='decrease');
-  if(q) d=d.filter(x=>x.name.toLowerCase().includes(q)||(x.code||'').includes(q));
+  if(q) d=d.filter(x=>(x.name||'').toLowerCase().includes(q)||(x.code||'').includes(q));
   renderNPS(d);
 }
 function renderOVS(data){
@@ -1529,7 +1632,9 @@ function accountRowToData(a){
     eval:ev,
     purchase:pur,
     rate,
-    _draftId:a._draftId||''
+    _draftId:a._draftId||'',
+    _autoName:!!a._autoName,
+    _autoPrice:!!a._autoPrice
   };
 }
 function syncSheetRowsToMpData(){
@@ -1590,10 +1695,10 @@ function drawSheetRows(rows, filtered=false){
       <td><select class="sheet-input" data-field="brokerage" onchange="cellChange(${rowIdx},this)"><option value="">선택</option>${brokerOpts}</select></td>
       <td><select class="sheet-input" data-field="acctType" onchange="cellChange(${rowIdx},this)"><option value="">선택</option>${acctOpts}</select></td>
       <td><input class="sheet-input" type="text" value="${t.code||''}" data-field="code" placeholder="005930" oninput="cellChange(${rowIdx},this);queueSheetCodeLookup(${rowIdx},this)" onchange="cellChange(${rowIdx},this)" onblur="handleSheetCodeInput(${rowIdx},this)" style="width:80px"/></td>
-      <td><input class="sheet-input" type="text" value="${t.name||''}" data-field="name" placeholder="종목명" onchange="cellChange(${rowIdx},this)" style="min-width:120px"/></td>
+      <td><input class="sheet-input${t._autoName?' auto-filled':''}" type="text" value="${t.name||''}" data-field="name" placeholder="종목명" onchange="cellChange(${rowIdx},this)" style="min-width:120px"/></td>
       <td><input class="sheet-input" type="number" value="${t.qty||''}" data-field="qty" placeholder="100" oninput="cellChange(${rowIdx},this)" style="width:70px"/></td>
       <td><input class="sheet-input" type="number" value="${t.avgBuy||''}" data-field="avgBuy" placeholder="70000" oninput="cellChange(${rowIdx},this)" style="width:90px"/></td>
-      <td><input class="sheet-input" type="number" value="${t.price||''}" data-field="price" placeholder="85000" oninput="cellChange(${rowIdx},this)" style="width:90px"/></td>
+      <td><input class="sheet-input${t._autoPrice?' auto-price':''}" type="number" value="${t.price||''}" data-field="price" placeholder="85000" oninput="cellChange(${rowIdx},this)" style="width:90px"/></td>
       <td><input class="sheet-input calc-input" type="text" value="${pur?fmt(pur)+'원':''}" readonly style="width:100px"/></td>
       <td><input class="sheet-input calc-input" type="text" value="${ev?fmt(ev)+'원':''}" readonly style="width:100px"/></td>
       <td><input class="sheet-input calc-input ${pc}" type="text" value="${pnl||pur?(pnl>=0?'+':'')+fmt(pnl)+'원':''}" readonly style="width:100px"/></td>
@@ -1626,9 +1731,15 @@ function cellChange(idx, input){
   const field=input.dataset.field;
   const val=input.value;
   _sheetRows[idx][field]=field==='date'||field==='brokerage'||field==='acctType'||field==='code'||field==='name'||field==='note'?val:parseFloat(val)||0;
+  if(field==='code'){_sheetRows[idx]._autoName=false;_sheetRows[idx]._autoPrice=false;}
+  if(field==='name'){_sheetRows[idx]._autoName=false;input.classList.remove('auto-filled');}
+  if(field==='price'){_sheetRows[idx]._autoPrice=false;input.classList.remove('auto-price');}
   // 계산된 셀 업데이트
   const row=input.closest('tr');if(!row)return;
-  const inputs=row.querySelectorAll('.sheet-input');
+  if(field==='code'){
+    row.querySelector('input[data-field="name"]')?.classList.remove('auto-filled');
+    row.querySelector('input[data-field="price"]')?.classList.remove('auto-price');
+  }
   const pnl=calcPnl(_sheetRows[idx]), pur=calcPurchase(_sheetRows[idx]);
   const ev=calcEval(_sheetRows[idx]), rate=calcRate(_sheetRows[idx]);
   const pc=pnl>=0?'up':'down', rc=rate>=0?'up':'down';
@@ -1728,7 +1839,7 @@ async function fetchAllPrices(){
     document.getElementById('price-last-update').textContent=now.getHours()+':'+String(now.getMinutes()).padStart(2,'0')+' 업데이트';
   }catch(e){
     setPriceApiStatus('API 오류', 'err');
-    grid.innerHTML=`<div class="price-loading" style="color:var(--down)">⚠ ${e.message}<br><small>Cloudflare Pages 환경변수(KIS_APP_KEY, KIS_APP_SECRET) 확인 필요</small></div>`;
+    grid.innerHTML=`<div class="price-loading" style="color:var(--down)">⚠ ${explainPriceError(e)}<br><small>현재가는 Cloudflare Pages Functions에서만 동작합니다.</small></div>`;
   }
   _priceBusy=false;
 }
@@ -1917,7 +2028,12 @@ function applyLocalSheetName(rowIdx, codeInput, overwrite=true){
   if(!name)return false;
   const row=codeInput.closest('tr');
   fillInputValue(row,'name',name,overwrite);
-  if(_sheetRows[rowIdx])_sheetRows[rowIdx].name=name;
+  const input=row?.querySelector('input[data-field="name"]');
+  if(input)input.classList.add('auto-filled');
+  if(_sheetRows[rowIdx]){
+    _sheetRows[rowIdx].name=name;
+    _sheetRows[rowIdx]._autoName=true;
+  }
   return true;
 }
 function applyLocalAcctName(acctIdx, codeInput, overwrite=true){
@@ -1926,7 +2042,12 @@ function applyLocalAcctName(acctIdx, codeInput, overwrite=true){
   if(!name)return false;
   const row=codeInput.closest('tr');
   fillInputValue(row,'stockName',name,overwrite);
-  if(_acctRows[acctIdx])_acctRows[acctIdx].stockName=name;
+  const input=row?.querySelector('input[data-field="stockName"]');
+  if(input)input.classList.add('auto-filled');
+  if(_acctRows[acctIdx]){
+    _acctRows[acctIdx].stockName=name;
+    _acctRows[acctIdx]._autoName=true;
+  }
   return true;
 }
 function queueSheetCodeLookup(rowIdx, codeInput){
@@ -1948,6 +2069,9 @@ function queueAcctCodeLookup(acctIdx, codeInput){
 async function fetchQuoteForCode(code){
   const clean=normalizeStockCode(code);
   if(!clean)throw new Error('종목코드가 비어 있습니다.');
+  if(IS_GITHUB_PAGES){
+    throw new Error('GitHub Pages는 /api 함수를 실행할 수 없습니다. Cloudflare Pages 도메인으로 접속해야 현재가가 연동됩니다.');
+  }
   const market=marketForCode(clean);
   const key=market+':'+clean;
   const cached=quoteCache[key];
@@ -1977,6 +2101,13 @@ function setPriceApiStatus(text,type='neutral'){
   el.style.color=type==='ok'?'#1a8a4a':type==='err'?'#c0392b':'var(--text2)';
   el.style.borderColor=type==='ok'?'#abe5c3':type==='err'?'#ffbfbf':'var(--border)';
   el.style.background=type==='ok'?'#f0fff6':type==='err'?'#fff5f5':'var(--bg3)';
+}
+function explainPriceError(e){
+  const msg=e?.message||String(e);
+  if(IS_GITHUB_PAGES)return '현재 접속한 github.io 주소는 API 실행을 지원하지 않습니다. Cloudflare Pages 도메인으로 접속하세요.';
+  if(msg.includes('404'))return '/api/kis-price를 찾을 수 없습니다. Cloudflare Pages 배포와 functions/api/kis-price.js 위치를 확인하세요.';
+  if(msg.includes('환경변수')||msg.includes('KIS_'))return 'Cloudflare 환경변수 KIS_APP_KEY / KIS_APP_SECRET을 확인하세요.';
+  return msg;
 }
 function extractQuote(data,key,code){
   if(!data)return null;
@@ -2013,10 +2144,16 @@ async function handleSheetCodeInput(rowIdx, codeInput){
     const apiName=q.name||lookupCode(code);
     if(apiName){
       fillInputValue(row,'name',apiName,true);
-      if(_sheetRows[rowIdx])_sheetRows[rowIdx].name=apiName;
+      const nameInput=row?.querySelector('input[data-field="name"]');
+      if(nameInput)nameInput.classList.add('auto-filled');
+      if(_sheetRows[rowIdx]){
+        _sheetRows[rowIdx].name=apiName;
+        _sheetRows[rowIdx]._autoName=true;
+      }
     }
     if(_sheetRows[rowIdx]){
       _sheetRows[rowIdx].price=q.price||_sheetRows[rowIdx].price||0;
+      _sheetRows[rowIdx]._autoPrice=!!q.price;
       if(apiName)_sheetRows[rowIdx].name=apiName;
     }
     drawSheetRows(_sheetRows);
@@ -2025,7 +2162,7 @@ async function handleSheetCodeInput(rowIdx, codeInput){
     showToast(`✅ ${code} 현재가 ${fmt(q.price)}원 반영`, 'ok');
   }catch(e){
     setPriceApiStatus('API 오류', 'err');
-    showToast(`현재가 조회 실패: ${e.message}`, 'err');
+    showToast(`현재가 조회 실패: ${explainPriceError(e)}`, 'err');
   }
 }
 async function handleAcctCodeInput(acctIdx, codeInput){
@@ -2040,11 +2177,17 @@ async function handleAcctCodeInput(acctIdx, codeInput){
     const apiName=q.name||lookupCode(code);
     if(apiName){
       fillInputValue(row,'stockName',apiName,true);
-      if(_acctRows[acctIdx])_acctRows[acctIdx].stockName=apiName;
+      const nameInput=row?.querySelector('input[data-field="stockName"]');
+      if(nameInput)nameInput.classList.add('auto-filled');
+      if(_acctRows[acctIdx]){
+        _acctRows[acctIdx].stockName=apiName;
+        _acctRows[acctIdx]._autoName=true;
+      }
     }
     if(_acctRows[acctIdx]){
       _acctRows[acctIdx].price=q.price||0;
       _acctRows[acctIdx].eval=(_acctRows[acctIdx].qty||0)*_acctRows[acctIdx].price;
+      _acctRows[acctIdx]._autoPrice=!!q.price;
       if(apiName)_acctRows[acctIdx].stockName=apiName;
     }
     drawAcctRows(_acctRows);
@@ -2054,7 +2197,7 @@ async function handleAcctCodeInput(acctIdx, codeInput){
     showToast(`✅ ${code} 현재가 ${fmt(q.price)}원 반영`, 'ok');
   }catch(e){
     setPriceApiStatus('API 오류', 'err');
-    showToast(`현재가 조회 실패: ${e.message}`, 'err');
+    showToast(`현재가 조회 실패: ${explainPriceError(e)}`, 'err');
   }
 }
 
@@ -2126,6 +2269,8 @@ function initAcctSheet(accounts) {
     eval:      a.eval || 0,
     purchase:  a.purchase || 0,
     _draftId:  a._draftId || '',
+    _autoName: !!a._autoName,
+    _autoPrice: !!a._autoPrice,
   }));
   drawAcctRows(_acctRows);
 }
@@ -2149,13 +2294,13 @@ function drawAcctRows(rows) {
       <td><select class="sheet-input" data-field="acctType" onchange="acctCellChange(${i},this)" style="min-width:72px"><option value="">선택</option>${aOpts}</select></td>
       <td><input class="sheet-input" type="text" value="${a.code||''}" data-field="code" placeholder="005930"
           oninput="acctCellChange(${i},this);queueAcctCodeLookup(${i},this)" onchange="acctCellChange(${i},this)" onblur="handleAcctCodeInput(${i},this)" style="width:78px"/></td>
-      <td><input class="sheet-input" type="text" value="${a.stockName||''}" data-field="stockName" placeholder="종목명"
+      <td><input class="sheet-input${a._autoName?' auto-filled':''}" type="text" value="${a.stockName||''}" data-field="stockName" placeholder="종목명"
           onchange="acctCellChange(${i},this)" style="min-width:110px"/></td>
       <td><input class="sheet-input" type="number" value="${a.qty||''}" data-field="qty" placeholder="100"
           oninput="acctCellChange(${i},this)" style="width:65px"/></td>
       <td><input class="sheet-input" type="number" value="${a.avgBuy||''}" data-field="avgBuy" placeholder="70000"
           oninput="acctCellChange(${i},this)" style="width:88px"/></td>
-      <td><input class="sheet-input calc-input" id="ap-price-${i}" value="${a.price ? a.price.toLocaleString('ko-KR')+'원' : ''}" readonly style="width:90px"/></td>
+      <td><input class="sheet-input calc-input${a._autoPrice?' auto-price':''}" id="ap-price-${i}" value="${a.price ? a.price.toLocaleString('ko-KR')+'원' : ''}" readonly style="width:90px"/></td>
       <td><input class="sheet-input calc-input" value="${ev ? ev.toLocaleString('ko-KR')+'원' : ''}" readonly style="width:95px"/></td>
       <td><input class="sheet-input calc-input" value="${pur ? pur.toLocaleString('ko-KR')+'원' : ''}" readonly style="width:95px"/></td>
       <td><input class="sheet-input calc-input ${rc}" value="${pur||ev ? (rate>=0?'+':'')+rate.toFixed(2)+'%' : ''}" readonly style="width:68px"/></td>
@@ -2170,8 +2315,14 @@ function acctCellChange(idx, input) {
   const field = input.dataset.field;
   const val   = input.value;
   _acctRows[idx][field] = ['brokerage','acctType','code','stockName'].includes(field) ? val : (parseFloat(val)||0);
+  if(field==='code'){_acctRows[idx]._autoName=false;_acctRows[idx]._autoPrice=false;}
+  if(field==='stockName'){_acctRows[idx]._autoName=false;input.classList.remove('auto-filled');}
   // 계산 셀 업데이트
   const row = input.closest('tr'); if (!row) return;
+  if(field==='code'){
+    row.querySelector('input[data-field="stockName"]')?.classList.remove('auto-filled');
+    row.querySelector('.calc-input.auto-price')?.classList.remove('auto-price');
+  }
   const a   = _acctRows[idx];
   const ev  = a.price && a.qty ? a.qty * a.price : (a.eval || 0);
   const pur = a.avgBuy && a.qty ? a.qty * a.avgBuy : (a.purchase || 0);
@@ -2275,10 +2426,17 @@ async function fetchAndUpdateAcctPrices() {
       if (p && !p.error) {
         _acctRows[i].price = p.price;
         _acctRows[i].eval  = (a.qty||0) * p.price;
-        if(!_acctRows[i].stockName && p.name)_acctRows[i].stockName = p.name;
+        _acctRows[i]._autoPrice = !!p.price;
+        if(p.name){
+          _acctRows[i].stockName = p.name;
+          _acctRows[i]._autoName = true;
+        }
         // 현재가 셀 업데이트
         const priceEl = document.getElementById('ap-price-' + i);
-        if (priceEl) priceEl.value = p.price.toLocaleString('ko-KR') + '원';
+        if (priceEl) {
+          priceEl.value = p.price.toLocaleString('ko-KR') + '원';
+          priceEl.classList.add('auto-price');
+        }
       }
     });
     drawAcctRows(_acctRows);
@@ -2287,7 +2445,7 @@ async function fetchAndUpdateAcctPrices() {
     showToast("✅ 현재가 업데이트 완료!", "ok");
   } catch(e) {
     setPriceApiStatus('API 오류', 'err');
-    showToast("현재가 조회 실패: " + e.message, "err");
+    showToast("현재가 조회 실패: " + explainPriceError(e), "err");
   }
 }
 
