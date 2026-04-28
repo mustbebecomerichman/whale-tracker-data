@@ -1085,6 +1085,7 @@ const ADMIN = "smmoon2030@gmail.com";
 const BROKERS = ["키움증권","미래에셋증권","NH투자증권","삼성증권","KB증권","한국투자증권",
   "신한투자증권","하나증권","대신증권","메리츠증권","한화투자증권","교보증권","토스증권","카카오페이증권","기타"];
 const ACCT_TYPES = ["위탁","ISA","연금저축","IRP","퇴직연금"];
+const BROKER_SET = new Set(BROKERS);
 const OVERSEAS_CODES = new Set(['AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','PLTR','ARKK']);
 const OVERSEAS_STOCK_DB = {
   AAPL:'Apple Inc.', MSFT:'Microsoft Corp.', NVDA:'NVIDIA Corp.', AMZN:'Amazon.com Inc.',
@@ -1667,16 +1668,18 @@ function normalizeLegendData(rows){
   const emojis=['🎩','🌉','📉','🧠','🏛','💎','📊','🪙'];
   return rows.map((x,i)=>{
     const top=Array.isArray(x.top)?x.top:(Array.isArray(x.holdingsList)?x.holdingsList:(Array.isArray(x.holdings)?x.holdings:[]));
+    const fb=fallback.find(f=>String(x.name||x.fund||'').includes(f.name.split(' ')[0]) || String(x.fund||'').includes(f.fund.split(' ')[0]));
+    const safeTop=top.length?top:(fb?.top||[]);
     return {
       id:x.id||String(x.fund||x.name||('legend-'+i)).toLowerCase().replace(/[^a-z0-9]+/g,'-'),
-      emoji:x.emoji||emojis[i%emojis.length],
-      name:x.name||x.manager||x.investor||x.fund||'투자 대가',
-      fund:x.fund||x.company||x.manager||'-',
-      aum:x.aum||x.value||x.totalValue||'-',
-      holdings:x.holdingsCount||x.holdings_count||(typeof x.holdings==='number'?x.holdings:null)||x.count||top.length||'-',
+      emoji:x.emoji||fb?.emoji||emojis[i%emojis.length],
+      name:x.name||x.manager||x.investor||x.fund||fb?.name||'투자 대가',
+      fund:x.fund||x.company||x.manager||fb?.fund||'-',
+      aum:x.aum||x.value||x.totalValue||fb?.aum||'-',
+      holdings:x.holdingsCount||x.holdings_count||(typeof x.holdings==='number'?x.holdings:null)||x.count||safeTop.length||'-',
       filingDate:x.filingDate||x.filing_date||x.date||x.updatedAt||'',
       strategy:x.strategy||x.note||x.description||'SEC 13F 공시 기준 포트폴리오',
-      top:top.map((h,j)=>({
+      top:safeTop.map((h,j)=>({
         ticker:h.ticker||h.code||h.symbol||'-',
         name:h.name||h.company||h.ticker||h.symbol||'-',
         weight:Number(h.weight ?? h.pct ?? h.ratio ?? 0),
@@ -1906,6 +1909,33 @@ function accountRowToData(a){
     _draftId:a._draftId||'',
     _autoName:!!a._autoName,
     _autoPrice:!!a._autoPrice
+  };
+}
+function looksLikeBrokerName(name){
+  const s=String(name||'').trim();
+  return BROKER_SET.has(s) || /증권$|투자증권$|^한국투자$|^미래에셋$/.test(s);
+}
+function normalizeAccountInputRow(a){
+  const code=normalizeStockCode(a.code||'');
+  const rawBroker=a.brokerage || (looksLikeBrokerName(a.name)?a.name:'');
+  const localName=code?lookupCode(code):'';
+  const rawStock=a.stockName || a.stock_name || a.stock || '';
+  const stockName=looksLikeBrokerName(rawStock)
+    ? (localName || '')
+    : (rawStock || localName || (!code && !looksLikeBrokerName(a.name)?a.name:''));
+  return {
+    brokerage: rawBroker,
+    acctType:  a.acctType || '위탁',
+    code,
+    stockName,
+    qty:       a.qty || 0,
+    avgBuy:    a.avgBuy || (a.purchase && a.qty ? Math.round(a.purchase/a.qty) : 0),
+    price:     a.price || 0,
+    eval:      a.eval || 0,
+    purchase:  a.purchase || 0,
+    _draftId:  a._draftId || '',
+    _autoName: !!a._autoName || (!!localName && (!rawStock || looksLikeBrokerName(rawStock))),
+    _autoPrice: !!a._autoPrice,
   };
 }
 function syncSheetRowsToMpData(){
@@ -2752,20 +2782,9 @@ let _acctRows = [];
 
 function initAcctSheet(accounts) {
   // accounts 데이터를 _acctRows로 변환
-  _acctRows = (accounts || []).map(a => ({
-    brokerage: a.name || '',
-    acctType:  a.acctType || '위탁',
-    code:      a.code || '',
-    stockName: a.stockName || a.name || '',
-    qty:       a.qty || 0,
-    avgBuy:    a.avgBuy || (a.purchase && a.qty ? Math.round(a.purchase/a.qty) : 0),
-    price:     a.price || 0,
-    eval:      a.eval || 0,
-    purchase:  a.purchase || 0,
-    _draftId:  a._draftId || '',
-    _autoName: !!a._autoName,
-    _autoPrice: !!a._autoPrice,
-  }));
+  _acctRows = (accounts || [])
+    .map(normalizeAccountInputRow)
+    .filter(a=>a._draftId||a.code||a.stockName||a.qty||a.avgBuy||a.price);
   drawAcctRows(_acctRows);
 }
 

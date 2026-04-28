@@ -16,7 +16,7 @@ dart_fetcher.py — Whale Tracker Pro 데이터 수집기
 ══════════════════════════════════════════════════════
 """
 
-import os, sys, json, time, re, html, requests
+import os, sys, json, time, re, html, io, zipfile, requests
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -56,6 +56,8 @@ NPS_DOMESTIC_LIMIT = int(os.environ.get("NPS_DOMESTIC_LIMIT", "500"))
 NPS_OVERSEAS_LIMIT = int(os.environ.get("NPS_OVERSEAS_LIMIT", "120"))
 ALERT_LOOKBACK_DAYS = int(os.environ.get("ALERT_LOOKBACK_DAYS", "90"))
 ALERT_LIMIT = int(os.environ.get("ALERT_LIMIT", "300"))
+DISCLOSURE_SCAN_KOSPI_LIMIT = int(os.environ.get("DISCLOSURE_SCAN_KOSPI_LIMIT", "500"))
+DISCLOSURE_SCAN_KOSDAQ_LIMIT = int(os.environ.get("DISCLOSURE_SCAN_KOSDAQ_LIMIT", "500"))
 GLOBAL_WHALE_TOP_N = int(os.environ.get("GLOBAL_WHALE_TOP_N", "30"))
 NPS_13F_CIK = "0001608046"
 
@@ -200,6 +202,79 @@ def fetch_naver_market_sum(market="KOSPI", limit=200):
         time.sleep(0.25)
     return rows[:limit]
 
+_corp_code_map = None
+_market_universe_cache = {}
+_majorstock_cache = {}
+
+def fetch_corp_code_map():
+    """DART 고유번호 ZIP에서 stock_code -> corp_code 매핑을 만든다."""
+    global _corp_code_map
+    if _corp_code_map is not None:
+        return _corp_code_map
+    if not DART_API_KEY:
+        print("  ⚠ DART_API_KEY 없음: DART 공시 수집 불가")
+        _corp_code_map = {}
+        return _corp_code_map
+    url = f"{DART_BASE_URL}/corpCode.xml"
+    r = requests.get(url, params={"crtfc_key": DART_API_KEY}, timeout=30)
+    r.raise_for_status()
+    import xml.etree.ElementTree as ET
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        xml_name = zf.namelist()[0]
+        root = ET.fromstring(zf.read(xml_name))
+    mapping = {}
+    for item in root.iter("list"):
+        corp_code = (item.findtext("corp_code") or "").strip()
+        stock_code = (item.findtext("stock_code") or "").strip()
+        corp_name = (item.findtext("corp_name") or "").strip()
+        if stock_code:
+            mapping[stock_code] = {"corp_code": corp_code, "name": corp_name}
+    _corp_code_map = mapping
+    print(f"  ✅ DART 고유번호 매핑: {len(mapping)}개 상장 종목")
+    return mapping
+
+def fetch_market_universe_for_disclosures():
+    """대량보유/국민연금 스캔용 상위 KOSPI/KOSDAQ 유니버스."""
+    key = (DISCLOSURE_SCAN_KOSPI_LIMIT, DISCLOSURE_SCAN_KOSDAQ_LIMIT)
+    if key in _market_universe_cache:
+        return _market_universe_cache[key]
+    kospi = fetch_naver_market_sum("KOSPI", DISCLOSURE_SCAN_KOSPI_LIMIT)
+    kosdaq = fetch_naver_market_sum("KOSDAQ", DISCLOSURE_SCAN_KOSDAQ_LIMIT)
+    rows = []
+    seen = set()
+    for row in kospi + kosdaq:
+        code = row.get("code", "")
+        if code and code not in seen:
+            rows.append(row)
+            seen.add(code)
+    _market_universe_cache[key] = rows
+    print(f"  ✅ 공시 스캔 유니버스: {len(rows)}개")
+    return rows
+
+def get_majorstock_items(corp_code):
+    """DART majorstock: 회사별 5% 이상 대량보유 보고 목록."""
+    if not corp_code:
+        return []
+    if corp_code in _majorstock_cache:
+        return _majorstock_cache[corp_code]
+    data = dart_get("majorstock", {"corp_code": corp_code})
+    rows = data.get("list", []) if data and data.get("status") == "000" else []
+    _majorstock_cache[corp_code] = rows
+    time.sleep(0.08)
+    return rows
+
+def holder_name(item):
+    return item.get("repror") or item.get("rcpter_nm") or item.get("reporter") or ""
+
+def item_report_date(item):
+    return item.get("rcept_dt") or item.get("rcept_date") or ""
+
+def item_pct(item):
+    return parse_pct(item.get("stkrt") or item.get("stkqy_irds") or 0)
+
+def item_delta_pct(item):
+    return parse_pct(item.get("stkrt_irds") or item.get("stkqy_irds_change") or 0)
+
 def fetch_quant_universe():
     print("\n📡 [DART 3/3] 퀀트 스크리너 유니버스 수집 중...")
     try:
@@ -219,39 +294,36 @@ def fetch_quant_universe():
 def fetch_nps_portfolio():
     print("\n📡 [DART 1/2] 국민연금 포트폴리오 수집 중...")
     portfolio = {}
-    for bgn_de, end_de in date_windows(NPS_DOMESTIC_LOOKBACK_DAYS, 90):
-        for corp_cls, market in [("Y","KOSPI"),("K","KOSDAQ")]:
-            page = 1
-            while True:
-                data = dart_get("majorstock", {
-                    "corp_cls":corp_cls,"bgn_de":bgn_de,
-                    "end_de":end_de,"page_no":page,"page_count":100,
-                })
-                if not data or data.get("status") not in ("000",):
-                    break
-                for item in data.get("list",[]):
-                    rn = item.get("report_nm","")
-                    rr = item.get("rcpter_nm","")
-                    if "국민연금" not in rn and "국민연금" not in rr:
-                        continue
-                    code = item.get("stock_code","") or item.get("corp_code","") or item.get("corp_name","")
-                    dt   = item.get("rcept_dt","")
-                    if code not in portfolio or dt > portfolio[code].get("_dt",""):
-                        portfolio[code] = {**item,"_dt":dt,"_market":market}
-                total = int(data.get("total_count",0))
-                if page * 100 >= total:
-                    break
-                page += 1
-                time.sleep(0.35)
-        print(f"  {fmt_date(bgn_de)}~{fmt_date(end_de)}: 완료")
+    corp_map = fetch_corp_code_map()
+    universe = fetch_market_universe_for_disclosures()
+    cutoff = (TODAY - timedelta(days=NPS_DOMESTIC_LOOKBACK_DAYS)).strftime("%Y%m%d")
+    for i, row in enumerate(universe, 1):
+        code = row.get("code", "")
+        corp = corp_map.get(code, {})
+        for item in get_majorstock_items(corp.get("corp_code", "")):
+            holder = holder_name(item)
+            if "국민연금" not in holder:
+                continue
+            dt = item_report_date(item)
+            if dt and dt < cutoff:
+                continue
+            key = code or item.get("corp_code") or item.get("corp_name", "")
+            if key not in portfolio or dt > portfolio[key].get("_dt",""):
+                portfolio[key] = {
+                    **item,
+                    "stock_code": code,
+                    "corp_name": row.get("name") or item.get("corp_name",""),
+                    "_dt": dt,
+                    "_market": row.get("market","KOSPI"),
+                    "_holder": holder,
+                }
+        if i % 100 == 0:
+            print(f"  진행: {i}/{len(universe)}개")
 
     result = []
     for item in portfolio.values():
-        pct = parse_pct(item.get("stkqy_irds",0))
-        try:
-            delta = float(str(item.get("stkqy_irds_change") or "0").replace(",",""))
-        except:
-            delta = 0.0
+        pct = item_pct(item)
+        delta = item_delta_pct(item)
         trend = "increase" if delta>0 else ("decrease" if delta<0 else "hold")
         try:
             sn = int(str(item.get("stkqy","")).replace(",",""))
@@ -263,7 +335,8 @@ def fetch_nps_portfolio():
             "code":item.get("stock_code",""),"name":item.get("corp_name",""),
             "market":item.get("_market","KOSPI"),"shares":shares,
             "pct":round(pct,2),"delta":round(delta,2),"trend":trend,
-            "date":fmt_date(item.get("rcept_dt","")),
+            "holder":item.get("_holder") or holder_name(item),
+            "date":fmt_date(item_report_date(item)),
         })
     result.sort(key=lambda x: x["pct"], reverse=True)
     print(f"  ✅ 국민연금 보유 종목: {len(result)}개")
@@ -272,36 +345,36 @@ def fetch_nps_portfolio():
 def fetch_alert5():
     print("\n📡 [DART 2/2] 5%↑ 대량보유 알림 수집 중...")
     alerts = {}
-    for bgn_de, end_de in date_windows(ALERT_LOOKBACK_DAYS, 30):
-        for corp_cls in ["Y","K"]:
-            page = 1
-            while True:
-                data = dart_get("majorstock", {
-                    "corp_cls":corp_cls,"bgn_de":bgn_de,"end_de":end_de,
-                    "page_no":page,"page_count":100,
-                })
-                if not data or data.get("status") != "000":
-                    break
-                for item in data.get("list",[]):
-                    key = "|".join([item.get("rcept_dt",""), item.get("corp_name",""), item.get("rcpter_nm","")])
-                    alerts[key] = item
-                total = int(data.get("total_count",0))
-                if page * 100 >= total:
-                    break
-                page += 1
-                time.sleep(0.35)
-        time.sleep(0.2)
+    corp_map = fetch_corp_code_map()
+    universe = fetch_market_universe_for_disclosures()
+    recent = (TODAY - timedelta(days=ALERT_LOOKBACK_DAYS)).strftime("%Y%m%d")
+    for i, row in enumerate(universe, 1):
+        code = row.get("code", "")
+        corp = corp_map.get(code, {})
+        for item in get_majorstock_items(corp.get("corp_code", "")):
+            dt = item_report_date(item)
+            if dt and dt < recent:
+                continue
+            key = "|".join([dt, code, holder_name(item)])
+            alerts[key] = {
+                **item,
+                "stock_code": code,
+                "corp_name": row.get("name") or item.get("corp_name",""),
+                "_holder": holder_name(item),
+            }
+        if i % 100 == 0:
+            print(f"  진행: {i}/{len(universe)}개")
     result = []
     for item in alerts.values():
-        after  = parse_pct(item.get("stkqy_irds",0))
-        delta  = parse_pct(item.get("stkqy_irds_change",0))
+        after  = item_pct(item)
+        delta  = item_delta_pct(item)
         before = round(after - delta, 2)
         t = "buy" if before<=0 else ("increase" if delta>0 else "decrease")
         result.append({
             "name":item.get("corp_name",""),"code":item.get("stock_code",""),
-            "type":t,"holder":item.get("rcpter_nm",""),
+            "type":t,"holder":item.get("_holder") or holder_name(item),
             "before":max(before,0),"after":after,"delta":round(delta,2),
-            "date":fmt_date(item.get("rcept_dt","")),
+            "date":fmt_date(item_report_date(item)),
         })
     result.sort(key=lambda x: x["date"], reverse=True)
     print(f"  ✅ 대량보유 공시: {len(result)}건")
