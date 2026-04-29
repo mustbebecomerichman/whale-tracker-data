@@ -7,6 +7,7 @@ on:
       - 'firestore.rules'
       - 'firebase.json'
       - '.github/workflows/deploy_firestore_rules.yml'
+      - '.github/scripts/deploy-firestore-rules.js'
   workflow_dispatch:
 
 jobs:
@@ -65,7 +66,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          if ! npx --yes firebase-tools@latest deploy --only firestore:rules --project whaletracker-pro --non-interactive --debug 2>&1 | tee firebase-deploy.log; then
+          if ! node .github/scripts/deploy-firestore-rules.js 2>&1 | tee firebase-deploy.log; then
             echo "::group::Firebase deploy failure"
             tail -n 80 firebase-deploy.log || true
             echo "::endgroup::"
