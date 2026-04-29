@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-29-summary-default-v1"/>
+<meta name="whale-tracker-version" content="2026-04-29-mobile-collapse-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -312,8 +312,7 @@ select.sheet-input{cursor:pointer;}
 .broker-pnl-bar{height:100%;border-radius:999px;background:var(--up);}
 .broker-pnl-bar.down{background:var(--down);}
 .broker-pnl-value{text-align:right;font-size:.78rem;font-weight:900;}
-.mobile-toggle{display:inline-flex;}
-.mobile-collapsible.is-collapsed{display:none!important;}
+.mobile-toggle{display:none;}
 
 /* QUANT SCREENER */
 .quant-score{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:28px;
@@ -434,6 +433,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .broker-pnl-row{grid-template-columns:1fr;gap:5px;}
   .broker-pnl-value{text-align:left;}
   .mobile-toggle{display:inline-flex;}
+  .mobile-collapsible.is-collapsed{display:none!important;}
   .quant-metrics{grid-template-columns:repeat(3,minmax(0,1fr));}
   .quant-result{grid-template-columns:1fr;}
   .quant-result-score{text-align:left;}
@@ -2797,10 +2797,11 @@ function updateDetailToggleButtons(group,collapsed){
 }
 function initPortfolioDetailVisibility(force=false){
   if(_portfolioDetailsInitialized&&!force)return;
+  const isMobile=window.matchMedia?window.matchMedia('(max-width:720px)').matches:window.innerWidth<=720;
   PORTFOLIO_DEFAULT_COLLAPSED_GROUPS.forEach(group=>{
     const items=document.querySelectorAll(`[data-mobile-group="${group}"]`);
-    items.forEach(x=>x.classList.add('is-collapsed'));
-    updateDetailToggleButtons(group,true);
+    items.forEach(x=>x.classList.toggle('is-collapsed',isMobile));
+    updateDetailToggleButtons(group,isMobile);
   });
   _portfolioDetailsInitialized=true;
 }
