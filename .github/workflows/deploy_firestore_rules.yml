@@ -62,4 +62,14 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
           CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE: ${{ runner.temp }}/firebase-service-account.json
-        run: npx --yes firebase-tools@latest deploy --only firestore:rules --project whaletracker-pro --non-interactive --debug
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! npx --yes firebase-tools@latest deploy --only firestore:rules --project whaletracker-pro --non-interactive --debug 2>&1 | tee firebase-deploy.log; then
+            echo "::group::Firebase deploy failure"
+            tail -n 80 firebase-deploy.log || true
+            echo "::endgroup::"
+            summary="$(tail -n 20 firebase-deploy.log | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')"
+            echo "::error title=Firestore rules deploy failed::${summary}"
+            exit 1
+          fi
