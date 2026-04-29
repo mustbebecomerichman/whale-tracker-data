@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-29-consent-permission-fallback-v1"/>
+<meta name="whale-tracker-version" content="2026-04-29-portfolio-period-metrics-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -218,6 +218,8 @@ td.name{font-weight:600;color:var(--text);}
 .mp-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:22px;}
 @media(max-width:900px){.mp-summary-grid{grid-template-columns:1fr 1fr;}}
 @media(max-width:520px){.mp-summary-grid{grid-template-columns:1fr;}}
+.mp-period-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin:-10px 0 22px;}
+@media(max-width:900px){.mp-period-grid{grid-template-columns:1fr;}}
 .mp-card{background:#fff;border:1px solid var(--border);border-radius:12px;
   padding:14px 16px;position:relative;overflow:hidden;box-shadow:var(--shadow);}
 .mp-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
@@ -225,10 +227,13 @@ td.name{font-weight:600;color:var(--text);}
 .mp-card.c-green::before{background:var(--accent);}
 .mp-card.c-orange::before{background:#e67e22;}
 .mp-card.c-purple::before{background:#9b59b6;}
+.mp-card.c-red::before{background:#e74c3c;}
+.mp-period-grid .mp-card{padding:16px 18px;}
 .mp-lbl{font-size:.72rem;color:var(--text2);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
 .mp-val{font-size:1.4rem;font-weight:900;color:var(--text);}
 .mp-val.up{color:var(--up);} .mp-val.down{color:var(--down);}
 .mp-sub{font-size:.72rem;color:var(--text2);margin-top:2px;}
+.period-meta{font-size:.72rem;color:var(--text2);line-height:1.5;margin-top:4px;}
 
 /* ACCOUNT BREAKDOWN */
 .acct-row{display:grid;grid-template-columns:150px 1fr 110px 65px 68px;
@@ -907,6 +912,24 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <div class="mp-lbl">당해 실현 손익</div>
       <div class="mp-val" id="mp-realized">-</div>
       <div class="mp-sub" id="mp-realized-sub">거래 내역 기준</div>
+    </div>
+  </div>
+
+  <div class="mp-period-grid" id="portfolio-period-metrics">
+    <div class="mp-card c-blue">
+      <div class="mp-lbl">전일 대비</div>
+      <div class="mp-val" id="period-daily">-</div>
+      <div class="period-meta" id="period-daily-sub">전일 스냅샷 기준</div>
+    </div>
+    <div class="mp-card c-green">
+      <div class="mp-lbl">한달 수익</div>
+      <div class="mp-val" id="period-month">-</div>
+      <div class="period-meta" id="period-month-sub">30일 전 스냅샷 기준</div>
+    </div>
+    <div class="mp-card c-purple">
+      <div class="mp-lbl">올해 수익</div>
+      <div class="mp-val" id="period-year">-</div>
+      <div class="period-meta" id="period-year-sub">실현손익 + 평가손익 변화</div>
     </div>
   </div>
 
@@ -2379,6 +2402,7 @@ function renderMp(data){
   renderBrokerPnlChart();
   renderTotalHistoryChart(data.history||[]);
   renderDailyChangeTable(data.history||[]);
+  renderPortfolioPeriodMetrics(data.history||[]);
   initPortfolioDetailVisibility();
   const el=document.getElementById('data-last-update');
   if(el&&data.updatedAt) el.textContent='마지막 업데이트: '+data.updatedAt;
@@ -2601,6 +2625,7 @@ function syncSheetRowsToMpData(){
     .filter(t=>t._draftId||t.name||t.code||t.brokerage||t.acctType||t.qty||t.avgBuy||t.price||t.note)
     .map(t=>({...t,acctType:t.acctType||'위탁'}));
   renderYearChips(mpData.transactions);
+  renderPortfolioPeriodMetrics(mpData.history||[]);
 }
 function syncAcctRowsToMpData(){
   if(!mpData)mpData=emptyPortfolio();
@@ -2610,6 +2635,7 @@ function syncAcctRowsToMpData(){
   updateMpSummaryFromAccountRows(mpData.accounts);
   if(updateDailyPortfolioSnapshot())renderTotalHistoryChart(mpData.history||[]);
   renderDailyChangeTable(mpData.history||[]);
+  renderPortfolioPeriodMetrics(mpData.history||[]);
 }
 function syncDivRowsToMpData(){
   if(!mpData)mpData=emptyPortfolio();
@@ -2675,6 +2701,7 @@ function drawSheetRows(rows, filtered=false){
   if(rEl){rEl.textContent=(total>=0?'+':'')+fmt(total)+'원';rEl.className='mp-val '+(total>=0?'up':'down');}
   const rs=document.getElementById('mp-realized-sub');
   if(rs) rs.textContent=mpYear+'년 · '+rows.length+'건';
+  renderPortfolioPeriodMetrics(mpData?.history||[]);
 }
 function updateSheetFooter(rows){
   const sumPur=rows.reduce((s,t)=>s+calcPurchase(t),0);
@@ -2801,6 +2828,78 @@ function updateDailyPortfolioSnapshot(){
   if(idx>=0)mpData.history[idx]=row; else mpData.history.push(row);
   mpData.history.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   return true;
+}
+function dateKeyDaysAgo(days){
+  const d=new Date();
+  d.setDate(d.getDate()-days);
+  return localDateKey(d);
+}
+function historyRowsSorted(history=[]){
+  return (history||[])
+    .filter(h=>h&&h.date&&(h.eval||h.purchase||h.pnl))
+    .slice()
+    .sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+}
+function pickHistoryBefore(rows,dateKey){
+  return rows.filter(h=>String(h.date)<dateKey).pop()||null;
+}
+function pickHistoryAtOrBefore(rows,dateKey){
+  return rows.filter(h=>String(h.date)<=dateKey).pop()||null;
+}
+function pickFirstHistoryOnOrAfter(rows,dateKey){
+  return rows.find(h=>String(h.date)>=dateKey)||null;
+}
+function setPeriodMetric(id,value,sub,{signed=true,empty=false}={}){
+  const el=document.getElementById(id);
+  const subEl=document.getElementById(id+'-sub');
+  if(!el)return;
+  if(empty){
+    el.textContent='-';
+    el.className='mp-val';
+  }else{
+    const v=Math.round(Number(value)||0);
+    el.textContent=(signed&&v>0?'+':'')+fmt(v)+'원';
+    el.className='mp-val '+(v>0?'up':v<0?'down':'');
+  }
+  if(subEl)subEl.textContent=sub||'';
+}
+function currentYearRealizedPnl(){
+  const yr=String(new Date().getFullYear());
+  return ((mpData?.transactions||{})[yr]||[]).reduce((s,t)=>s+calcPnl(t),0);
+}
+function renderPortfolioPeriodMetrics(history=[]){
+  const current=portfolioTotalsForHistory();
+  const rows=historyRowsSorted(history);
+  const today=localDateKey();
+
+  const prev=pickHistoryBefore(rows,today);
+  if(prev){
+    const diff=current.total-(Number(prev.eval)||0);
+    const pct=(Number(prev.eval)||0)?diff/(Number(prev.eval)||0)*100:0;
+    setPeriodMetric('period-daily',diff,`${prev.date} 대비 · ${pct>=0?'+':''}${pct.toFixed(2)}%`);
+  }else{
+    setPeriodMetric('period-daily',0,'전일 스냅샷이 쌓이면 표시됩니다.',{empty:true});
+  }
+
+  const monthBase=pickHistoryAtOrBefore(rows,dateKeyDaysAgo(30)) || (rows.length>1?rows[0]:null);
+  if(monthBase){
+    const profitDiff=current.pnl-(Number(monthBase.pnl)||0);
+    const rateDiff=current.rate-(Number(monthBase.rate)||0);
+    setPeriodMetric('period-month',profitDiff,`${monthBase.date} 이후 평가손익 · ${rateDiff>=0?'+':''}${rateDiff.toFixed(2)}%p`);
+  }else{
+    setPeriodMetric('period-month',0,'30일 비교 스냅샷이 필요합니다.',{empty:true});
+  }
+
+  const yr=String(new Date().getFullYear());
+  const yearStart=`${yr}-01-01`;
+  const yearBase=pickHistoryAtOrBefore(rows,yearStart) || pickFirstHistoryOnOrAfter(rows,yearStart);
+  const realized=currentYearRealizedPnl();
+  const unrealizedChange=yearBase?current.pnl-(Number(yearBase.pnl)||0):current.pnl;
+  const yearTotal=realized+unrealizedChange;
+  const baseText=yearBase
+    ? `평가손익 ${yearBase.date} 이후 ${unrealizedChange>=0?'+':''}${fmt(Math.round(unrealizedChange))}원`
+    : `현재 평가손익 ${current.pnl>=0?'+':''}${fmt(Math.round(current.pnl))}원`;
+  setPeriodMetric('period-year',yearTotal,`${yr}년 실현 ${realized>=0?'+':''}${fmt(Math.round(realized))}원 · ${baseText}`);
 }
 function renderTotalHistoryChart(history=[]){
   const el=document.getElementById('mp-total-history-chart');

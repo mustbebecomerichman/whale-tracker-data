@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Write Firebase service account
         shell: bash
@@ -35,7 +35,31 @@ jobs:
           fi
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/firebase-service-account.json"
 
+      - name: Validate Firebase service account
+        shell: bash
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        run: |
+          set -euo pipefail
+          node - <<'EOF'
+          const fs = require('fs');
+          const path = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+          const raw = fs.readFileSync(path, 'utf8');
+          const json = JSON.parse(raw);
+          const required = ['type', 'project_id', 'client_email', 'private_key'];
+          const missing = required.filter((key) => !json[key]);
+          if (missing.length) {
+            throw new Error(`FIREBASE_SERVICE_ACCOUNT is missing: ${missing.join(', ')}`);
+          }
+          if (json.project_id !== 'whaletracker-pro') {
+            throw new Error(`Service account project_id must be whaletracker-pro, got ${json.project_id}`);
+          }
+          console.log(`Using Firebase service account ${json.client_email}`);
+          console.log('This account needs roles/firebaserules.admin or an equivalent Firebase Admin role.');
+          EOF
+
       - name: Deploy rules
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
-        run: npx --yes firebase-tools deploy --only firestore:rules --project whaletracker-pro
+          CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE: ${{ runner.temp }}/firebase-service-account.json
+        run: npx --yes firebase-tools@latest deploy --only firestore:rules --project whaletracker-pro --non-interactive --debug
