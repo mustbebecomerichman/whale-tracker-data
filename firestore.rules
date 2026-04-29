@@ -54,6 +54,15 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email;
     }
 
+    function ownsConsent(uid) {
+      return signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email is string
+        && request.resource.data.agreed == true
+        && request.resource.data.consentVersion is string;
+    }
+
     match /portfolio_data/{uid} {
       allow read, write: if signedIn() && isApproved() && uid == request.auth.uid;
     }
@@ -68,22 +77,12 @@ service cloud.firestore {
     match /user_consents/{uid} {
       allow get: if isAdmin() || (signedIn() && uid == request.auth.uid);
       allow list: if isAdmin();
-      allow create, update: if signedIn()
-        && uid == request.auth.uid
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.email == request.auth.token.email
-        && request.resource.data.agreed == true
-        && request.resource.data.consentVersion is string;
+      allow create, update: if ownsConsent(uid);
       allow delete: if isAdmin();
 
       match /logs/{logId} {
         allow get, list: if isAdmin() || (signedIn() && uid == request.auth.uid);
-        allow create: if signedIn()
-          && uid == request.auth.uid
-          && request.resource.data.uid == request.auth.uid
-          && request.resource.data.email == request.auth.token.email
-          && request.resource.data.agreed == true
-          && request.resource.data.consentVersion is string;
+        allow create: if ownsConsent(uid);
         allow update, delete: if false;
       }
     }

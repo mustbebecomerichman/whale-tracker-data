@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-29-consent-modal-v1"/>
+<meta name="whale-tracker-version" content="2026-04-29-consent-permission-fallback-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -1345,6 +1345,39 @@ function preparePrivacyConsent(provider){
   sessionStorage.setItem(PRIVACY_CONSENT_PENDING_KEY,JSON.stringify(consent));
   return consent;
 }
+function consentStorageKey(uid,version=PRIVACY_CONSENT_VERSION){
+  return `privacyConsent:${uid}:${version}`;
+}
+function consentBackupKey(uid,version=PRIVACY_CONSENT_VERSION){
+  return `privacyConsentBackup:${uid}:${version}`;
+}
+function isPermissionError(e){
+  return e?.code==='permission-denied'
+    || /missing or insufficient permissions/i.test(e?.message||'');
+}
+function backupPrivacyConsent(u,pending){
+  if(!u||!pending?.version)return;
+  try{
+    localStorage.setItem(consentBackupKey(u.uid,pending.version),JSON.stringify({
+      ...pending,
+      email:u.email||'',
+      displayName:u.displayName||'',
+      backedUpAtClient:new Date().toISOString()
+    }));
+  }catch(e){}
+}
+function readPrivacyConsentBackup(u){
+  if(!u)return null;
+  try{
+    const raw=localStorage.getItem(consentBackupKey(u.uid));
+    return raw?JSON.parse(raw):null;
+  }catch(e){
+    return null;
+  }
+}
+function clearPrivacyConsentBackup(u,version=PRIVACY_CONSENT_VERSION){
+  try{ localStorage.removeItem(consentBackupKey(u.uid,version)); }catch(e){}
+}
 function requestPrivacyConsent(provider){
   const modal=document.getElementById('privacy-consent-modal');
   const agreeBtn=document.getElementById('privacy-consent-agree-btn');
@@ -1378,7 +1411,23 @@ function requestPrivacyConsent(provider){
 function resolvePrivacyConsent(agreed){
   if(privacyConsentResolve)privacyConsentResolve(agreed);
 }
-async function recordPendingPrivacyConsent(u){
+async function recordConsentProfileFallback(u,base){
+  await db.collection('users').doc(u.uid).set({
+    uid:u.uid,
+    email:u.email||base.email||'',
+    name:u.displayName||(u.email||base.email||'').split('@')[0],
+    privacyConsent:{
+      version:base.consentVersion,
+      provider:base.provider,
+      summary:base.consentSummary,
+      agreed:true,
+      agreedAtClient:base.agreedAtClient,
+      source:base.source,
+      fallbackStoredAtClient:new Date().toISOString()
+    }
+  },{merge:true});
+}
+async function recordPendingPrivacyConsent(u,{required=true}={}){
   const raw=sessionStorage.getItem(PRIVACY_CONSENT_PENDING_KEY);
   if(!u||!raw)return null;
   let pending=null;
@@ -1402,20 +1451,36 @@ async function recordPendingPrivacyConsent(u){
     const ref=db.collection('user_consents').doc(u.uid);
     await ref.set({...base,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
     await ref.collection('logs').add(base);
-    localStorage.setItem(`privacyConsent:${u.uid}:${base.consentVersion}`,'1');
+    localStorage.setItem(consentStorageKey(u.uid,base.consentVersion),'1');
+    clearPrivacyConsentBackup(u,base.consentVersion);
     sessionStorage.removeItem(PRIVACY_CONSENT_PENDING_KEY);
     return base;
   }catch(e){
+    if(!required&&isPermissionError(e)){
+      backupPrivacyConsent(u,pending);
+      try{
+        await recordConsentProfileFallback(u,base);
+      }catch(_e){}
+      sessionStorage.removeItem(PRIVACY_CONSENT_PENDING_KEY);
+      return {...base,permissionFallback:true};
+    }
     setAuthMsg('개인정보 동의 로그 저장에 실패했습니다: '+e.message, 'error');
     throw e;
   }
 }
 async function ensurePrivacyConsentForAuth(u){
-  const recorded=await recordPendingPrivacyConsent(u);
+  const recorded=await recordPendingPrivacyConsent(u,{required:false});
   if(recorded)return recorded;
   if(providerForUser(u)!=='google')return null;
 
-  const consentKey=`privacyConsent:${u.uid}:${PRIVACY_CONSENT_VERSION}`;
+  const backup=readPrivacyConsentBackup(u);
+  if(backup?.version){
+    sessionStorage.setItem(PRIVACY_CONSENT_PENDING_KEY,JSON.stringify(backup));
+    const retried=await recordPendingPrivacyConsent(u,{required:false});
+    if(retried)return retried;
+  }
+
+  const consentKey=consentStorageKey(u.uid);
   if(localStorage.getItem(consentKey)==='1')return null;
 
   try{
@@ -1423,6 +1488,7 @@ async function ensurePrivacyConsentForAuth(u){
     const data=doc.exists?doc.data():null;
     if(data?.agreed===true&&data?.consentVersion===PRIVACY_CONSENT_VERSION){
       localStorage.setItem(consentKey,'1');
+      clearPrivacyConsentBackup(u);
       return null;
     }
   }catch(e){}
@@ -1561,7 +1627,7 @@ async function doSignup(){
   try{
     const c=await auth.createUserWithEmailAndPassword(email,pw);
     await c.user.updateProfile({displayName:name});
-    await recordPendingPrivacyConsent(c.user);
+    await recordPendingPrivacyConsent(c.user,{required:false});
     setAuthMsg("✅ 가입 완료! 로그인됩니다.","success");
   }catch(e){
     if(e.code==='auth/email-already-in-use'){
