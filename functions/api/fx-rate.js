@@ -1,19 +1,15 @@
-import { requireFirebaseUser } from '../_shared/firebase-auth.js';
+import { corsHeaders, rejectUntrustedOrigin, requireFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
+const METHODS = 'GET, OPTIONS';
 
 const HANA_URL = 'https://www.kebhana.com/cms/rate/wpfxd651_01i_01.do';
 const ONE_DAY = 24 * 60 * 60 * 1000;
 let memoryCache = null;
 
-function json(data, status = 200) {
+function json(request, env, data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS, 'Content-Type': 'application/json; charset=utf-8' },
+    headers: { ...corsHeaders(request, env, METHODS), 'Content-Type': 'application/json; charset=utf-8' },
   });
 }
 
@@ -117,15 +113,17 @@ async function fetchHanaFirstTts(dateYmd) {
 }
 
 export async function onRequest(context) {
-  const { request } = context;
-  if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
-  if (request.method !== 'GET') return json({ error: 'GET only' }, 405);
-  const auth = await requireFirebaseUser(request);
+  const { request, env } = context;
+  const blocked = rejectUntrustedOrigin(request, env, METHODS);
+  if (blocked) return blocked;
+  if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders(request, env, METHODS) });
+  if (request.method !== 'GET') return json(request, env, { error: 'GET only' }, 405);
+  const auth = await requireFirebaseUser(request, env);
   if (!auth.ok) return auth.response;
 
   const today = ymd();
   if (memoryCache?.requestedDateRaw === today && Date.now() - memoryCache.cachedAt < 6 * 60 * 60 * 1000) {
-    return json(memoryCache.data);
+    return json(request, env, memoryCache.data);
   }
 
   const start = new Date(`${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}T12:00:00+09:00`);
@@ -138,11 +136,11 @@ export async function onRequest(context) {
         data.requestedDate = displayDate(today);
         data.stale = target !== today || data.sourceDate !== displayDate(today);
         memoryCache = { requestedDateRaw: today, cachedAt: Date.now(), data };
-        return json(data);
+        return json(request, env, data);
       }
     } catch (e) {
       errors.push(`${target}: ${e.message}`);
     }
   }
-  return json({ error: 'No USD TTS rate found', requestedDate: displayDate(today), errors }, 502);
+  return safeErrorResponse(request, env, new Error(`No USD TTS rate found: ${errors.join(' | ')}`), 502, METHODS);
 }

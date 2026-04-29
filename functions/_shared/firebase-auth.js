@@ -1,6 +1,11 @@
 const PROJECT_ID = 'whaletracker-pro';
 const ISSUER = `https://securetoken.google.com/${PROJECT_ID}`;
 const JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://whale-tracker-data.pages.dev',
+  'https://whaletracker-pro.web.app',
+  'https://whaletracker-pro.firebaseapp.com',
+];
 
 let jwksCache = null;
 let jwksExpiry = 0;
@@ -62,7 +67,61 @@ async function verifyJwt(token) {
   return payload;
 }
 
-export async function requireFirebaseUser(request) {
+function configuredOrigins(env = {}) {
+  const raw = env.ALLOWED_ORIGINS || env.ALLOWED_ORIGIN || '';
+  const extra = String(raw)
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean);
+  return new Set([...DEFAULT_ALLOWED_ORIGINS, ...extra]);
+}
+
+function isLocalDevOrigin(origin) {
+  try {
+    const url = new URL(origin);
+    return ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  } catch (e) {
+    return false;
+  }
+}
+
+export function isAllowedOrigin(origin, env = {}) {
+  if (!origin) return true;
+  if (configuredOrigins(env).has(origin)) return true;
+  return env.ALLOW_LOCAL_ORIGINS === 'true' && isLocalDevOrigin(origin);
+}
+
+export function corsHeaders(request, env = {}, methods = 'GET, POST, OPTIONS') {
+  const origin = request.headers.get('origin') || '';
+  const allowOrigin = isAllowedOrigin(origin, env) && origin
+    ? origin
+    : DEFAULT_ALLOWED_ORIGINS[0];
+  return {
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Methods': methods,
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Vary': 'Origin',
+  };
+}
+
+export function rejectUntrustedOrigin(request, env = {}, methods = 'GET, POST, OPTIONS') {
+  const origin = request.headers.get('origin') || '';
+  if (isAllowedOrigin(origin, env)) return null;
+  return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
+    status: 403,
+    headers: { ...corsHeaders(request, env, methods), 'Content-Type': 'application/json' },
+  });
+}
+
+export function safeErrorResponse(request, env, error, status = 500, methods = 'GET, POST, OPTIONS') {
+  console.error(error);
+  return new Response(JSON.stringify({ error: 'Request failed. Please try again later.' }), {
+    status,
+    headers: { ...corsHeaders(request, env, methods), 'Content-Type': 'application/json' },
+  });
+}
+
+export async function requireFirebaseUser(request, env = {}) {
   const header = request.headers.get('authorization') || '';
   const token = header.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) {
@@ -71,7 +130,7 @@ export async function requireFirebaseUser(request) {
       response: new Response(JSON.stringify({ error: 'Authentication required' }), {
         status: 401,
         headers: {
-          'Access-Control-Allow-Origin': '*',
+          ...corsHeaders(request, env),
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
           'Content-Type': 'application/json',
         },
@@ -86,7 +145,7 @@ export async function requireFirebaseUser(request) {
       response: new Response(JSON.stringify({ error: 'Invalid authentication token' }), {
         status: 401,
         headers: {
-          'Access-Control-Allow-Origin': '*',
+          ...corsHeaders(request, env),
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
           'Content-Type': 'application/json',
         },

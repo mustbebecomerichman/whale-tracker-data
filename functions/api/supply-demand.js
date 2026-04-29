@@ -1,4 +1,4 @@
-import { requireFirebaseUser } from '../_shared/firebase-auth.js';
+import { corsHeaders, rejectUntrustedOrigin, requireFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
 
 /**
  * Cloudflare Pages Function - KIS 투자자별 수급 현황
@@ -7,11 +7,7 @@ import { requireFirebaseUser } from '../_shared/firebase-auth.js';
  * Request body: { codes: ["005930", "000660"] }
  */
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
+const METHODS = 'POST, OPTIONS';
 
 let _cachedToken = null, _tokenExpiry = 0;
 const TOKEN_KEY = 'kis-access-token-v1';
@@ -142,7 +138,9 @@ export async function onRequestPost(context) {
   const { request, env } = context;
 
   try {
-    const auth = await requireFirebaseUser(request);
+    const blocked = rejectUntrustedOrigin(request, env, METHODS);
+    if (blocked) return blocked;
+    const auth = await requireFirebaseUser(request, env);
     if (!auth.ok) return auth.response;
     const { appKey, appSecret } = getKisCreds(env);
     if (!appKey || !appSecret) {
@@ -166,22 +164,23 @@ export async function onRequestPost(context) {
       try {
         results[code] = await fetchInvestorData(code, token, env);
       } catch (e) {
-        results[code] = { error: e.message };
+        console.error('KIS supply-demand failed', { code, message: e.message });
+        results[code] = { error: 'Investor data unavailable' };
       }
       await new Promise(r => setTimeout(r, 200));
     }
 
     return new Response(JSON.stringify(results), {
-      headers: { ...CORS, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(request, env, METHODS), 'Content-Type': 'application/json' },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    });
+    return safeErrorResponse(request, env, e, 500, METHODS);
   }
 }
 
-export async function onRequestOptions() {
-  return new Response(null, { headers: CORS });
+export async function onRequestOptions(context) {
+  const { request, env } = context;
+  const blocked = rejectUntrustedOrigin(request, env, METHODS);
+  if (blocked) return blocked;
+  return new Response(null, { headers: corsHeaders(request, env, METHODS) });
 }

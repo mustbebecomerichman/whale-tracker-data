@@ -46,3 +46,18 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Require API origin guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIn "Access-Control-Allow-Origin.*['\"]\\*['\"]" functions; then
+            echo "API functions must not allow wildcard CORS origins." >&2
+            exit 1
+          fi
+          for file in functions/api/*.js; do
+            if ! grep -q "rejectUntrustedOrigin" "$file"; then
+              echo "$file is missing rejectUntrustedOrigin." >&2
+              exit 1
+            fi
+          done

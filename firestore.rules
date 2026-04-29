@@ -58,7 +58,7 @@ service cloud.firestore {
       return signedIn()
         && uid == request.auth.uid
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.email is string
+        && request.resource.data.email == request.auth.token.email
         && request.resource.data.agreed == true
         && request.resource.data.consentVersion is string;
     }

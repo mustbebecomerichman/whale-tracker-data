@@ -1,4 +1,4 @@
-import { requireFirebaseUser } from '../_shared/firebase-auth.js';
+import { corsHeaders, rejectUntrustedOrigin, requireFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
 
 /**
  * Cloudflare Pages Function — KIS 현재가 조회
@@ -9,11 +9,7 @@ import { requireFirebaseUser } from '../_shared/firebase-auth.js';
  *   KIS_APP_SECRET : 한국투자증권 App Secret
  */
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
+const METHODS = 'GET, POST, OPTIONS';
 
 let _cachedToken = null, _tokenExpiry = 0;
 const TOKEN_KEY = 'kis-access-token-v1';
@@ -197,17 +193,6 @@ async function handlePriceRequest(request, env) {
   let items = [];
   if (request.method === 'GET') {
     const url = new URL(request.url);
-    if (url.searchParams.get('debug') === '1') {
-      const store = getTokenStore(env);
-      return {
-        debug: true,
-        hasKvBinding: !!store,
-        kvBindingName: store ? 'KIS_TOKEN_KV' : '',
-        hasMemoryToken: !!(_cachedToken && Date.now() < _tokenExpiry),
-        memoryTokenExpiresAt: _tokenExpiry ? new Date(_tokenExpiry).toISOString() : '',
-        note: 'debug=1은 KIS 토큰을 발급하지 않습니다.',
-      };
-    }
     const code = url.searchParams.get('code');
     const market = url.searchParams.get('market') || 'J';
     if (code) items = [{ code, market }];
@@ -238,7 +223,8 @@ async function handlePriceRequest(request, env) {
           : await fetchDomesticPrice(code, token, env);
       }
     } catch(e) {
-      results[key] = { error: e.message, code, market };
+      console.error('KIS quote failed', { code, market, message: e.message });
+      results[key] = { error: 'Quote unavailable', code, market };
     }
     await new Promise(r => setTimeout(r, 200));
   }
@@ -248,37 +234,38 @@ async function handlePriceRequest(request, env) {
 export async function onRequestPost(context) {
   const { request, env } = context;
   try {
-    const auth = await requireFirebaseUser(request);
+    const blocked = rejectUntrustedOrigin(request, env, METHODS);
+    if (blocked) return blocked;
+    const auth = await requireFirebaseUser(request, env);
     if (!auth.ok) return auth.response;
     const results = await handlePriceRequest(request, env);
     return new Response(JSON.stringify(results), {
-      headers: { ...CORS, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(request, env, METHODS), 'Content-Type': 'application/json' },
     });
   } catch(e) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    });
+    return safeErrorResponse(request, env, e, 500, METHODS);
   }
 }
 
 export async function onRequestGet(context) {
   const { request, env } = context;
   try {
-    const auth = await requireFirebaseUser(request);
+    const blocked = rejectUntrustedOrigin(request, env, METHODS);
+    if (blocked) return blocked;
+    const auth = await requireFirebaseUser(request, env);
     if (!auth.ok) return auth.response;
     const results = await handlePriceRequest(request, env);
     return new Response(JSON.stringify(results), {
-      headers: { ...CORS, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(request, env, METHODS), 'Content-Type': 'application/json' },
     });
   } catch(e) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    });
+    return safeErrorResponse(request, env, e, 500, METHODS);
   }
 }
 
-export async function onRequestOptions() {
-  return new Response(null, { headers: CORS });
+export async function onRequestOptions(context) {
+  const { request, env } = context;
+  const blocked = rejectUntrustedOrigin(request, env, METHODS);
+  if (blocked) return blocked;
+  return new Response(null, { headers: corsHeaders(request, env, METHODS) });
 }

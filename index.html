@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-29-portfolio-period-metrics-v1"/>
+<meta name="whale-tracker-version" content="2026-04-29-api-origin-guard-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -1231,7 +1231,6 @@ const FB = {
   messagingSenderId:"367992947829",
   appId:"1:367992947829:web:7302354cc42a842e3e643c"
 };
-const ADMIN = "smmoon2030@gmail.com";
 const BROKERS = ["키움증권","미래에셋증권","NH투자증권","삼성증권","KB증권","한국투자증권",
   "신한투자증권","하나증권","대신증권","메리츠증권","한화투자증권","교보증권","토스증권","카카오페이증권","기타"];
 const ACCT_TYPES = ["위탁","ISA","연금저축","IRP","퇴직연금"];
@@ -1303,7 +1302,7 @@ async function resolveUserAccess(u=auth.currentUser){
   const cacheKey=`${u.uid}:${mail}`;
   if(_authAccessCache?.key===cacheKey)return _authAccessCache.value;
   let claims={};
-  let isAdmin=mail===emailKey(ADMIN);
+  let isAdmin=false;
   try{
     const token=await u.getIdTokenResult();
     claims=token?.claims||{};
@@ -1313,6 +1312,12 @@ async function resolveUserAccess(u=auth.currentUser){
     try{
       const s=await db.collection('admins').doc(u.uid).get();
       if(s.exists)isAdmin=true;
+    }catch(e){}
+  }
+  if(!isAdmin){
+    try{
+      await db.collection('approved_users').limit(1).get();
+      isAdmin=true;
     }catch(e){}
   }
   let allowed=isAdmin || claims.approved===true;
@@ -3187,7 +3192,7 @@ async function loadUserList(){
     const errHtml=errors.length?`<div style="color:var(--down);font-size:.74rem;margin-bottom:8px;line-height:1.5">일부 목록을 읽지 못했습니다: ${errors.join(' / ')}</div>`:'';
     list.innerHTML=errHtml+`<div class="status-chip" style="display:inline-flex;margin-bottom:8px;">전체 회원 ${rows.length}명</div>`+
       rows.map(d=>{
-        const isAdm=d.email===ADMIN;
+        const isAdm=false;
         const joined=dt(d.joinedAt||d.addedAt);
         const last=dt(d.lastLoginAt);
         const src=(d._source||[]).includes('users')?'회원':'운영 메모';
