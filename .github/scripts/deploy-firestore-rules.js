@@ -100,12 +100,15 @@ async function main() {
   const releaseName = `projects/${projectId}/releases/cloud.firestore`;
   const release = { name: releaseName, rulesetName: ruleset.name };
   try {
-    await firebaserules('PATCH', `${releaseName}?updateMask=rulesetName`, token, release);
+    await firebaserules('PATCH', releaseName, token, {
+      release,
+      updateMask: 'rulesetName',
+    });
   } catch (error) {
     if (!(error instanceof ApiError) || error.status !== 404) {
       throw error;
     }
-    await firebaserules('POST', `projects/${projectId}/releases?releaseId=cloud.firestore`, token, release);
+    await firebaserules('POST', `projects/${projectId}/releases`, token, release);
   }
   console.log(`Updated ${releaseName} to ${ruleset.name}`);
 }
