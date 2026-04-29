@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-29-google-login-v1"/>
+<meta name="whale-tracker-version" content="2026-04-29-consent-log-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -53,6 +53,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
 .auth-google-btn:disabled{opacity:.55;cursor:not-allowed;}
 .auth-google-icon{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
   font-size:.78rem;font-weight:900;color:#4285f4;border:1px solid #dfe4ea;background:#fff;}
+.privacy-consent{margin-top:14px;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:11px 12px;}
+.privacy-consent label{display:flex;align-items:flex-start;gap:8px;font-size:.8rem;font-weight:800;color:var(--text);line-height:1.45;cursor:pointer;}
+.privacy-consent input{margin-top:2px;accent-color:var(--accent);}
+.privacy-consent p{font-size:.72rem;color:var(--text2);line-height:1.55;margin-top:7px;}
 .auth-link-btn{display:block;width:100%;background:none;border:none;color:var(--text2);font-size:.78rem;font-weight:700;
   text-align:center;padding:9px 6px;margin-top:6px;cursor:pointer;}
 .auth-link-btn:hover{color:var(--accent);}
@@ -651,6 +655,13 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       </button>
       <p class="auth-note">회원가입 후 바로 이용할 수 있습니다</p>
     </div>
+    <div class="privacy-consent">
+      <label>
+        <input type="checkbox" id="privacy-consent-check"/>
+        <span>개인정보 수집·이용 및 동의 로그 보관에 동의합니다.</span>
+      </label>
+      <p>수집 항목: 이메일, 표시 이름, Firebase UID, 로그인/동의 시각, 사용자가 입력한 포트폴리오 데이터. 목적: 회원 식별, 포트폴리오 저장, 보안 및 동의 이력 증빙.</p>
+    </div>
     <div id="auth-msg"></div>
   </div>
 </div>
@@ -1196,6 +1207,9 @@ auth = firebase.auth();
 db   = firebase.firestore();
 const AUTH_SESSION_KEY='whaleTrackerExplicitLogin';
 const LOGIN_WRITE_KEY_PREFIX='whaleLoginWrite:';
+const PRIVACY_CONSENT_VERSION='privacy-v1-2026-04-29';
+const PRIVACY_CONSENT_SUMMARY='이메일, 표시 이름, Firebase UID, 로그인/동의 시각, 사용자가 입력한 포트폴리오 데이터를 회원 식별, 포트폴리오 저장, 보안 및 동의 이력 증빙 목적으로 처리합니다.';
+const PRIVACY_CONSENT_PENDING_KEY='whalePendingPrivacyConsent';
 let _authAccessCache=null;
 auth.setPersistence(firebase.auth.Auth.Persistence.NONE)
   .then(()=>auth.onAuthStateChanged(handleAuthState))
@@ -1281,6 +1295,64 @@ async function recordUserLoginOncePerDay(u){
     localStorage.setItem(key,today);
   }catch(e){}
 }
+function appVersion(){
+  return document.querySelector('meta[name="whale-tracker-version"]')?.content||'';
+}
+function preparePrivacyConsent(provider){
+  const checked=document.getElementById('privacy-consent-check')?.checked;
+  if(!checked){
+    setAuthMsg('회원가입 또는 Google 로그인/가입을 진행하려면 개인정보 수집·이용 동의가 필요합니다.', 'error');
+    return null;
+  }
+  const consent={
+    version:PRIVACY_CONSENT_VERSION,
+    summary:PRIVACY_CONSENT_SUMMARY,
+    provider,
+    agreedAtClient:new Date().toISOString(),
+    appVersion:appVersion(),
+    source:'auth-screen'
+  };
+  sessionStorage.setItem(PRIVACY_CONSENT_PENDING_KEY,JSON.stringify(consent));
+  return consent;
+}
+async function recordPendingPrivacyConsent(u){
+  const raw=sessionStorage.getItem(PRIVACY_CONSENT_PENDING_KEY);
+  if(!u||!raw)return null;
+  let pending=null;
+  try{pending=JSON.parse(raw);}catch(e){pending=null;}
+  if(!pending?.version)return null;
+  const base={
+    uid:u.uid,
+    email:u.email||'',
+    displayName:u.displayName||'',
+    consentVersion:pending.version,
+    consentSummary:pending.summary||PRIVACY_CONSENT_SUMMARY,
+    provider:pending.provider||providerForUser(u),
+    agreed:true,
+    agreedAt:firebase.firestore.FieldValue.serverTimestamp(),
+    agreedAtClient:pending.agreedAtClient||new Date().toISOString(),
+    loggedAtClient:new Date().toISOString(),
+    appVersion:pending.appVersion||appVersion(),
+    source:pending.source||'auth-screen'
+  };
+  try{
+    const ref=db.collection('user_consents').doc(u.uid);
+    await ref.set({...base,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+    await ref.collection('logs').add(base);
+    localStorage.setItem(`privacyConsent:${u.uid}:${base.consentVersion}`,'1');
+    sessionStorage.removeItem(PRIVACY_CONSENT_PENDING_KEY);
+    return base;
+  }catch(e){
+    setAuthMsg('개인정보 동의 로그 저장에 실패했습니다: '+e.message, 'error');
+    throw e;
+  }
+}
+function providerForUser(u){
+  const ids=(u?.providerData||[]).map(p=>p.providerId);
+  if(ids.includes('google.com'))return 'google';
+  if(ids.includes('password'))return 'password';
+  return ids[0]||'unknown';
+}
 async function authHeaders(headers={}){
   const u=auth.currentUser;
   if(!u)throw new Error('로그인이 필요합니다.');
@@ -1346,6 +1418,8 @@ function setGoogleButtonsBusy(busy){
   });
 }
 async function doGoogleLogin(){
+  const consent=preparePrivacyConsent('google');
+  if(!consent)return;
   const provider=new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({prompt:'select_account'});
   sessionStorage.setItem(AUTH_SESSION_KEY,'1');
@@ -1364,6 +1438,7 @@ async function doGoogleLogin(){
       }
     }
     sessionStorage.removeItem(AUTH_SESSION_KEY);
+    sessionStorage.removeItem(PRIVACY_CONSENT_PENDING_KEY);
     const m={
       'auth/popup-closed-by-user':'Google 로그인이 취소되었습니다.',
       'auth/cancelled-popup-request':'이미 진행 중인 Google 로그인 창이 있습니다.',
@@ -1397,11 +1472,14 @@ async function doSignup(){
   const pw=document.getElementById('su-pw').value;
   if(!name||!email||!pw){setAuthMsg("모든 항목을 입력하세요.","error");return;}
   if(pw.length<6){setAuthMsg("비밀번호는 6자 이상이어야 합니다.","error");return;}
+  const consent=preparePrivacyConsent('password');
+  if(!consent)return;
   const btn=document.getElementById('su-btn');btn.disabled=true;btn.textContent='가입 중...';
   sessionStorage.setItem(AUTH_SESSION_KEY,'1');
   try{
     const c=await auth.createUserWithEmailAndPassword(email,pw);
     await c.user.updateProfile({displayName:name});
+    await recordPendingPrivacyConsent(c.user);
     setAuthMsg("✅ 가입 완료! 로그인됩니다.","success");
   }catch(e){
     if(e.code==='auth/email-already-in-use'){
@@ -1411,10 +1489,12 @@ async function doSignup(){
         return;
       }catch(loginErr){
         sessionStorage.removeItem(AUTH_SESSION_KEY);
+        sessionStorage.removeItem(PRIVACY_CONSENT_PENDING_KEY);
         setAuthMsg('이미 가입된 이메일입니다. 기존 비밀번호로 로그인하세요. 승인 절차는 사용하지 않습니다.',"error");
       }
     }else{
       sessionStorage.removeItem(AUTH_SESSION_KEY);
+      sessionStorage.removeItem(PRIVACY_CONSENT_PENDING_KEY);
       setAuthMsg('가입 실패: '+e.message,"error");
     }
     btn.disabled=false;btn.textContent='회원가입';
@@ -1438,6 +1518,17 @@ async function afterLogin(u){
   _mpLoadedUid=null;
   _portfolioDetailsInitialized=false;
   _authAccessCache=null;
+  try{
+    await recordPendingPrivacyConsent(u);
+  }catch(e){
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    me=null;
+    _mpLoadedUid=null;
+    try{ await auth.signOut(); }catch(_e){}
+    show('auth');
+    setGoogleButtonsBusy(false);
+    return;
+  }
   const access=await resolveUserAccess(u);
   if(!access.allowed){
     sessionStorage.removeItem(AUTH_SESSION_KEY);
@@ -1454,6 +1545,7 @@ async function afterLogin(u){
   document.getElementById('admin-nav-btn').style.display=isAdm?'inline-block':'none';
   document.getElementById('admin-badge').style.display=isAdm?'inline-block':'none';
   show('app');
+  setGoogleButtonsBusy(false);
   await recordUserLoginOncePerDay(u);
   await loadWhaleData({force:isAdm});
   if(isAdm){loadUserList();loadChangelog();}

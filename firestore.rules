@@ -65,6 +65,29 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /user_consents/{uid} {
+      allow get: if isAdmin() || (signedIn() && uid == request.auth.uid);
+      allow list: if isAdmin();
+      allow create, update: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.agreed == true
+        && request.resource.data.consentVersion is string;
+      allow delete: if isAdmin();
+
+      match /logs/{logId} {
+        allow get, list: if isAdmin() || (signedIn() && uid == request.auth.uid);
+        allow create: if signedIn()
+          && uid == request.auth.uid
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.email == request.auth.token.email
+          && request.resource.data.agreed == true
+          && request.resource.data.consentVersion is string;
+        allow update, delete: if false;
+      }
+    }
+
     match /approved_users/{email} {
       allow get: if isAdmin()
         || (signedIn() && request.auth.token.email == email);
