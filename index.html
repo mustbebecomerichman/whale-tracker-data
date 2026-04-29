@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-29-portfolio-mobile-refresh-v1"/>
+<meta name="whale-tracker-version" content="2026-04-29-mobile-icon-hub-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -243,6 +243,7 @@ td.name{font-weight:600;color:var(--text);}
 .mp-val.up{color:var(--up);} .mp-val.down{color:var(--down);}
 .mp-sub{font-size:.72rem;color:var(--text2);margin-top:2px;}
 .period-meta{font-size:.72rem;color:var(--text2);line-height:1.5;margin-top:4px;}
+.mobile-section-hub{display:none;}
 
 /* ACCOUNT BREAKDOWN */
 .acct-row{display:grid;grid-template-columns:150px 1fr 110px 65px 68px;
@@ -489,6 +490,51 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .mp-period-grid .period-meta{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.5em;}
   .split-money{gap:1px;}
   .split-money .usd{font-size:.84em;}
+  .mobile-section-hub{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:8px;
+    margin:0 0 14px;
+  }
+  .mobile-hub-btn{
+    min-width:0;
+    min-height:72px;
+    border:1px solid var(--border);
+    border-radius:10px;
+    background:#fff;
+    color:var(--text);
+    box-shadow:var(--shadow);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:5px;
+    font-family:inherit;
+    font-weight:800;
+    font-size:.78rem;
+    cursor:pointer;
+    touch-action:manipulation;
+  }
+  .mobile-hub-btn span{font-size:1.28rem;line-height:1;}
+  .mobile-hub-btn b{font-size:.78rem;line-height:1.1;}
+  .mobile-hub-btn.active{
+    border-color:var(--accent);
+    background:#effff6;
+    color:var(--accent);
+    box-shadow:0 8px 18px rgba(0,200,83,.12);
+  }
+  #page-mypage .section{margin-bottom:14px;}
+  #page-mypage .section-title{
+    padding:10px 12px;
+    margin-bottom:8px;
+    border:1px solid var(--border);
+    border-radius:10px;
+    background:#fff;
+    box-shadow:var(--shadow);
+  }
+  #page-mypage .section-title-left{font-size:.88rem;line-height:1.25;}
+  #page-mypage .section-title .mobile-toggle{display:none;}
+  #page-mypage .section.mobile-hub-section.is-hub-collapsed{display:none;}
   .card,.admin-section{padding:14px;border-radius:10px;}
   .kis-status{display:grid;grid-template-columns:auto 1fr;align-items:start;padding:12px;}
   .kis-status > div:last-child{grid-column:1 / -1;margin-left:0;}
@@ -968,6 +1014,15 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <div class="mp-val" id="period-year">-</div>
       <div class="period-meta" id="period-year-sub">연초 스냅샷 기준</div>
     </div>
+  </div>
+
+  <div class="mobile-section-hub" id="portfolio-mobile-hub" aria-label="Portfolio quick sections">
+    <button type="button" class="mobile-hub-btn" data-hub-group="price-detail" onclick="openMobilePortfolioGroup('price-detail','price-grid')"><span>📈</span><b>시세</b></button>
+    <button type="button" class="mobile-hub-btn" data-hub-group="acct-detail" onclick="openMobilePortfolioGroup('acct-detail','acct-table')"><span>🏦</span><b>계좌</b></button>
+    <button type="button" class="mobile-hub-btn" data-hub-group="daily-change" onclick="openMobilePortfolioGroup('daily-change','daily-change-tbody')"><span>⚡</span><b>변동</b></button>
+    <button type="button" class="mobile-hub-btn" data-hub-group="tx-detail" onclick="openMobilePortfolioGroup('tx-detail','sheet-table')"><span>📋</span><b>거래</b></button>
+    <button type="button" class="mobile-hub-btn" data-hub-group="div-detail" onclick="openMobilePortfolioGroup('div-detail','div-table')"><span>💰</span><b>배당</b></button>
+    <button type="button" class="mobile-hub-btn" data-hub-group="profit-history" onclick="openMobilePortfolioGroup('profit-history','mp-total-history-chart')"><span>📉</span><b>추이</b></button>
   </div>
 
   <!-- 현재가 시세판 -->
@@ -2452,7 +2507,7 @@ let _portfolioAutoQuoteTimer=null;
 let _portfolioAutoQuoteAt=0;
 const PORTFOLIO_AUTO_QUOTE_INTERVAL_MS=90*1000;
 const PORTFOLIO_DEFAULT_COLLAPSED_GROUPS=[
-  'price-detail','acct-detail','broker-chart','tx-detail','div-detail','profit-history'
+  'price-detail','acct-detail','daily-change','broker-chart','tx-detail','div-detail','profit-history'
 ];
 
 async function initMyPage(){
@@ -2544,7 +2599,7 @@ function renderMp(data){
   if(snapshotChanged)schedulePortfolioAutosave(false,900);
 }
 function promoteDailyChangeSection(){
-  const anchor=document.getElementById('portfolio-period-metrics') || document.querySelector('#page-mypage .mp-summary-grid');
+  const anchor=document.getElementById('portfolio-mobile-hub') || document.getElementById('portfolio-period-metrics') || document.querySelector('#page-mypage .mp-summary-grid');
   const badge=document.getElementById('daily-change-badge');
   const section=badge?.closest('.section');
   if(!anchor||!section)return;
@@ -3481,8 +3536,40 @@ function showPage(p){
 function toggleMobileSection(group,btn){
   const items=document.querySelectorAll(`[data-mobile-group="${group}"]`);
   const collapsed=[...items].every(x=>x.classList.contains('is-collapsed'));
-  items.forEach(x=>x.classList.toggle('is-collapsed',!collapsed));
+  setPortfolioGroupCollapsed(group,!collapsed);
   updateDetailToggleButtons(group,!collapsed);
+  setMobileHubActive(group,collapsed);
+}
+function setPortfolioGroupCollapsed(group,collapsed){
+  const sections=new Set();
+  document.querySelectorAll(`[data-mobile-group="${group}"]`).forEach(item=>{
+    item.classList.toggle('is-collapsed',collapsed);
+    const section=item.closest('#page-mypage .section');
+    if(section){
+      section.classList.add('mobile-hub-section');
+      sections.add(section);
+    }
+  });
+  sections.forEach(section=>section.classList.toggle('is-hub-collapsed',isPortfolioMobile() && collapsed));
+}
+function setMobileHubActive(group,open=true){
+  document.querySelectorAll('.mobile-hub-btn').forEach(btn=>{
+    btn.classList.toggle('active',open && btn.dataset.hubGroup===group);
+  });
+}
+function isPortfolioMobile(){
+  return window.matchMedia?window.matchMedia('(max-width:720px)').matches:window.innerWidth<=720;
+}
+function openMobilePortfolioGroup(group,targetId=''){
+  const isMobile=isPortfolioMobile();
+  PORTFOLIO_DEFAULT_COLLAPSED_GROUPS.forEach(g=>{
+    const open=g===group;
+    setPortfolioGroupCollapsed(g,isMobile && !open);
+    updateDetailToggleButtons(g,isMobile && !open);
+  });
+  setMobileHubActive(group,true);
+  const target=document.getElementById(targetId)||document.querySelector(`[data-mobile-group="${group}"]`);
+  if(target)setTimeout(()=>target.scrollIntoView({behavior:'smooth',block:'start'}),60);
 }
 function updateDetailToggleButtons(group,collapsed){
   document.querySelectorAll('.mobile-toggle').forEach(btn=>{
@@ -3495,12 +3582,12 @@ function updateDetailToggleButtons(group,collapsed){
 }
 function initPortfolioDetailVisibility(force=false){
   if(_portfolioDetailsInitialized&&!force)return;
-  const isMobile=window.matchMedia?window.matchMedia('(max-width:720px)').matches:window.innerWidth<=720;
+  const isMobile=isPortfolioMobile();
   PORTFOLIO_DEFAULT_COLLAPSED_GROUPS.forEach(group=>{
-    const items=document.querySelectorAll(`[data-mobile-group="${group}"]`);
-    items.forEach(x=>x.classList.toggle('is-collapsed',isMobile));
+    setPortfolioGroupCollapsed(group,isMobile);
     updateDetailToggleButtons(group,isMobile);
   });
+  setMobileHubActive('',false);
   _portfolioDetailsInitialized=true;
 }
 
