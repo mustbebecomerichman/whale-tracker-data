@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-29-mobile-collapse-v1"/>
+<meta name="whale-tracker-version" content="2026-04-29-google-login-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -43,6 +43,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
   color:#fff;font-size:.95rem;font-weight:800;cursor:pointer;margin-top:6px;transition:background .2s;}
 .auth-btn:hover{background:var(--accent-h);}
 .auth-btn:disabled{opacity:.5;cursor:not-allowed;}
+.auth-separator{display:flex;align-items:center;gap:10px;margin:14px 0 6px;
+  color:var(--text2);font-size:.72rem;font-weight:700;}
+.auth-separator::before,.auth-separator::after{content:'';height:1px;background:var(--border);flex:1;}
+.auth-google-btn{width:100%;padding:12px;background:#fff;border:1px solid var(--border);border-radius:10px;
+  color:var(--text);font-size:.9rem;font-weight:800;cursor:pointer;margin-top:8px;
+  display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;}
+.auth-google-btn:hover{border-color:#cfd5dd;background:#f8fafc;}
+.auth-google-btn:disabled{opacity:.55;cursor:not-allowed;}
+.auth-google-icon{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  font-size:.78rem;font-weight:900;color:#4285f4;border:1px solid #dfe4ea;background:#fff;}
 .auth-link-btn{display:block;width:100%;background:none;border:none;color:var(--text2);font-size:.78rem;font-weight:700;
   text-align:center;padding:9px 6px;margin-top:6px;cursor:pointer;}
 .auth-link-btn:hover{color:var(--accent);}
@@ -621,6 +631,10 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <div class="auth-field"><label>비밀번호</label>
         <input type="password" id="login-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
       <button class="auth-btn" id="login-btn" onclick="doLogin()">로그인</button>
+      <div class="auth-separator">또는</div>
+      <button type="button" class="auth-google-btn" id="google-login-btn" onclick="doGoogleLogin()">
+        <span class="auth-google-icon">G</span><span>Google로 계속하기</span>
+      </button>
       <button type="button" class="auth-link-btn" id="reset-pw-btn" onclick="resetLoginPassword()">비밀번호 재설정 메일 보내기</button>
     </div>
     <div id="signup-form" style="display:none">
@@ -631,6 +645,10 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <div class="auth-field"><label>비밀번호 (6자 이상)</label>
         <input type="password" id="su-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doSignup()"/></div>
       <button class="auth-btn" id="su-btn" onclick="doSignup()">회원가입</button>
+      <div class="auth-separator">또는</div>
+      <button type="button" class="auth-google-btn" id="google-signup-btn" onclick="doGoogleLogin()">
+        <span class="auth-google-icon">G</span><span>Google로 가입/로그인</span>
+      </button>
       <p class="auth-note">회원가입 후 바로 이용할 수 있습니다</p>
     </div>
     <div id="auth-msg"></div>
@@ -1177,6 +1195,8 @@ firebase.initializeApp(FB);
 auth = firebase.auth();
 db   = firebase.firestore();
 const AUTH_SESSION_KEY='whaleTrackerExplicitLogin';
+const LOGIN_WRITE_KEY_PREFIX='whaleLoginWrite:';
+let _authAccessCache=null;
 auth.setPersistence(firebase.auth.Auth.Persistence.NONE)
   .then(()=>auth.onAuthStateChanged(handleAuthState))
   .catch(()=>auth.onAuthStateChanged(handleAuthState));
@@ -1187,6 +1207,7 @@ async function handleAuthState(u){
     await afterLogin(u);
   } else {
     me = null;
+    _authAccessCache=null;
     sessionStorage.removeItem(AUTH_SESSION_KEY);
     if(u){
       try{ await auth.signOut(); }catch(e){}
@@ -1196,35 +1217,69 @@ async function handleAuthState(u){
 }
 
 async function approved(email){
-  const u=auth.currentUser;
-  if(!u||!email)return false;
-  if(await isAdminUser(u))return true;
-  try{
-    const uidGrant=await db.collection('approved_uids').doc(u.uid).get();
-    if(uidGrant.exists)return true;
-  }catch(e){}
-  try{
-    const s=await db.collection('approved_users').doc(emailKey(email)).get();
-    return s.exists;
-  }catch(e){
-    return false;
-  }
+  const access=await resolveUserAccess(auth.currentUser);
+  return !!(email&&access.allowed);
 }
 function emailKey(e){ return (e||'').trim().toLowerCase(); }
 function ekey(e){ return emailKey(e).replace(/\./g,'__dot__').replace(/@/g,'__at__'); }
 async function isAdminUser(u=auth.currentUser){
-  if(!u)return false;
-  if(u.email===ADMIN)return true;
+  const access=await resolveUserAccess(u);
+  return !!access.isAdmin;
+}
+async function resolveUserAccess(u=auth.currentUser){
+  if(!u)return {allowed:false,isAdmin:false};
+  const mail=emailKey(u.email||'');
+  const cacheKey=`${u.uid}:${mail}`;
+  if(_authAccessCache?.key===cacheKey)return _authAccessCache.value;
+  let claims={};
+  let isAdmin=mail===emailKey(ADMIN);
   try{
-    const token=await u.getIdTokenResult(true);
-    if(token?.claims?.admin===true)return true;
+    const token=await u.getIdTokenResult();
+    claims=token?.claims||{};
+    if(claims.admin===true)isAdmin=true;
+  }catch(e){}
+  if(!isAdmin){
+    try{
+      const s=await db.collection('admins').doc(u.uid).get();
+      if(s.exists)isAdmin=true;
+    }catch(e){}
+  }
+  let allowed=isAdmin || claims.approved===true;
+  if(!allowed){
+    try{
+      const uidGrant=await db.collection('approved_uids').doc(u.uid).get();
+      if(uidGrant.exists)allowed=true;
+    }catch(e){}
+  }
+  if(!allowed && mail){
+    const keys=[mail,ekey(mail)].filter((v,i,a)=>v&&a.indexOf(v)===i);
+    for(const key of keys){
+      try{
+        const s=await db.collection('approved_users').doc(key).get();
+        if(s.exists){allowed=true;break;}
+      }catch(e){}
+    }
+  }
+  const value={allowed,isAdmin};
+  _authAccessCache={key:cacheKey,value};
+  return value;
+}
+async function recordUserLoginOncePerDay(u){
+  if(!u)return false;
+  const today=localDateKey();
+  const key=LOGIN_WRITE_KEY_PREFIX+u.uid;
+  try{
+    if(localStorage.getItem(key)===today)return;
   }catch(e){}
   try{
-    const s=await db.collection('admins').doc(u.uid).get();
-    return s.exists;
-  }catch(e){
-    return false;
-  }
+    await db.collection('users').doc(u.uid).set({
+      uid:u.uid,
+      email:u.email,
+      name:u.displayName||u.email.split('@')[0],
+      lastLoginAt:firebase.firestore.FieldValue.serverTimestamp()
+    },{merge:true});
+    localStorage.setItem(key,today);
+  }catch(e){}
 }
 async function authHeaders(headers={}){
   const u=auth.currentUser;
@@ -1276,6 +1331,49 @@ async function doLogin(){
     btn.disabled=false;btn.textContent='로그인';
   }
 }
+function setGoogleButtonsBusy(busy){
+  const labels={
+    'google-login-btn':'Google로 계속하기',
+    'google-signup-btn':'Google로 가입/로그인'
+  };
+  Object.keys(labels).forEach(id=>{
+    const btn=document.getElementById(id);
+    if(!btn)return;
+    btn.disabled=busy;
+    btn.innerHTML=busy
+      ? '<span class="auth-google-icon">G</span><span>Google 로그인 중...</span>'
+      : `<span class="auth-google-icon">G</span><span>${labels[id]}</span>`;
+  });
+}
+async function doGoogleLogin(){
+  const provider=new firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({prompt:'select_account'});
+  sessionStorage.setItem(AUTH_SESSION_KEY,'1');
+  setGoogleButtonsBusy(true);
+  try{
+    await auth.signInWithPopup(provider);
+    setGoogleButtonsBusy(false);
+  }catch(e){
+    const fallbackCodes=['auth/popup-blocked','auth/operation-not-supported-in-this-environment'];
+    if(fallbackCodes.includes(e.code)){
+      try{
+        await auth.signInWithRedirect(provider);
+        return;
+      }catch(redirectErr){
+        e=redirectErr;
+      }
+    }
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    const m={
+      'auth/popup-closed-by-user':'Google 로그인이 취소되었습니다.',
+      'auth/cancelled-popup-request':'이미 진행 중인 Google 로그인 창이 있습니다.',
+      'auth/unauthorized-domain':'Firebase Console의 승인된 도메인에 현재 도메인을 추가해야 합니다.',
+      'auth/operation-not-allowed':'Firebase Console에서 Google 로그인 provider를 먼저 활성화해야 합니다.'
+    };
+    setAuthMsg(m[e.code]||'Google 로그인 실패: '+(e.message||e.code||e),"error");
+    setGoogleButtonsBusy(false);
+  }
+}
 async function resetLoginPassword(){
   const email=document.getElementById('login-email').value.trim();
   if(!email){setAuthMsg("비밀번호를 재설정할 이메일을 먼저 입력하세요.","error");return;}
@@ -1322,7 +1420,12 @@ async function doSignup(){
     btn.disabled=false;btn.textContent='회원가입';
   }
 }
-async function doLogout(){ sessionStorage.removeItem(AUTH_SESSION_KEY); await auth.signOut(); }
+async function doLogout(){
+  sessionStorage.removeItem(AUTH_SESSION_KEY);
+  _authAccessCache=null;
+  _mpLoadedUid=null;
+  await auth.signOut();
+}
 function setAuthMsg(msg,type){
   const el=document.getElementById('auth-msg');
   el.className=type==='error'?'auth-error':'auth-success';
@@ -1332,30 +1435,27 @@ function setAuthMsg(msg,type){
 // ── 로그인 후처리 ──────────────────────────────────────
 async function afterLogin(u){
   mpData=null; // ✅ 계정 전환 시 이전 사용자 데이터 초기화
+  _mpLoadedUid=null;
   _portfolioDetailsInitialized=false;
-  const allowed=await approved(u.email);
-  if(!allowed){
+  _authAccessCache=null;
+  const access=await resolveUserAccess(u);
+  if(!access.allowed){
     sessionStorage.removeItem(AUTH_SESSION_KEY);
     me=null;
+    _mpLoadedUid=null;
     await auth.signOut();
     show('auth');
+    setGoogleButtonsBusy(false);
     setAuthMsg('초대된 사용자만 이용할 수 있습니다. 관리자에게 승인 요청을 해주세요.', 'error');
     return;
   }
   document.getElementById('user-display').textContent=u.displayName||u.email.split('@')[0];
-  const isAdm=await isAdminUser(u);
+  const isAdm=access.isAdmin;
   document.getElementById('admin-nav-btn').style.display=isAdm?'inline-block':'none';
   document.getElementById('admin-badge').style.display=isAdm?'inline-block':'none';
   show('app');
-  try{
-    await db.collection('users').doc(u.uid).set({
-      uid:u.uid,
-      email:u.email,
-      name:u.displayName||u.email.split('@')[0],
-      lastLoginAt:firebase.firestore.FieldValue.serverTimestamp()
-    },{merge:true});
-  }catch(e){}
-  await loadWhaleData();
+  await recordUserLoginOncePerDay(u);
+  await loadWhaleData({force:isAdm});
   if(isAdm){loadUserList();loadChangelog();}
 }
 
@@ -1461,6 +1561,8 @@ let _whaleMeta={}, _globalMeta={};
 function formatDataDate(v){
   if(!v)return '';
   if(v?.toDate)return v.toDate().toLocaleDateString('ko-KR');
+  if(Number.isFinite(v?.seconds))return new Date(v.seconds*1000).toLocaleDateString('ko-KR');
+  if(Number.isFinite(v?._seconds))return new Date(v._seconds*1000).toLocaleDateString('ko-KR');
   if(v instanceof Date)return v.toLocaleDateString('ko-KR');
   const s=String(v);
   const parsed=Date.parse(s);
@@ -1504,17 +1606,42 @@ function normalizeNpsOverseasRows(rows){
     date:x.date||x.filingDate||x.updatedAt||''
   })).filter(x=>x.ticker||x.name);
 }
-async function loadWhaleData(){
+const WHALE_DATA_CACHE_KEY='whaleDataCacheV2';
+const WHALE_DATA_CACHE_TTL=30*60*1000;
+function readWhaleDataCache(){
+  try{
+    const cached=JSON.parse(localStorage.getItem(WHALE_DATA_CACHE_KEY)||'null');
+    if(!cached?.savedAt)return null;
+    if(Date.now()-cached.savedAt>WHALE_DATA_CACHE_TTL)return null;
+    return cached;
+  }catch(e){
+    return null;
+  }
+}
+function writeWhaleDataCache(d,g){
+  try{localStorage.setItem(WHALE_DATA_CACHE_KEY,JSON.stringify({savedAt:Date.now(),d,g}));}catch(e){}
+}
+function clearWhaleDataCache(){
+  try{localStorage.removeItem(WHALE_DATA_CACHE_KEY);}catch(e){}
+}
+async function loadWhaleData(options={}){
   let d={nps_portfolio:S_NPS,overseas:S_OVS,alert5:S_A5,alert10:S_A10,quant_universe:S_QUANT};
   let g={global_whales:LEGENDS};
-  try{
-    const s=await db.collection('whale_data').doc('current').get();
-    if(s.exists) d={...d,...s.data()};
-  }catch(e){}
-  try{
-    const s=await db.collection('whale_data').doc('global').get();
-    if(s.exists) g={...g,...s.data()};
-  }catch(e){}
+  const cached=options.force?null:readWhaleDataCache();
+  if(cached){
+    d={...d,...(cached.d||{})};
+    g={...g,...(cached.g||{})};
+  }else{
+    try{
+      const s=await db.collection('whale_data').doc('current').get();
+      if(s.exists) d={...d,...s.data()};
+    }catch(e){}
+    try{
+      const s=await db.collection('whale_data').doc('global').get();
+      if(s.exists) g={...g,...s.data()};
+    }catch(e){}
+    writeWhaleDataCache(d,g);
+  }
   _whaleMeta={...(d.meta||{}),updated_at:d.updated_at,data_updated_at:d.data_updated_at||d.updatedAt};
   _globalMeta={...(g.meta||{}),updated_at:g.updated_at,data_updated_at:g.data_updated_at||g.updatedAt};
   const npsRows=normalizeNpsRows(d.nps_portfolio||d.nps||d.national_pension||d.npsPortfolio);
@@ -1924,12 +2051,12 @@ function showLegend(id){
 // ═══════════════════════════════════════════════════════
 //  내 포트폴리오
 // ═══════════════════════════════════════════════════════
-let mpData=null, mpYear='2026', _sheetRows=[];
+let mpData=null, mpYear='2026', _sheetRows=[], _mpLoadedUid=null;
 let _autosaveTimer=null;
 let _autosaveBusy=false;
 let _portfolioDetailsInitialized=false;
 const PORTFOLIO_DEFAULT_COLLAPSED_GROUPS=[
-  'price-detail','acct-detail','broker-chart','tx-detail','div-detail','profit-history','daily-change'
+  'price-detail','acct-detail','broker-chart','tx-detail','div-detail','profit-history'
 ];
 
 async function initMyPage(){
@@ -1949,14 +2076,17 @@ function emptyPortfolio(){
     history:[]
   };
 }
-async function loadMpData(){
+async function loadMpData(options={}){
   if(!me){mpData=JSON.parse(JSON.stringify(S_PORT));renderMp(mpData);return;}
+  if(!options.force && mpData && _mpLoadedUid===me.uid){renderMp(mpData);return;}
   try{
     const s=await db.collection('portfolio_data').doc(me.uid).get();
     mpData=s.exists?s.data():emptyPortfolio();
+    _mpLoadedUid=me.uid;
   }catch(e){
     showToast("포트폴리오 로드 오류: "+e.message,"err");
     mpData=emptyPortfolio();
+    _mpLoadedUid=me.uid;
   }
   renderMp(mpData);
 }
@@ -1965,6 +2095,7 @@ async function saveMpData(data){
   if(!me){showToast("⚠ 임시 저장 (로그인 후 Firebase 저장)","ok");renderMp(data);return;}
   try{
     await db.collection('portfolio_data').doc(me.uid).set(data);
+    _mpLoadedUid=me.uid;
     showToast("✅ 저장 완료!","ok");
   }catch(e){showToast("저장 오류: "+e.message,"err");}
   renderMp(data);
@@ -1979,6 +2110,7 @@ async function persistMpData(showSaved=false){
   try{
     _autosaveBusy=true;
     await db.collection('portfolio_data').doc(me.uid).set(mpData);
+    _mpLoadedUid=me.uid;
     if(showSaved)showToast("✅ 자동 저장 완료","ok");
     const el=document.getElementById('data-last-update');
     if(el)el.textContent='마지막 업데이트: '+mpData.updatedAt;
@@ -1988,13 +2120,14 @@ async function persistMpData(showSaved=false){
     _autosaveBusy=false;
   }
 }
-function schedulePortfolioAutosave(showSaved=false, delay=350){
+function schedulePortfolioAutosave(showSaved=false, delay=1500){
   clearTimeout(_autosaveTimer);
   _autosaveTimer=setTimeout(()=>persistMpData(showSaved),delay);
 }
 function renderMp(data){
   initFxControls();
   renderMpSummary(data);
+  promoteDailyChangeSection();
   initAcctSheet(data.accounts||[]);
   updateAcctSummaryBar();
   const snapshotChanged=updateDailyPortfolioSnapshot();
@@ -2009,6 +2142,13 @@ function renderMp(data){
   const el=document.getElementById('data-last-update');
   if(el&&data.updatedAt) el.textContent='마지막 업데이트: '+data.updatedAt;
   if(snapshotChanged)schedulePortfolioAutosave(false,900);
+}
+function promoteDailyChangeSection(){
+  const summary=document.querySelector('#page-mypage .mp-summary-grid');
+  const badge=document.getElementById('daily-change-badge');
+  const section=badge?.closest('.section');
+  if(!summary||!section)return;
+  if(summary.nextElementSibling!==section)summary.insertAdjacentElement('afterend',section);
 }
 function fmtKrwAmount(n){ return Math.round(Math.abs(Number(n)||0)).toLocaleString('ko-KR')+'원'; }
 function fmtUsdAmount(n){
@@ -2744,8 +2884,9 @@ async function uploadWhaleData(){
   try{
     const d=JSON.parse(raw);
     await db.collection('whale_data').doc('current').set({...d,updated_at:firebase.firestore.FieldValue.serverTimestamp()});
+    clearWhaleDataCache();
     showToast("✅ 저장 완료! 모든 사용자에게 반영됩니다.","ok");
-    await loadWhaleData();
+    await loadWhaleData({force:true});
   }catch(e){showToast("오류: "+e.message,"err");}
 }
 async function saveChangelog(){
@@ -3135,7 +3276,7 @@ async function fetchQuoteForCode(code){
   const market=marketForCode(clean);
   const key=market+':'+clean;
   const cached=quoteCache[key];
-  if(cached && Date.now()-cached.at<60_000)return cached.data;
+  if(cached && Date.now()-cached.at<5*60_000)return cached.data;
   setPriceApiStatus('조회 중', 'neutral');
   const res=await apiFetch('/api/kis-price',{
     method:'POST',
