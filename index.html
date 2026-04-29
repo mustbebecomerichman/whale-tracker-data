@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-29-usd-highlight-v1"/>
+<meta name="whale-tracker-version" content="2026-04-29-daily-change-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -1029,6 +1029,21 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     </div>
   </div>
 
+  <div class="section">
+    <div class="section-title">
+      <div class="section-title-left">전일 대비 자산 변동 <span class="badge" id="daily-change-badge">직전 스냅샷 기준</span></div>
+      <button class="btn btn-outline btn-sm mobile-toggle" onclick="toggleMobileSection('daily-change',this)">숨기기</button>
+    </div>
+    <div class="tbl-wrap mobile-collapsible" data-mobile-group="daily-change">
+      <table>
+        <thead><tr><th>항목</th><th>현재</th><th>전일</th><th>변동</th><th>변동률</th><th>해석</th></tr></thead>
+        <tbody id="daily-change-tbody">
+          <tr><td colspan="6" class="neutral" style="text-align:center;padding:18px;">전일 스냅샷이 쌓이면 표시됩니다.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- JSON 업로드 (한줄로 축소) -->
   <div class="section">
     <div class="card">
@@ -1984,6 +1999,7 @@ function renderMp(data){
   renderDivSheet(_divYear, data.dividends||{});
   renderBrokerPnlChart();
   renderTotalHistoryChart(data.history||[]);
+  renderDailyChangeTable(data.history||[]);
   const el=document.getElementById('data-last-update');
   if(el&&data.updatedAt) el.textContent='마지막 업데이트: '+data.updatedAt;
   if(snapshotChanged)schedulePortfolioAutosave(false,900);
@@ -2206,6 +2222,7 @@ function syncAcctRowsToMpData(){
     .map(accountRowToData);
   updateMpSummaryFromAccountRows(mpData.accounts);
   if(updateDailyPortfolioSnapshot())renderTotalHistoryChart(mpData.history||[]);
+  renderDailyChangeTable(mpData.history||[]);
 }
 function syncDivRowsToMpData(){
   if(!mpData)mpData=emptyPortfolio();
@@ -2421,6 +2438,43 @@ function renderTotalHistoryChart(history=[]){
     <text x="${PX}" y="14" style="font-size:10px;fill:#03C75A;font-weight:800">평가금액</text>
     <text x="${PX+62}" y="14" style="font-size:10px;fill:#667085;font-weight:800">매입금액</text>
   </svg>`;
+}
+function renderDailyChangeTable(history=[]){
+  const body=document.getElementById('daily-change-tbody');
+  if(!body)return;
+  const badge=document.getElementById('daily-change-badge');
+  const current=portfolioTotalsForHistory();
+  const rows=(history||[])
+    .filter(h=>h&&h.date&&(h.eval||h.purchase||h.pnl))
+    .slice()
+    .sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const today=localDateKey();
+  const prev=rows.filter(h=>String(h.date)<today).pop()
+    || (rows.length>1?rows[rows.length-2]:null);
+  if(!prev){
+    if(badge)badge.textContent='직전 스냅샷 없음';
+    body.innerHTML='<tr><td colspan="6" class="neutral" style="text-align:center;padding:18px;">비교할 전일 스냅샷이 아직 없습니다. 08시 이후 하루 이상 기록되면 표시됩니다.</td></tr>';
+    return;
+  }
+  if(badge)badge.textContent=`${prev.date} 대비`;
+  const totalDiff=current.total-(Number(prev.eval)||0);
+  const purchaseDiff=current.purchase-(Number(prev.purchase)||0);
+  const marketDiff=totalDiff-purchaseDiff;
+  const pnlDiff=current.pnl-(Number(prev.pnl)||0);
+  const rateDiff=current.rate-(Number(prev.rate)||0);
+  const pct=(diff,base)=>base?diff/base*100:0;
+  const moneyCell=n=>`<span class="${n>0?'up-chip':n<0?'down-chip':'neutral'}">${signedText(n,fmtKrwAmount)}</span>`;
+  const pctCell=n=>`<span class="${n>0?'up-chip':n<0?'down-chip':'neutral'}">${n>0?'+':''}${n.toFixed(2)}%</span>`;
+  const ppCell=n=>`<span class="${n>0?'up-chip':n<0?'down-chip':'neutral'}">${n>0?'+':''}${n.toFixed(2)}%p</span>`;
+  const interp=(diff,up,down,flat='변동 없음')=>diff>0?up:diff<0?down:flat;
+  const lines=[
+    ['총 평가금액',fmt(current.total)+'원',fmt(prev.eval||0)+'원',moneyCell(totalDiff),pctCell(pct(totalDiff,prev.eval||0)),interp(totalDiff,'자산 증가','자산 감소')],
+    ['원금/매입금액',fmt(current.purchase)+'원',fmt(prev.purchase||0)+'원',moneyCell(purchaseDiff),pctCell(pct(purchaseDiff,prev.purchase||0)),interp(purchaseDiff,'추가 매수/입금 영향','매도/출금 영향')],
+    ['가격·환율 추정효과','-','-',moneyCell(marketDiff),pctCell(pct(marketDiff,prev.eval||0)),interp(marketDiff,'시장/환율 기여 양호','시장/환율 부담')],
+    ['평가손익',fmt(current.pnl)+'원',fmt(prev.pnl||0)+'원',moneyCell(pnlDiff),pctCell(pct(pnlDiff,Math.abs(prev.pnl||0))),interp(pnlDiff,'손익 개선','손익 악화')],
+    ['수익률',`${current.rate>=0?'+':''}${current.rate.toFixed(2)}%`,`${(prev.rate||0)>=0?'+':''}${(prev.rate||0).toFixed(2)}%`,ppCell(rateDiff),'-',interp(rateDiff,'효율 개선','효율 둔화')]
+  ];
+  body.innerHTML=lines.map(r=>`<tr><td class="name">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td></tr>`).join('');
 }
 function renderBrokerPnlChart(rows=_acctRows){
   const el=document.getElementById('mp-history-chart');
@@ -2853,6 +2907,7 @@ function refreshFxDependentViews(){
   updateAcctSummaryBar();
   renderBrokerPnlChart(_acctRows);
   renderTotalHistoryChart(mpData?.history||[]);
+  renderDailyChangeTable(mpData?.history||[]);
 }
 function setFxTtsRate(raw,meta=null){
   const v=Number(String(raw||'').replace(/,/g,''));
