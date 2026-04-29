@@ -202,6 +202,7 @@ td.name{font-weight:600;color:var(--text);}
 .acct-row{display:grid;grid-template-columns:150px 1fr 110px 65px 68px;
   align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0f0;}
 .acct-row:last-child{border-bottom:none;}
+.acct-row.usd-asset{background:rgba(192,57,43,.045);border-left:3px solid rgba(192,57,43,.24);border-radius:8px;padding-left:8px;}
 @media(max-width:700px){.acct-row{grid-template-columns:110px 1fr 80px 55px;}}
 .acct-name{font-size:.83rem;font-weight:700;white-space:nowrap;}
 .acct-amt{font-size:.83rem;text-align:right;white-space:nowrap;color:var(--text3);}
@@ -239,6 +240,9 @@ td.name{font-weight:600;color:var(--text);}
 .sheet-table thead th.calc-col{background:#E8F4FD;color:var(--accent4);}
 .sheet-table tbody tr:hover td{background:#F9FFFC;}
 .sheet-table tbody td{border:1px solid #EDEFF2;padding:0;min-width:60px;}
+.sheet-table tbody tr.usd-asset td{background:rgba(192,57,43,.045);}
+.sheet-table tbody tr.usd-asset:hover td{background:rgba(192,57,43,.075);}
+.sheet-table tbody tr.usd-asset td:first-child{border-left:3px solid rgba(192,57,43,.28);}
 .sheet-table tbody td.row-num{background:#F8F9FA;text-align:center;color:var(--text2);font-size:.72rem;padding:3px 5px;width:50px;cursor:default;}
 .sheet-table tbody td.row-num:hover{background:#F8F9FA;}
 .row-tools{display:inline-flex;align-items:center;justify-content:center;gap:3px;vertical-align:middle;}
@@ -275,6 +279,7 @@ select.sheet-input{cursor:pointer;}
 .price-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:9px;margin-bottom:18px;}
 .price-card{background:#fff;border:1px solid var(--border);border-radius:10px;
   padding:11px 13px;box-shadow:var(--shadow);cursor:pointer;transition:border-color .2s,transform .2s;}
+.price-card.usd-asset{background:rgba(192,57,43,.045);border-color:rgba(192,57,43,.22);}
 .price-card:hover{border-color:var(--accent4);transform:translateY(-1px);}
 .price-card-name{font-size:.76rem;color:var(--text2);font-weight:600;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .price-card-code{font-size:.7rem;color:var(--text2);margin-bottom:6px;}
@@ -2081,7 +2086,7 @@ function renderAccountPanel(wrapId,totalId,summary,currency){
   wrap.innerHTML=summary.map(a=>{
     if(!a.eval&&!a.purchase)return '';
     const pct=totE>0?(a.eval/totE*100).toFixed(1):0;
-    return`<div class="acct-row">
+    return`<div class="acct-row ${currency==='USD'?'usd-asset':''}">
       <div class="acct-name">${a.name}<div class="acct-meta">${a.count}종목 · 매입 ${formatAccountAmount(a.purchase,currency)}</div></div>
       <div class="acct-amt">${formatAccountAmount(a.eval,currency)}</div>
       <div class="acct-bar-wrap"><div class="acct-bar" style="width:${(a.eval/maxE*100).toFixed(1)}%"></div></div>
@@ -2474,7 +2479,7 @@ async function fetchAllPrices(){
     });
   }
   if(!holdings.length){grid.innerHTML='<div class="price-loading">거래 내역에 종목을 입력하면 현재가가 표시됩니다.</div>';_priceBusy=false;return;}
-  grid.innerHTML=holdings.map(h=>`<div class="price-card" id="pc-${h.code}" onclick="showHoldingDetail('${h.code}')"><div class="price-card-name">${h.name}</div><div class="price-card-code">${h.code}</div><div class="price-card-price" style="color:var(--text2)">조회 중...</div></div>`).join('');
+  grid.innerHTML=holdings.map(h=>`<div class="price-card ${currencyForCode(h.code)==='USD'?'usd-asset':''}" id="pc-${h.code}" onclick="showHoldingDetail('${h.code}')"><div class="price-card-name">${h.name}</div><div class="price-card-code">${h.code}</div><div class="price-card-price" style="color:var(--text2)">조회 중...</div></div>`).join('');
   try{
     const res=await apiFetch('/api/kis-price',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:holdings})});
     if(!res.ok)throw new Error('HTTP '+res.status);
@@ -3283,7 +3288,7 @@ function drawAcctRows(rows) {
     const valueCls = pnl > 0 ? 'up' : pnl < 0 ? 'down' : 'money-neutral';
     const bOpts = BROKERS.map(b => `<option${b===a.brokerage?' selected':''}>${b}</option>`).join('');
     const aOpts = ACCT_TYPES.map(t => `<option${t===a.acctType?' selected':''}>${t}</option>`).join('');
-    return `<tr data-aidx="${i}" onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))showHoldingDetail('${a.code||''}')">
+    return `<tr class="${currencyForCode(a.code)==='USD'?'usd-asset':''}" data-aidx="${i}" onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))showHoldingDetail('${a.code||''}')">
       <td class="row-num" title="Delete row">${rowDeleteButton(`deleteAcctRow(${i})`)}</td>
       <td><select class="sheet-input" data-field="brokerage" onchange="acctCellChange(${i},this)" style="min-width:100px"><option value="">선택</option>${bOpts}</select></td>
       <td><select class="sheet-input" data-field="acctType" onchange="acctCellChange(${i},this)" style="min-width:72px"><option value="">선택</option>${aOpts}</select></td>
