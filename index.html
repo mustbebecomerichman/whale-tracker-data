@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-29-open-google-login-v1"/>
+<meta name="whale-tracker-version" content="2026-04-29-portfolio-mobile-refresh-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -235,6 +235,9 @@ td.name{font-weight:600;color:var(--text);}
 .mp-card.c-purple::before{background:#9b59b6;}
 .mp-card.c-red::before{background:#e74c3c;}
 .mp-period-grid .mp-card{padding:16px 18px;}
+.mp-card.period-positive{border-color:#abe5c3;background:linear-gradient(180deg,#fff,#f0fff6);}
+.mp-card.period-negative{border-color:#ffbfbf;background:linear-gradient(180deg,#fff,#fff5f5);}
+.mp-card.period-flat{border-color:#d8dee8;background:#fff;}
 .mp-lbl{font-size:.72rem;color:var(--text2);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
 .mp-val{font-size:1.4rem;font-weight:900;color:var(--text);}
 .mp-val.up{color:var(--up);} .mp-val.down{color:var(--down);}
@@ -471,7 +474,21 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .section-title{align-items:flex-start;}
   .search-row{display:grid;grid-template-columns:1fr;gap:8px;}
   .search-input,.admin-input{min-width:0;width:100%;}
-  .grid-2,.grid-3,.mp-summary-grid{grid-template-columns:1fr;}
+  .grid-2,.grid-3{grid-template-columns:1fr;}
+  #page-mypage .hero{padding:16px 0 12px;margin-bottom:12px;}
+  #page-mypage .hero h1{font-size:1.2rem;margin-bottom:4px;}
+  #page-mypage .hero p{font-size:.76rem;line-height:1.35;}
+  .mp-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px;}
+  .mp-period-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:0 0 12px;}
+  .mp-card{padding:10px 11px;border-radius:9px;}
+  .mp-period-grid .mp-card{padding:10px 8px;}
+  .mp-lbl{font-size:.62rem;margin-bottom:4px;line-height:1.15;letter-spacing:0;}
+  .mp-val{font-size:1rem;line-height:1.15;word-break:keep-all;}
+  .mp-period-grid .mp-val{font-size:.92rem;}
+  .mp-sub,.period-meta{font-size:.64rem;line-height:1.25;margin-top:3px;}
+  .mp-period-grid .period-meta{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.5em;}
+  .split-money{gap:1px;}
+  .split-money .usd{font-size:.84em;}
   .card,.admin-section{padding:14px;border-radius:10px;}
   .kis-status{display:grid;grid-template-columns:auto 1fr;align-items:start;padding:12px;}
   .kis-status > div:last-child{grid-column:1 / -1;margin-left:0;}
@@ -942,14 +959,14 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <div class="period-meta" id="period-daily-sub">전일 스냅샷 기준</div>
     </div>
     <div class="mp-card c-green">
-      <div class="mp-lbl">한달 수익</div>
+      <div class="mp-lbl">월간 자산변동</div>
       <div class="mp-val" id="period-month">-</div>
       <div class="period-meta" id="period-month-sub">30일 전 스냅샷 기준</div>
     </div>
     <div class="mp-card c-purple">
-      <div class="mp-lbl">올해 수익</div>
+      <div class="mp-lbl">연간 자산변동</div>
       <div class="mp-val" id="period-year">-</div>
-      <div class="period-meta" id="period-year-sub">실현손익 + 평가손익 변화</div>
+      <div class="period-meta" id="period-year-sub">연초 스냅샷 기준</div>
     </div>
   </div>
 
@@ -2431,6 +2448,9 @@ let mpData=null, mpYear='2026', _sheetRows=[], _mpLoadedUid=null;
 let _autosaveTimer=null;
 let _autosaveBusy=false;
 let _portfolioDetailsInitialized=false;
+let _portfolioAutoQuoteTimer=null;
+let _portfolioAutoQuoteAt=0;
+const PORTFOLIO_AUTO_QUOTE_INTERVAL_MS=90*1000;
 const PORTFOLIO_DEFAULT_COLLAPSED_GROUPS=[
   'price-detail','acct-detail','broker-chart','tx-detail','div-detail','profit-history'
 ];
@@ -2438,6 +2458,7 @@ const PORTFOLIO_DEFAULT_COLLAPSED_GROUPS=[
 async function initMyPage(){
   await loadAutoFxRate();
   await loadMpData();
+  schedulePortfolioAutoQuote(true);
 }
 function emptyPortfolio(){
   const yr=String(new Date().getFullYear());
@@ -2464,7 +2485,9 @@ async function loadMpData(options={}){
     mpData=emptyPortfolio();
     _mpLoadedUid=me.uid;
   }
+  const normalizedNames=normalizePortfolioStockNames(mpData);
   renderMp(mpData);
+  if(normalizedNames)schedulePortfolioAutosave(false,700);
 }
 async function saveMpData(data){
   mpData=data;
@@ -2521,11 +2544,11 @@ function renderMp(data){
   if(snapshotChanged)schedulePortfolioAutosave(false,900);
 }
 function promoteDailyChangeSection(){
-  const summary=document.querySelector('#page-mypage .mp-summary-grid');
+  const anchor=document.getElementById('portfolio-period-metrics') || document.querySelector('#page-mypage .mp-summary-grid');
   const badge=document.getElementById('daily-change-badge');
   const section=badge?.closest('.section');
-  if(!summary||!section)return;
-  if(summary.nextElementSibling!==section)summary.insertAdjacentElement('afterend',section);
+  if(!anchor||!section)return;
+  if(anchor.nextElementSibling!==section)anchor.insertAdjacentElement('afterend',section);
 }
 function fmtKrwAmount(n){ return Math.round(Math.abs(Number(n)||0)).toLocaleString('ko-KR')+'원'; }
 function fmtUsdAmount(n){
@@ -2679,19 +2702,63 @@ function splitBrokerage(raw='', acctType=''){
   const typeMap={"종합":"위탁","연금(신)":"연금저축","연금(구)":"연금저축"};
   return {brokerage:m[1].replace('투자','투자증권'), acctType:typeMap[m[2]]||m[2]};
 }
+function looksLikeStockCodeText(name,code=''){
+  const s=String(name||'').trim();
+  const clean=normalizeStockCode(code);
+  if(!s)return true;
+  const normalized=normalizeStockCode(s);
+  return normalized==='#N/A'
+    || (!!clean && normalized===clean)
+    || /^종목\s*[A-Z0-9.]+$/i.test(s)
+    || /^[A-Z]{1,8}$/.test(normalized) && !!clean && isOverseasCode(clean);
+}
+function resolveStockName(code,current='',apiName=''){
+  const clean=normalizeStockCode(code);
+  const cur=String(current||'').trim();
+  const usableFallback=looksLikeStockCodeText(cur,clean)||looksLikeBrokerName(cur)?'':cur;
+  const resolved=bestStockName(clean,apiName,usableFallback);
+  if(resolved && !looksLikeStockCodeText(resolved,clean))return resolved;
+  return lookupCode(clean)||usableFallback||resolved||clean;
+}
+function normalizePortfolioStockNames(data){
+  if(!data)return false;
+  let changed=false;
+  const normalizeRow=(row,nameField='name')=>{
+    if(!row)return;
+    const code=normalizeStockCode(row.code||row.ticker||row.symbol||'');
+    if(code && row.code!==code){row.code=code;changed=true;}
+    if(!code)return;
+    const current=row[nameField]||row.stockName||row.stock_name||row.stock||
+      (nameField==='stockName'&&!looksLikeBrokerName(row.name)?row.name:'')||'';
+    const next=resolveStockName(code,current);
+    if(next && next!==current){
+      row[nameField]=next;
+      if(nameField==='stockName')row._autoName=true;
+      if(nameField==='name')row._autoName=true;
+      changed=true;
+    }
+  };
+  (data.accounts||[]).forEach(row=>normalizeRow(row,'stockName'));
+  Object.values(data.transactions||{}).forEach(rows=>(rows||[]).forEach(row=>normalizeRow(row,'name')));
+  Object.values(data.dividends||{}).forEach(rows=>(rows||[]).forEach(row=>normalizeRow(row,'name')));
+  return changed;
+}
 function normalizeTxRow(t){
   const s=splitBrokerage(t.brokerage,t.acctType);
-  return {...t,brokerage:s.brokerage,acctType:s.acctType||'위탁'};
+  const code=normalizeStockCode(t.code||'');
+  const name=code?resolveStockName(code,t.name||t.stockName||''):(t.name||'');
+  return {...t,code,name,brokerage:s.brokerage,acctType:s.acctType||'위탁',_autoName:!!(code&&name&&name!==(t.name||''))||!!t._autoName};
 }
 function accountRowToData(a){
   const ev=a.price&&a.qty?a.qty*a.price:(a.eval||0);
   const pur=a.avgBuy&&a.qty?a.qty*a.avgBuy:(a.purchase||0);
   const rate=pur>0?Math.round((ev-pur)/pur*10000)/100:0;
+  const stockName=resolveStockName(a.code,a.stockName||'');
   return {
     name:a.brokerage||'',
     acctType:a.acctType||'위탁',
     code:a.code||'',
-    stockName:a.stockName||'',
+    stockName,
     qty:a.qty||0,
     avgBuy:a.avgBuy||0,
     price:a.price||0,
@@ -2714,7 +2781,7 @@ function normalizeAccountInputRow(a){
   const rawStock=a.stockName || a.stock_name || a.stock || '';
   const stockName=looksLikeBrokerName(rawStock)
     ? (localName || '')
-    : (rawStock || localName || (!code && !looksLikeBrokerName(a.name)?a.name:''));
+    : (code?resolveStockName(code,rawStock || (!looksLikeBrokerName(a.name)?a.name:'')):(rawStock || localName || (!code && !looksLikeBrokerName(a.name)?a.name:'')));
   return {
     brokerage: rawBroker,
     acctType:  a.acctType || '위탁',
@@ -2735,7 +2802,7 @@ function syncSheetRowsToMpData(){
   if(!mpData.transactions)mpData.transactions={};
   mpData.transactions[mpYear]=_sheetRows
     .filter(t=>t._draftId||t.name||t.code||t.brokerage||t.acctType||t.qty||t.avgBuy||t.price||t.note)
-    .map(t=>({...t,acctType:t.acctType||'위탁'}));
+    .map(t=>({...t,code:normalizeStockCode(t.code||''),name:resolveStockName(t.code,t.name||''),acctType:t.acctType||'위탁'}));
   renderYearChips(mpData.transactions);
   renderPortfolioPeriodMetrics(mpData.history||[]);
 }
@@ -2754,7 +2821,7 @@ function syncDivRowsToMpData(){
   if(!mpData.dividends)mpData.dividends={};
   mpData.dividends[_divYear]=_divRows
     .filter(d=>d._draftId||d.name||d.code||d.brokerage||calcDivGross(d)>0||d.note)
-    .map(d=>({...d}));
+    .map(d=>({...d,code:normalizeStockCode(d.code||''),name:resolveStockName(d.code,d.name||'')}));
   renderDivYearChips(mpData.dividends);
 }
 
@@ -2965,13 +3032,17 @@ function setPeriodMetric(id,value,sub,{signed=true,empty=false}={}){
   const el=document.getElementById(id);
   const subEl=document.getElementById(id+'-sub');
   if(!el)return;
+  const card=el.closest('.mp-card');
+  if(card)card.classList.remove('period-positive','period-negative','period-flat');
   if(empty){
     el.textContent='-';
     el.className='mp-val';
+    if(card)card.classList.add('period-flat');
   }else{
     const v=Math.round(Number(value)||0);
     el.textContent=(signed&&v>0?'+':'')+fmt(v)+'원';
     el.className='mp-val '+(v>0?'up':v<0?'down':'');
+    if(card)card.classList.add(v>0?'period-positive':v<0?'period-negative':'period-flat');
   }
   if(subEl)subEl.textContent=sub||'';
 }
@@ -2995,9 +3066,9 @@ function renderPortfolioPeriodMetrics(history=[]){
 
   const monthBase=pickHistoryAtOrBefore(rows,dateKeyDaysAgo(30)) || (rows.length>1?rows[0]:null);
   if(monthBase){
-    const profitDiff=current.pnl-(Number(monthBase.pnl)||0);
-    const rateDiff=current.rate-(Number(monthBase.rate)||0);
-    setPeriodMetric('period-month',profitDiff,`${monthBase.date} 이후 평가손익 · ${rateDiff>=0?'+':''}${rateDiff.toFixed(2)}%p`);
+    const diff=current.total-(Number(monthBase.eval)||0);
+    const pct=(Number(monthBase.eval)||0)?diff/(Number(monthBase.eval)||0)*100:0;
+    setPeriodMetric('period-month',diff,`${monthBase.date} 대비 · ${pct>=0?'+':''}${pct.toFixed(2)}%`);
   }else{
     setPeriodMetric('period-month',0,'30일 비교 스냅샷이 필요합니다.',{empty:true});
   }
@@ -3005,13 +3076,13 @@ function renderPortfolioPeriodMetrics(history=[]){
   const yr=String(new Date().getFullYear());
   const yearStart=`${yr}-01-01`;
   const yearBase=pickHistoryAtOrBefore(rows,yearStart) || pickFirstHistoryOnOrAfter(rows,yearStart);
-  const realized=currentYearRealizedPnl();
-  const unrealizedChange=yearBase?current.pnl-(Number(yearBase.pnl)||0):current.pnl;
-  const yearTotal=realized+unrealizedChange;
-  const baseText=yearBase
-    ? `평가손익 ${yearBase.date} 이후 ${unrealizedChange>=0?'+':''}${fmt(Math.round(unrealizedChange))}원`
-    : `현재 평가손익 ${current.pnl>=0?'+':''}${fmt(Math.round(current.pnl))}원`;
-  setPeriodMetric('period-year',yearTotal,`${yr}년 실현 ${realized>=0?'+':''}${fmt(Math.round(realized))}원 · ${baseText}`);
+  if(yearBase){
+    const diff=current.total-(Number(yearBase.eval)||0);
+    const pct=(Number(yearBase.eval)||0)?diff/(Number(yearBase.eval)||0)*100:0;
+    setPeriodMetric('period-year',diff,`${yearBase.date} 대비 · ${pct>=0?'+':''}${pct.toFixed(2)}%`);
+  }else{
+    setPeriodMetric('period-year',0,'연초 비교 스냅샷이 필요합니다.',{empty:true});
+  }
 }
 function renderTotalHistoryChart(history=[]){
   const el=document.getElementById('mp-total-history-chart');
@@ -3113,7 +3184,33 @@ function renderBrokerPnlChart(rows=_acctRows){
 
 // ── 현재가 조회 ────────────────────────────────────────
 let _priceBusy=false;
-async function fetchAllPrices(){
+function portfolioAccountCodeCount(){
+  return (_acctRows||[]).filter(a=>normalizeStockCode(a.code)).length;
+}
+function portfolioAnyCodeCount(){
+  const txCount=Object.values(mpData?.transactions||{}).flat().filter(t=>normalizeStockCode(t.code)).length;
+  return portfolioAccountCodeCount()+txCount;
+}
+function schedulePortfolioAutoQuote(force=false){
+  clearTimeout(_portfolioAutoQuoteTimer);
+  _portfolioAutoQuoteTimer=setTimeout(()=>autoRefreshPortfolioQuotes(force),350);
+}
+async function autoRefreshPortfolioQuotes(force=false){
+  const page=document.getElementById('page-mypage');
+  if(!page?.classList.contains('active'))return;
+  if(!portfolioAnyCodeCount()||IS_GITHUB_PAGES)return;
+  const now=Date.now();
+  if(now-_portfolioAutoQuoteAt<(force?15*1000:PORTFOLIO_AUTO_QUOTE_INTERVAL_MS))return;
+  _portfolioAutoQuoteAt=now;
+  try{
+    if(portfolioAccountCodeCount())await fetchAndUpdateAcctPrices({silent:true,auto:true});
+    await fetchAllPrices({silent:true,auto:true});
+  }catch(e){
+    console.warn('auto portfolio quote failed',e);
+  }
+}
+async function fetchAllPrices(options={}){
+  const silent=!!options.silent;
   if(_priceBusy)return; _priceBusy=true;
   const grid=document.getElementById('price-grid');
   const holdings=[];const seen=new Set();
@@ -3121,7 +3218,7 @@ async function fetchAllPrices(){
     const clean=normalizeStockCode(code);
     if(clean&&!seen.has(clean)&&clean!=='#N/A'){
       seen.add(clean);
-      holdings.push({code:clean,name:name||lookupCode(clean)||clean,market:marketForCode(clean),qty:qty||0,avgBuy:avgBuy||0});
+      holdings.push({code:clean,name:resolveStockName(clean,name||''),market:marketForCode(clean),qty:qty||0,avgBuy:avgBuy||0});
     }
   };
   (_acctRows||[]).forEach(a=>addHolding(a.code,a.stockName,a.qty,a.avgBuy));
@@ -3130,7 +3227,7 @@ async function fetchAllPrices(){
       addHolding(t.code,t.name,t.qty,t.avgBuy);
     });
   }
-  if(!holdings.length){grid.innerHTML='<div class="price-loading">거래 내역에 종목을 입력하면 현재가가 표시됩니다.</div>';_priceBusy=false;return;}
+  if(!holdings.length){grid.innerHTML='<div class="price-loading">거래 내역에 종목을 입력하면 현재가가 표시됩니다.</div>';_priceBusy=false;return false;}
   grid.innerHTML=holdings.map(h=>`<div class="price-card ${currencyForCode(h.code)==='USD'?'usd-asset':''}" id="pc-${h.code}" onclick="showHoldingDetail('${h.code}')"><div class="price-card-name">${h.name}</div><div class="price-card-code">${h.code}</div><div class="price-card-price" style="color:var(--text2)">조회 중...</div></div>`).join('');
   try{
     const res=await apiFetch('/api/kis-price',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:holdings})});
@@ -3144,7 +3241,7 @@ async function fetchAllPrices(){
       const cls=p.changeRate>0?'up':p.changeRate<0?'down':'flat';
       const sym=p.changeRate>0?'▲':p.changeRate<0?'▼':'-';
       const pnl=h.qty>0?Math.round((p.price-h.avgBuy)*h.qty):null;
-      const displayName=bestStockName(h.code,p.name,h.name);
+      const displayName=resolveStockName(h.code,h.name,p.name);
       card.innerHTML=`<div class="price-card-name">${displayName}</div>
         <div class="price-card-code">${h.code}${h.qty?' · '+h.qty+'주':''}</div>
         <div class="price-card-price">${formatPriceByQuote(p,h.code)}</div>
@@ -3155,11 +3252,15 @@ async function fetchAllPrices(){
     const now=new Date();
     document.getElementById('price-last-update').textContent=now.getHours()+':'+String(now.getMinutes()).padStart(2,'0')+' 업데이트';
     setPriceApiStatus('API 정상', 'ok');
+    return true;
   }catch(e){
     setPriceApiStatus('API 오류', 'err');
     grid.innerHTML=`<div class="price-loading" style="color:var(--down)">⚠ ${explainPriceError(e)}<br><small>현재가는 Cloudflare Pages Functions에서만 동작합니다.</small></div>`;
+    if(!silent)showToast("시세 조회 실패: " + explainPriceError(e), "err");
+    return false;
+  }finally{
+    _priceBusy=false;
   }
-  _priceBusy=false;
 }
 async function fetchSupplyDemandMap(codes){
   const clean=[...new Set((codes||[]).map(normalizeStockCode).filter(c=>/^\d{6}$/.test(c)))];
@@ -3530,6 +3631,7 @@ function refreshFxDependentViews(){
   renderBrokerPnlChart(_acctRows);
   renderTotalHistoryChart(mpData?.history||[]);
   renderDailyChangeTable(mpData?.history||[]);
+  renderPortfolioPeriodMetrics(mpData?.history||[]);
 }
 function setFxTtsRate(raw,meta=null){
   const v=Number(String(raw||'').replace(/,/g,''));
@@ -3623,6 +3725,8 @@ function toggleKrwView(btn){
   updateAcctSummaryBar();
   renderBrokerPnlChart(_acctRows);
   renderTotalHistoryChart(mpData?.history||[]);
+  renderDailyChangeTable(mpData?.history||[]);
+  renderPortfolioPeriodMetrics(mpData?.history||[]);
 }
 function fillInputValue(row,field,value,overwrite=false){
   const input=row?.querySelector(`input[data-field="${field}"]`);
@@ -4099,12 +4203,13 @@ async function saveAcctSheet() {
 }
 
 // 계좌별현황에서 현재가 일괄 조회 후 반영
-async function fetchAndUpdateAcctPrices() {
+async function fetchAndUpdateAcctPrices(options={}) {
+  const silent=!!options.silent;
   const holdings = _acctRows
     .filter(a => a.code)
-    .map(a => ({code:normalizeStockCode(a.code), name:a.stockName||a.code, market:marketForCode(a.code), qty:a.qty||0, avgBuy:a.avgBuy||0}));
-  if (!holdings.length) { showToast("종목 코드를 먼저 입력하세요", "err"); return; }
-  showToast("현재가 조회 중...", "ok");
+    .map(a => ({code:normalizeStockCode(a.code), name:resolveStockName(a.code,a.stockName||''), market:marketForCode(a.code), qty:a.qty||0, avgBuy:a.avgBuy||0}));
+  if (!holdings.length) { if(!silent)showToast("종목 코드를 먼저 입력하세요", "err"); return false; }
+  if(!silent)showToast("현재가 조회 중...", "ok");
   try {
     const res = await apiFetch('/api/kis-price', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({items:holdings})});
     if (!res.ok) throw new Error('HTTP '+res.status);
@@ -4116,7 +4221,7 @@ async function fetchAndUpdateAcctPrices() {
         _acctRows[i].price = p.price;
         _acctRows[i].eval  = (a.qty||0) * p.price;
         _acctRows[i]._autoPrice = !!p.price;
-        const apiName=bestStockName(a.code,p.name,a.stockName);
+        const apiName=resolveStockName(a.code,a.stockName,p.name);
         if(apiName){
           _acctRows[i].stockName = apiName;
           _acctRows[i]._autoName = true;
@@ -4131,11 +4236,13 @@ async function fetchAndUpdateAcctPrices() {
     });
     drawAcctRows(_acctRows);
     syncAcctRowsToMpData();
-    schedulePortfolioAutosave(true,120);
-    showToast("✅ 현재가 업데이트 완료!", "ok");
+    schedulePortfolioAutosave(!silent,120);
+    if(!silent)showToast("✅ 현재가 업데이트 완료!", "ok");
+    return true;
   } catch(e) {
     setPriceApiStatus('API 오류', 'err');
-    showToast("현재가 조회 실패: " + explainPriceError(e), "err");
+    if(!silent)showToast("현재가 조회 실패: " + explainPriceError(e), "err");
+    return false;
   }
 }
 
@@ -4178,7 +4285,11 @@ function switchDivYear(yr, el) {
 
 function renderDivSheet(year, allDivs) {
   const divs = (allDivs[year] || []);
-  _divRows = divs.map(d => ({...d}));
+  _divRows = divs.map(d => {
+    const code=normalizeStockCode(d.code||'');
+    const name=code?resolveStockName(code,d.name||''):(d.name||'');
+    return {...d,code,name,_autoName:!!(code&&name&&name!==(d.name||''))||!!d._autoName};
+  });
   const cnt = document.getElementById('div-count');
   if (cnt) cnt.textContent = _divRows.length + '건';
   drawDivRows(_divRows);
