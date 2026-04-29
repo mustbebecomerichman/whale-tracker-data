@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-29-mobile-onboarding-v1"/>
+<meta name="whale-tracker-version" content="2026-04-29-open-google-login-v1"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -670,7 +670,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <span id="mobile-browser-tip-copy">지금 화면은 앱 안에서 열린 브라우저일 수 있습니다. Chrome 또는 Safari에서 다시 열어주세요.</span>
       <div class="mobile-browser-tip-actions">
         <button type="button" onclick="copyCurrentUrl()">주소 복사</button>
-        <button type="button" onclick="openCurrentPageInChrome()">Chrome로 열기</button>
+        <button type="button" onclick="openCurrentPageInChrome()">기본 브라우저 열기</button>
       </div>
     </div>
     <div id="login-form">
@@ -700,7 +700,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <div class="auth-field"><label>비밀번호 (6자 이상)</label>
           <input type="password" id="su-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doSignup()"/></div>
         <button class="auth-btn" id="su-btn" onclick="doSignup()">회원가입</button>
-        <p class="auth-note">가입 후 승인 요청이 자동으로 접수됩니다</p>
+        <p class="auth-note">회원가입 후 바로 이용할 수 있습니다</p>
       </div>
     </div>
     <div id="auth-msg"></div>
@@ -1180,7 +1180,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <div class="admin-section">
         <div class="admin-title">👥 사용자 관리</div>
         <p style="font-size:.78rem;color:var(--text2);margin-bottom:10px;line-height:1.6;">
-          승인된 사용자만 앱 데이터를 이용할 수 있습니다. 신규 로그인 요청은 아래 승인 요청 목록에 쌓입니다.
+          Google 또는 이메일로 로그인한 사용자는 바로 이용할 수 있습니다. 이 목록은 운영 메모와 로그인 기록 확인용입니다.
         </p>
         <div class="admin-form-row">
           <input class="admin-input" id="new-user-email" placeholder="이메일 주소" type="email"/>
@@ -1188,13 +1188,6 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
           <button class="btn btn-primary" onclick="addUser()">추가</button>
         </div>
         <div id="user-list"><div style="text-align:center;padding:16px;"><div class="spinner"></div></div></div>
-      </div>
-      <div class="admin-section">
-        <div class="admin-title">🛂 승인 요청</div>
-        <p style="font-size:.78rem;color:var(--text2);margin-bottom:10px;line-height:1.6;">
-          신규 사용자가 로그인하면 자동으로 요청이 접수됩니다. 승인하면 이메일과 UID가 함께 허용됩니다.
-        </p>
-        <div id="access-request-list"><div style="text-align:center;padding:16px;"><div class="spinner"></div></div></div>
       </div>
     </div>
     <div>
@@ -1293,6 +1286,7 @@ const LOGIN_WRITE_KEY_PREFIX='whaleLoginWrite:';
 const PRIVACY_CONSENT_VERSION='privacy-v1-2026-04-29';
 const PRIVACY_CONSENT_SUMMARY='이메일, 표시 이름, Firebase UID, 로그인/동의 시각, 사용자가 입력한 포트폴리오 데이터를 회원 식별, 포트폴리오 저장, 보안 및 동의 이력 증빙 목적으로 처리합니다.';
 const PRIVACY_CONSENT_PENDING_KEY='whalePendingPrivacyConsent';
+const EXTERNAL_OPEN_ATTEMPT_KEY='whaleExternalOpenAttempt';
 let _authAccessCache=null;
 auth.setPersistence(firebase.auth.Auth.Persistence.NONE)
   .then(()=>auth.onAuthStateChanged(handleAuthState))
@@ -1347,22 +1341,7 @@ async function resolveUserAccess(u=auth.currentUser){
       isAdmin=true;
     }catch(e){}
   }
-  let allowed=isAdmin || claims.approved===true;
-  if(!allowed){
-    try{
-      const uidGrant=await db.collection('approved_uids').doc(u.uid).get();
-      if(uidGrant.exists)allowed=true;
-    }catch(e){}
-  }
-  if(!allowed && mail){
-    const keys=[mail,ekey(mail)].filter((v,i,a)=>v&&a.indexOf(v)===i);
-    for(const key of keys){
-      try{
-        const s=await db.collection('approved_users').doc(key).get();
-        if(s.exists){allowed=true;break;}
-      }catch(e){}
-    }
-  }
+  const allowed=true;
   const value={allowed,isAdmin};
   _authAccessCache={key:cacheKey,value};
   return value;
@@ -1575,15 +1554,36 @@ function embeddedBrowserName(){
   if(/iPhone|iPad|iPod/i.test(ua)&&/AppleWebKit/i.test(ua)&&!/Safari/i.test(ua))return 'iOS 앱 내 브라우저';
   return '';
 }
+function isKakaoTalkBrowser(){
+  return /KAKAOTALK/i.test(navigator.userAgent||'');
+}
+function isAndroidDevice(){
+  return /Android/i.test(navigator.userAgent||'');
+}
 function isEmbeddedMobileBrowser(){
   return !!embeddedBrowserName();
+}
+function shouldAutoOpenExternalBrowser(){
+  return isKakaoTalkBrowser()&&isAndroidDevice();
+}
+function maybeOpenExternalBrowser(){
+  if(!shouldAutoOpenExternalBrowser()){
+    updateMobileBrowserTip();
+    return false;
+  }
+  const key=`${EXTERNAL_OPEN_ATTEMPT_KEY}:${location.origin}${location.pathname}`;
+  if(sessionStorage.getItem(key)==='1')return true;
+  sessionStorage.setItem(key,'1');
+  setAuthMsg('카카오톡에서 열렸습니다. Google 로그인을 위해 기본 브라우저로 여는 중입니다.', 'success');
+  setTimeout(openCurrentPageInChrome,250);
+  return true;
 }
 function updateMobileBrowserTip(){
   const tip=document.getElementById('mobile-browser-tip');
   const copy=document.getElementById('mobile-browser-tip-copy');
   if(!tip)return;
   const name=embeddedBrowserName();
-  if(!name){
+  if(!name||shouldAutoOpenExternalBrowser()){
     tip.style.display='none';
     return;
   }
@@ -1617,7 +1617,8 @@ function openCurrentPageInChrome(){
   if(/Android/i.test(navigator.userAgent||'')){
     try{
       const url=new URL(location.href);
-      location.href=`intent://${url.host}${url.pathname}${url.search}${url.hash}#Intent;scheme=${url.protocol.replace(':','')};package=com.android.chrome;end`;
+      const target=`${url.host}${url.pathname}${url.search}`;
+      location.href=`intent://${target}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url.href)};end`;
       return;
     }catch(e){}
   }
@@ -1647,7 +1648,7 @@ async function apiFetch(url, options={}){
 function show(which){
   document.getElementById('auth-screen').style.display = which==='auth'?'flex':'none';
   document.getElementById('app').style.display          = which==='auth'?'none':'block';
-  if(which==='auth')setTimeout(updateMobileBrowserTip,0);
+  if(which==='auth')setTimeout(maybeOpenExternalBrowser,0);
 }
 function switchTab(t){
   document.querySelectorAll('.auth-tab').forEach(b=>b.classList.remove('active'));
@@ -1691,8 +1692,13 @@ function setGoogleButtonsBusy(busy){
 }
 async function doGoogleLogin(){
   if(isEmbeddedMobileBrowser()){
+    if(shouldAutoOpenExternalBrowser()){
+      sessionStorage.removeItem(`${EXTERNAL_OPEN_ATTEMPT_KEY}:${location.origin}${location.pathname}`);
+      maybeOpenExternalBrowser();
+      return;
+    }
     updateMobileBrowserTip();
-    setAuthMsg('Google 정책상 앱 안에서 열린 브라우저에서는 로그인이 차단됩니다. Chrome 또는 Safari에서 열면 계속할 수 있습니다.', 'error');
+    setAuthMsg('Google 정책상 앱 안에서 열린 브라우저에서는 로그인이 차단됩니다. 기본 브라우저에서 열면 계속할 수 있습니다.', 'error');
     return;
   }
   const consent=await requestPrivacyConsent('google');
@@ -1767,7 +1773,7 @@ async function doSignup(){
       }catch(loginErr){
         sessionStorage.removeItem(AUTH_SESSION_KEY);
         sessionStorage.removeItem(PRIVACY_CONSENT_PENDING_KEY);
-        setAuthMsg('이미 가입된 이메일입니다. 기존 비밀번호로 로그인하세요. 승인 요청은 필요하면 자동으로 접수됩니다.',"error");
+        setAuthMsg('이미 가입된 이메일입니다. 기존 비밀번호로 로그인하세요.',"error");
       }
     }else{
       sessionStorage.removeItem(AUTH_SESSION_KEY);
@@ -1787,29 +1793,6 @@ function setAuthMsg(msg,type){
   const el=document.getElementById('auth-msg');
   el.className=type==='error'?'auth-error':'auth-success';
   el.textContent=msg;el.style.display='block';
-}
-async function recordAccessRequest(u){
-  if(!u)return false;
-  const email=u.email||'';
-  if(!email)return false;
-  try{
-    await db.collection('access_requests').doc(u.uid).set({
-      uid:u.uid,
-      email,
-      emailKey:emailKey(email),
-      displayName:u.displayName||email.split('@')[0],
-      provider:providerForUser(u),
-      status:'pending',
-      requestedAt:firebase.firestore.FieldValue.serverTimestamp(),
-      requestedAtClient:new Date().toISOString(),
-      appVersion:appVersion(),
-      userAgent:(navigator.userAgent||'').slice(0,240)
-    },{merge:true});
-    return true;
-  }catch(e){
-    console.warn('access request failed',e);
-    return false;
-  }
 }
 
 // ── 로그인 후처리 ──────────────────────────────────────
@@ -1832,19 +1815,13 @@ async function afterLogin(u){
   }
   const access=await resolveUserAccess(u);
   if(!access.allowed){
-    const requestSaved=await recordAccessRequest(u);
     sessionStorage.removeItem(AUTH_SESSION_KEY);
     me=null;
     _mpLoadedUid=null;
     try{ await auth.signOut(); }catch(e){}
     show('auth');
     setGoogleButtonsBusy(false);
-    setAuthMsg(
-      requestSaved
-        ? '승인 요청이 접수되었습니다. 관리자가 승인하면 같은 계정으로 다시 로그인할 수 있습니다.'
-        : '승인이 필요합니다. 관리자에게 로그인 이메일을 알려주시면 승인해드릴 수 있습니다.',
-      requestSaved?'success':'error'
-    );
+    setAuthMsg('로그인 권한을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.', 'error');
     return;
   }
   document.getElementById('user-display').textContent=u.displayName||u.email.split('@')[0];
@@ -1855,7 +1832,7 @@ async function afterLogin(u){
   setGoogleButtonsBusy(false);
   await recordUserLoginOncePerDay(u);
   await loadWhaleData({force:isAdm});
-  if(isAdm){loadUserList();loadAccessRequests();loadChangelog();}
+  if(isAdm){loadUserList();loadChangelog();}
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3325,14 +3302,14 @@ async function loadUserList(){
         const isAdm=false;
         const joined=dt(d.joinedAt||d.addedAt);
         const last=dt(d.lastLoginAt);
-        const src=(d._source||[]).includes('approved_users')?'승인됨':'가입 기록';
+        const src=(d._source||[]).includes('approved_users')?'운영 메모':'가입 기록';
         const rmId=encodeURIComponent(d.id||ekey(d.email));
         const rmEmail=encodeURIComponent(d.email||'');
         const rmUid=encodeURIComponent(d.uid||'');
         return `<div class="user-row"><div>
           <div class="user-email">${escapeHtml(d.name||d.displayName||d.email)}${isAdm?' <span class="admin-badge">ADMIN</span>':''}</div>
           <div class="user-meta">${escapeHtml(d.email)} · ${src} · 가입 ${escapeHtml(joined)} · 최근 로그인 ${escapeHtml(last)}</div>
-        </div><div class="user-row-actions">${!isAdm&&(d._source||[]).includes('approved_users')?`<button class="btn btn-danger btn-sm" onclick="removeUser(decodeURIComponent('${rmId}'),decodeURIComponent('${rmEmail}'),decodeURIComponent('${rmUid}'))">승인 해제</button>`:''}</div></div>`;
+        </div><div class="user-row-actions">${!isAdm&&(d._source||[]).includes('approved_users')?`<button class="btn btn-danger btn-sm" onclick="removeUser(decodeURIComponent('${rmId}'),decodeURIComponent('${rmEmail}'),decodeURIComponent('${rmUid}'))">메모 삭제</button>`:''}</div></div>`;
       }).join('');
   }catch(e){list.innerHTML=`<p style="color:var(--down);font-size:.82rem;">오류: ${e.message}</p>`;}
 }
@@ -3342,142 +3319,16 @@ async function addUser(){
   if(!email){showToast("이메일을 입력하세요","err");return;}
   const normalized=emailKey(email);
   await db.collection('approved_users').doc(normalized).set({email:normalized,name:name||normalized.split('@')[0],addedAt:firebase.firestore.FieldValue.serverTimestamp(),addedBy:me?.email});
-  try{
-    const pending=await db.collection('access_requests').where('emailKey','==',normalized).get();
-    if(!pending.empty){
-      const batch=db.batch();
-      pending.forEach(doc=>{
-        batch.set(db.collection('approved_uids').doc(doc.id),{
-          uid:doc.id,
-          email:normalized,
-          name:name||doc.data().displayName||normalized.split('@')[0],
-          addedAt:firebase.firestore.FieldValue.serverTimestamp(),
-          addedBy:me?.email
-        },{merge:true});
-        batch.set(doc.ref,{
-          status:'approved',
-          approvedAt:firebase.firestore.FieldValue.serverTimestamp(),
-          approvedBy:me?.email
-        },{merge:true});
-      });
-      await batch.commit();
-    }
-  }catch(e){}
   document.getElementById('new-user-email').value='';document.getElementById('new-user-name').value='';
-  showToast("✅ 추가 완료","ok");loadUserList();loadAccessRequests();
+  showToast("✅ 추가 완료","ok");loadUserList();
 }
 async function removeUser(id,email,uid=''){
-  if(!confirm(`${email} 승인을 해제할까요?`))return;
+  if(!confirm(`${email} 운영 메모를 삭제할까요?`))return;
   const raw=emailKey(email);
   const legacy=ekey(email);
   const refs=[id,raw,legacy].filter((v,i,a)=>v&&a.indexOf(v)===i);
   await Promise.all(refs.map(ref=>db.collection('approved_users').doc(ref).delete().catch(()=>{})));
-  try{
-    const linked=await db.collection('access_requests').where('emailKey','==',raw).get();
-    if(!linked.empty){
-      const batch=db.batch();
-      linked.forEach(doc=>{
-        batch.delete(db.collection('approved_uids').doc(doc.id));
-        batch.set(doc.ref,{
-          status:'revoked',
-          revokedAt:firebase.firestore.FieldValue.serverTimestamp(),
-          revokedBy:me?.email
-        },{merge:true});
-      });
-      await batch.commit();
-    }
-  }catch(e){}
-  if(uid){
-    await db.collection('approved_uids').doc(uid).delete().catch(()=>{});
-    await db.collection('access_requests').doc(uid).set({
-      status:'revoked',
-      revokedAt:firebase.firestore.FieldValue.serverTimestamp(),
-      revokedBy:me?.email
-    },{merge:true}).catch(()=>{});
-  }
-  showToast("삭제 완료","ok");loadUserList();loadAccessRequests();
-}
-function requestStatusLabel(status){
-  return {pending:'승인 대기',approved:'승인 완료',rejected:'보류',revoked:'승인 해제'}[status]||'확인 필요';
-}
-function requestStatusClass(status){
-  if(status==='approved')return 'approved';
-  if(status==='pending')return 'pending';
-  return 'rejected';
-}
-async function loadAccessRequests(){
-  const list=document.getElementById('access-request-list');
-  if(!list)return;
-  try{
-    const snap=await db.collection('access_requests').get();
-    const rows=[];
-    snap.forEach(doc=>rows.push({id:doc.id,...(doc.data()||{})}));
-    const toMs=v=>v?.toMillis?v.toMillis():(v?.toDate?v.toDate().getTime():(Date.parse(v||'')||0));
-    const dt=v=>v?.toDate?v.toDate().toLocaleString('ko-KR'):(v?new Date(v).toLocaleString('ko-KR'):'-');
-    rows.sort((a,b)=>toMs(b.requestedAt||b.requestedAtClient)-toMs(a.requestedAt||a.requestedAtClient));
-    if(!rows.length){
-      list.innerHTML='<p style="color:var(--text2);text-align:center;padding:14px;font-size:.82rem;">아직 승인 요청이 없습니다.</p>';
-      return;
-    }
-    const pendingCount=rows.filter(r=>(r.status||'pending')==='pending').length;
-    list.innerHTML=`<div class="status-chip" style="display:inline-flex;margin-bottom:8px;">대기 ${pendingCount}명 · 전체 ${rows.length}명</div>`+
-      rows.map(d=>{
-        const status=d.status||'pending';
-        const uid=encodeURIComponent(d.uid||d.id);
-        const canApprove=status!=='approved';
-        const actions=canApprove
-          ? `<button class="btn btn-primary btn-sm" onclick="approveAccessRequest(decodeURIComponent('${uid}'))">승인</button>
-             <button class="btn btn-outline btn-sm" onclick="dismissAccessRequest(decodeURIComponent('${uid}'))">보류</button>`
-          : '<span class="status-chip">처리 완료</span>';
-        return `<div class="user-row"><div>
-          <div class="user-email">${escapeHtml(d.displayName||d.email||'이름 없음')} <span class="request-chip ${requestStatusClass(status)}">${requestStatusLabel(status)}</span></div>
-          <div class="user-meta">${escapeHtml(d.email||'-')} · ${escapeHtml(d.provider||'-')} · 요청 ${escapeHtml(dt(d.requestedAt||d.requestedAtClient))}</div>
-        </div><div class="user-row-actions">${actions}</div></div>`;
-      }).join('');
-  }catch(e){
-    list.innerHTML=`<p style="color:var(--down);font-size:.82rem;">승인 요청을 읽지 못했습니다: ${escapeHtml(e.message)}</p>`;
-  }
-}
-async function approveAccessRequest(uid){
-  const ref=db.collection('access_requests').doc(uid);
-  const snap=await ref.get();
-  if(!snap.exists){showToast('승인 요청을 찾지 못했습니다','err');return;}
-  const d=snap.data()||{};
-  const email=emailKey(d.email||'');
-  if(!email){showToast('요청에 이메일이 없습니다','err');return;}
-  const name=d.displayName||email.split('@')[0];
-  const batch=db.batch();
-  batch.set(db.collection('approved_users').doc(email),{
-    email,
-    name,
-    addedAt:firebase.firestore.FieldValue.serverTimestamp(),
-    addedBy:me?.email
-  },{merge:true});
-  batch.set(db.collection('approved_uids').doc(uid),{
-    uid,
-    email,
-    name,
-    addedAt:firebase.firestore.FieldValue.serverTimestamp(),
-    addedBy:me?.email
-  },{merge:true});
-  batch.set(ref,{
-    status:'approved',
-    approvedAt:firebase.firestore.FieldValue.serverTimestamp(),
-    approvedBy:me?.email
-  },{merge:true});
-  await batch.commit();
-  showToast('승인 완료','ok');
-  loadAccessRequests();loadUserList();
-}
-async function dismissAccessRequest(uid){
-  if(!confirm('이 요청을 보류로 표시할까요?'))return;
-  await db.collection('access_requests').doc(uid).set({
-    status:'rejected',
-    rejectedAt:firebase.firestore.FieldValue.serverTimestamp(),
-    rejectedBy:me?.email
-  },{merge:true});
-  showToast('보류 처리했습니다','ok');
-  loadAccessRequests();
+  showToast("삭제 완료","ok");loadUserList();
 }
 function loadJSONFile(e){
   const f=e.target.files[0];if(!f)return;
@@ -3523,7 +3374,7 @@ function showPage(p){
   const map={nps:0,national:1,alert:2,legend:3,mypage:4,admin:5};
   const btns=document.querySelectorAll('nav button');
   if(btns[map[p]]) btns[map[p]].classList.add('active');
-  if(p==='admin'){loadUserList();loadAccessRequests();loadChangelog();}
+  if(p==='admin'){loadUserList();loadChangelog();}
   if(p==='mypage') initMyPage();
 }
 function toggleMobileSection(group,btn){

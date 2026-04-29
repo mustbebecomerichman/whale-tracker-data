@@ -42,10 +42,7 @@ service cloud.firestore {
     }
 
     function isApproved() {
-      return isAdmin()
-        || approvedByClaim()
-        || approvedByUid()
-        || approvedByEmail();
+      return signedIn();
     }
 
     function ownsProfile(uid) {
@@ -61,14 +58,6 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.agreed == true
         && request.resource.data.consentVersion is string;
-    }
-
-    function ownsAccessRequest(uid) {
-      return signedIn()
-        && uid == request.auth.uid
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.email == request.auth.token.email
-        && request.resource.data.status == 'pending';
     }
 
     match /portfolio_data/{uid} {
@@ -105,14 +94,6 @@ service cloud.firestore {
       allow get: if isAdmin()
         || (signedIn() && uid == request.auth.uid);
       allow list, create, update, delete: if isAdmin();
-    }
-
-    match /access_requests/{uid} {
-      allow get: if isAdmin() || (signedIn() && uid == request.auth.uid);
-      allow list: if isAdmin();
-      allow create: if ownsAccessRequest(uid);
-      allow update: if isAdmin() || ownsAccessRequest(uid);
-      allow delete: if isAdmin();
     }
 
     match /admins/{uid} {
