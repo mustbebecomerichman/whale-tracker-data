@@ -1,0 +1,27 @@
+{
+  "name": "WhaleTracker Pro",
+  "short_name": "WhaleTracker",
+  "description": "기관 투자자 지분 추적과 개인 포트폴리오 관리를 위한 모바일 최적화 플랫폼",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4F6F8",
+  "theme_color": "#03C75A",
+  "lang": "ko-KR",
+  "categories": ["finance", "business", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

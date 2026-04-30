@@ -3,7 +3,15 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-29-mobile-icon-hub-v1"/>
+<meta name="whale-tracker-version" content="2026-04-30-store-ads-mobile-v1"/>
+<meta name="theme-color" content="#03C75A"/>
+<meta name="application-name" content="WhaleTracker Pro"/>
+<meta name="apple-mobile-web-app-title" content="WhaleTracker Pro"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<link rel="manifest" href="/manifest.webmanifest"/>
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png"/>
+<link rel="apple-touch-icon" href="/icons/icon-192.png"/>
 <title>Whale Tracker Pro</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -66,6 +74,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
   text-align:center;padding:9px 6px;margin-top:6px;cursor:pointer;}
 .auth-link-btn:hover{color:var(--accent);}
 .auth-note{font-size:.75rem;color:var(--text2);text-align:center;margin-top:12px;line-height:1.6;}
+.auth-links{display:flex;justify-content:center;gap:12px;margin-top:12px;font-size:.76rem;}
+.auth-links a{color:var(--text2);text-decoration:none;}
+.auth-links a:hover{color:var(--accent4);}
 .auth-error{background:#fff5f5;border:1px solid #ffbfbf;color:#c0392b;border-radius:8px;
   padding:10px 14px;font-size:.82rem;margin-top:14px;text-align:center;}
 .auth-success{background:#f0fff6;border:1px solid #abe5c3;color:#1a8a4a;border-radius:8px;
@@ -339,6 +350,26 @@ select.sheet-input{cursor:pointer;}
 .price-card-supply div{display:flex;justify-content:space-between;gap:6px;}
 .price-card-supply strong{font-weight:800;}
 .price-loading{text-align:center;padding:20px;color:var(--text2);font-size:.84rem;}
+.price-card-ghost{opacity:.62;border-style:dashed;cursor:default;background:linear-gradient(180deg,#fff,#f7fafc);}
+.price-card-ghost:hover{border-color:var(--border);transform:none;}
+.price-ghost-line{height:9px;border-radius:999px;background:#e6ebf1;margin:6px 0;}
+.price-ghost-line.name{width:58%;}
+.price-ghost-line.code{width:34%;height:7px;}
+.price-ghost-line.price{width:72%;height:15px;margin-top:12px;background:#dfe7ef;}
+.price-ghost-line.change{width:48%;}
+
+.mp-import-section{margin-top:6px;margin-bottom:18px;}
+.mp-import-card{background:#fff;border:1px dashed var(--border);border-radius:10px;box-shadow:none;overflow:hidden;}
+.mp-import-card summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:10px 12px;color:var(--text);}
+.mp-import-card summary::-webkit-details-marker{display:none;}
+.mp-import-title{font-size:.86rem;font-weight:900;}
+.mp-import-sub{font-size:.7rem;color:var(--text2);font-weight:700;}
+.mp-import-body{padding:0 12px 12px;color:var(--text2);font-size:.78rem;line-height:1.55;}
+.mp-import-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px;}
+
+.ad-slot{display:none;margin:10px 0 14px;}
+.ad-slot.is-ready{display:block;min-height:64px;border:1px solid var(--border);border-radius:10px;background:#fff;box-shadow:var(--shadow);overflow:hidden;}
+.ad-slot ins{display:block;min-height:64px;}
 .stock-detail-panel{display:none;background:#fff;border:1px solid var(--border);border-radius:12px;
   padding:14px 16px;margin-top:12px;box-shadow:var(--shadow);}
 .stock-detail-panel.show{display:block;}
@@ -459,12 +490,16 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
 @media(max-width:720px){
   html,body{width:100%;overflow-x:hidden;}
   body{font-size:13px;}
-  .header-inner{height:auto;min-height:54px;align-items:flex-start;gap:10px;flex-wrap:wrap;padding:10px 12px;}
-  .logo{width:100%;font-size:1rem;}
-  nav{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
-  nav button{width:100%;padding:8px 6px;font-size:.78rem;}
-  .hdr-right{width:100%;justify-content:space-between;}
-  main{padding:16px 12px;}
+  header{box-shadow:0 1px 10px rgba(0,0,0,.08);}
+  .header-inner{height:52px;min-height:52px;align-items:center;gap:8px;flex-wrap:nowrap;padding:8px 12px;}
+  .logo{width:auto;flex:1;font-size:.98rem;min-width:0;}
+  nav{position:fixed;left:0;right:0;bottom:0;z-index:120;width:100%;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(66px,1fr);gap:4px;padding:6px 6px max(6px,env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--border);box-shadow:0 -4px 18px rgba(0,0,0,.09);overflow-x:auto;}
+  nav button{width:100%;padding:7px 4px;font-size:.68rem;border-radius:8px;white-space:nowrap;}
+  nav button.active{background:#edfff5;color:var(--accent);}
+  .hdr-right{width:auto;justify-content:flex-end;gap:6px;}
+  .user-chip{display:none;}
+  .logout-btn{padding:6px 8px;font-size:.7rem;}
+  main{padding:16px 12px 86px;}
   .hero{padding:22px 0 18px;margin-bottom:18px;}
   .hero h1{font-size:1.35rem;line-height:1.25;}
   .hero p{font-size:.82rem;}
@@ -536,9 +571,11 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   #page-mypage .section-title .mobile-toggle{display:none;}
   #page-mypage .section.mobile-hub-section.is-hub-collapsed{display:none;}
   .card,.admin-section{padding:14px;border-radius:10px;}
-  .kis-status{display:grid;grid-template-columns:auto 1fr;align-items:start;padding:12px;}
-  .kis-status > div:last-child{grid-column:1 / -1;margin-left:0;}
-  .kis-status .btn{width:100%;}
+  .kis-status{display:grid;grid-template-columns:1fr auto;align-items:center;padding:10px 12px;gap:8px;margin-bottom:10px;}
+  .kis-status > div:first-child{display:none;}
+  .kis-status p{display:none;}
+  .kis-status > div:last-child{grid-column:auto;margin-left:0;}
+  .kis-status .btn{width:auto;padding:6px 10px;}
   .price-grid{grid-template-columns:1fr;}
   .stock-detail-grid{grid-template-columns:1fr;}
   .stock-detail-head{display:grid;}
@@ -552,7 +589,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .quant-result-metrics{grid-template-columns:repeat(2,minmax(0,1fr));}
   .acct-row{grid-template-columns:1fr;gap:6px;padding:10px 0;}
   .acct-amt,.acct-pct,.acct-rate{text-align:left;}
-  .toast{left:12px;right:12px;bottom:14px;transform:translateY(20px);white-space:normal;text-align:center;}
+  .toast{left:12px;right:12px;bottom:84px;transform:translateY(20px);white-space:normal;text-align:center;}
   .toast.show{transform:translateY(0);}
 
   .tbl-wrap,.sheet-wrap{overflow-x:visible;border:none;box-shadow:none;}
@@ -767,6 +804,10 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       </div>
     </div>
     <div id="auth-msg"></div>
+    <div class="auth-links">
+      <a href="/about.html" target="_blank">서비스 소개</a>
+      <a href="/privacy.html" target="_blank">개인정보처리방침</a>
+    </div>
   </div>
 </div>
 
@@ -967,7 +1008,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     <div style="font-size:2rem;flex-shrink:0">🏦</div>
     <div>
       <h4>한국투자증권 API 연동 완료 ✅</h4>
-      <p><code>python dart_fetcher.py --kis</code> 실행 → <code>my_portfolio.json</code> 생성 → 아래 업로드로 전체 동기화</p>
+      <p><code>python dart_fetcher.py --kis</code> 실행 → <code>my_portfolio.json</code> 생성 → 파일 가져오기로 전체 동기화</p>
     </div>
     <div style="margin-left:auto;flex-shrink:0;">
       <button class="btn btn-outline btn-sm" onclick="fetchAllPrices()">🔄 시세 조회</button>
@@ -1025,6 +1066,8 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     <button type="button" class="mobile-hub-btn" data-hub-group="profit-history" onclick="openMobilePortfolioGroup('profit-history','mp-total-history-chart')"><span>📉</span><b>추이</b></button>
   </div>
 
+  <div class="ad-slot" data-ad-slot-key="portfolio-mobile"></div>
+
   <!-- 현재가 시세판 -->
   <div class="section">
     <div class="section-title">
@@ -1033,7 +1076,18 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <button class="btn btn-outline btn-sm mobile-toggle" onclick="toggleMobileSection('price-detail',this)">숨기기</button>
     </div>
     <div class="price-grid mobile-collapsible" id="price-grid" data-mobile-group="price-detail">
-      <div class="price-loading">🔄 시세 조회 버튼을 눌러주세요</div>
+      <div class="price-card price-card-ghost" aria-hidden="true">
+        <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
+        <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
+      </div>
+      <div class="price-card price-card-ghost" aria-hidden="true">
+        <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
+        <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
+      </div>
+      <div class="price-card price-card-ghost" aria-hidden="true">
+        <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
+        <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
+      </div>
     </div>
     <div class="stock-detail-panel mobile-collapsible" id="stock-detail-panel" data-mobile-group="price-detail"></div>
   </div>
@@ -1222,22 +1276,22 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     </div>
   </div>
 
-  <!-- JSON 업로드 (한줄로 축소) -->
-  <div class="section">
-    <div class="card">
-      <div class="card-header"><div class="card-title">📁 JSON 파일 업로드</div>
-        <div style="display:flex;gap:8px;">
+  <!-- JSON 업로드 (보조 기능) -->
+  <div class="section mp-import-section">
+    <details class="mp-import-card">
+      <summary>
+        <span class="mp-import-title">📁 파일 가져오기</span>
+        <span class="mp-import-sub">JSON/CSV 백업 복원</span>
+      </summary>
+      <div class="mp-import-body">
+        <p><code>my_portfolio.json</code> 또는 CSV 백업을 선택하면 포트폴리오가 동기화됩니다.</p>
+        <input type="file" id="mp-file" accept=".json,.csv" style="display:none" onchange="readMpFile(event)"/>
+        <div class="mp-import-actions">
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('mp-file').click()">📂 파일 선택</button>
           <button class="btn btn-outline btn-sm" onclick="downloadMpTemplate()">⬇ 템플릿</button>
         </div>
       </div>
-      <p style="font-size:.8rem;color:var(--text2);margin-bottom:10px;">
-        <code>dart_fetcher.py --kis</code> 실행 후 생성된 <code>my_portfolio.json</code>을 업로드하면 전체 동기화됩니다.
-      </p>
-      <input type="file" id="mp-file" accept=".json,.csv" style="display:none" onchange="readMpFile(event)"/>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-outline" onclick="document.getElementById('mp-file').click()">📂 파일 선택</button>
-      </div>
-    </div>
+    </details>
   </div>
 </div>
 
@@ -1300,7 +1354,8 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   <div style="max-width:1200px;margin:0 auto;">
     <p>🐋 <strong>Whale Tracker Pro</strong> &nbsp;|&nbsp;
       데이터 출처: <a href="https://dart.fss.or.kr" target="_blank">금융감독원 DART</a> ·
-      <a href="https://www.sec.gov" target="_blank">미 SEC EDGAR</a></p>
+      <a href="https://www.sec.gov" target="_blank">미 SEC EDGAR</a> ·
+      <a href="/privacy.html" target="_blank">개인정보처리방침</a></p>
     <div class="disclaimer">
       ※ 본 서비스의 모든 데이터는 공시 기반의 후행 데이터이며, 투자 권유가 아닙니다.
       투자 결과에 대한 책임은 투자자 본인에게 있습니다.
@@ -1347,6 +1402,8 @@ const ETF_HOLDINGS = {
   '132030':[{name:'금 선물',weight:100}]
 };
 const IS_GITHUB_PAGES = /\.github\.io$/i.test(location.hostname);
+const ADSENSE_CLIENT_ID = '';
+const ADSENSE_SLOTS = {portfolioMobile:''};
 
 // ── Firebase ───────────────────────────────────────────
 let auth=null, db=null, me=null;
@@ -3239,6 +3296,12 @@ function renderBrokerPnlChart(rows=_acctRows){
 
 // ── 현재가 조회 ────────────────────────────────────────
 let _priceBusy=false;
+function pricePlaceholderCards(count=3){
+  return Array.from({length:count},()=>`<div class="price-card price-card-ghost" aria-hidden="true">
+    <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
+    <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
+  </div>`).join('');
+}
 function portfolioAccountCodeCount(){
   return (_acctRows||[]).filter(a=>normalizeStockCode(a.code)).length;
 }
@@ -3282,7 +3345,7 @@ async function fetchAllPrices(options={}){
       addHolding(t.code,t.name,t.qty,t.avgBuy);
     });
   }
-  if(!holdings.length){grid.innerHTML='<div class="price-loading">거래 내역에 종목을 입력하면 현재가가 표시됩니다.</div>';_priceBusy=false;return false;}
+  if(!holdings.length){grid.innerHTML=pricePlaceholderCards(3);_priceBusy=false;return false;}
   grid.innerHTML=holdings.map(h=>`<div class="price-card ${currencyForCode(h.code)==='USD'?'usd-asset':''}" id="pc-${h.code}" onclick="showHoldingDetail('${h.code}')"><div class="price-card-name">${h.name}</div><div class="price-card-code">${h.code}</div><div class="price-card-price" style="color:var(--text2)">조회 중...</div></div>`).join('');
   try{
     const res=await apiFetch('/api/kis-price',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:holdings})});
@@ -4510,12 +4573,39 @@ async function saveDivSheet() {
   await persistMpData(true);
 }
 
+function initAdSlots(){
+  const client=(ADSENSE_CLIENT_ID||'').trim();
+  if(!client)return;
+  const slots={portfolioMobile:(ADSENSE_SLOTS.portfolioMobile||'').trim()};
+  const script=document.createElement('script');
+  script.async=true;
+  script.crossOrigin='anonymous';
+  script.src=`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(client)}`;
+  document.head.appendChild(script);
+  document.querySelectorAll('.ad-slot').forEach(el=>{
+    const key=el.dataset.adSlotKey||'portfolioMobile';
+    const slot=slots[key];
+    if(!slot)return;
+    el.classList.add('is-ready');
+    el.innerHTML=`<ins class="adsbygoogle" style="display:block" data-ad-client="${client}" data-ad-slot="${slot}" data-ad-format="auto" data-full-width-responsive="true"></ins>`;
+  });
+  script.addEventListener('load',()=>{
+    document.querySelectorAll('.adsbygoogle').forEach(()=>{try{(window.adsbygoogle=window.adsbygoogle||[]).push({});}catch(e){}});
+  });
+}
+function registerAppShell(){
+  if(!('serviceWorker' in navigator) || location.protocol!=='https:')return;
+  navigator.serviceWorker.register('/sw.js').catch(e=>console.warn('service worker registration failed',e));
+}
+
 let _tTimer;
 function showToast(msg,type){
   const t=document.getElementById('toast');
   t.textContent=msg;t.className='toast '+(type||'ok')+' show';
   clearTimeout(_tTimer);_tTimer=setTimeout(()=>t.className='toast',3200);
 }
+initAdSlots();
+registerAppShell();
 </script>
 </body>
 </html>
