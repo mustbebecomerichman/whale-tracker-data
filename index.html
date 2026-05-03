@@ -258,6 +258,7 @@ td.name{font-weight:600;color:var(--text);}
 #page-mypage.amounts-hidden #mp-purchase-sub,
 #page-mypage.amounts-hidden .price-card-price,
 #page-mypage.amounts-hidden .price-card-change,
+#page-mypage.amounts-hidden .price-card-pnl,
 #page-mypage.amounts-hidden .acct-amt,
 #page-mypage.amounts-hidden .acct-rate,
 #page-mypage.amounts-hidden .broker-pnl-value{filter:blur(7px);}
@@ -295,18 +296,21 @@ td.name{font-weight:600;color:var(--text);}
 .mobile-section-hub{display:none;}
 
 /* ACCOUNT BREAKDOWN */
-.acct-row{display:grid;grid-template-columns:150px 1fr 110px 65px 68px;
-  align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0f0;}
+.acct-row{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(120px,.9fr) minmax(90px,.7fr);
+  grid-template-areas:"name amount rate" "bar bar pct";align-items:center;gap:6px 10px;padding:10px 0;border-bottom:1px solid #f0f0f0;}
 .acct-row:last-child{border-bottom:none;}
 .acct-row.usd-asset{background:rgba(192,57,43,.045);border-left:3px solid rgba(192,57,43,.24);border-radius:8px;padding-left:8px;}
-@media(max-width:700px){.acct-row{grid-template-columns:110px 1fr 80px 55px;}}
-.acct-name{font-size:.83rem;font-weight:700;white-space:nowrap;}
-.acct-amt{font-size:.83rem;text-align:right;white-space:nowrap;color:var(--text3);}
+@media(max-width:700px){.acct-row{grid-template-columns:1fr auto;grid-template-areas:"name rate" "amount amount" "bar pct";}}
+.acct-name{grid-area:name;font-size:.86rem;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.acct-amt{grid-area:amount;font-size:.96rem;text-align:right;white-space:nowrap;color:var(--text);font-weight:950;}
 .acct-bar-wrap{height:5px;background:var(--bg3);border-radius:4px;overflow:hidden;}
+.acct-row .acct-bar-wrap{grid-area:bar;}
 .acct-bar{height:100%;border-radius:4px;background:var(--accent);transition:width .4s;}
-.acct-pct{font-size:.75rem;color:var(--text2);text-align:right;}
-.acct-rate{font-size:.83rem;font-weight:700;text-align:right;}
+.acct-pct{grid-area:pct;font-size:.75rem;color:var(--text2);text-align:right;}
+.acct-rate{grid-area:rate;font-size:.83rem;font-weight:900;text-align:right;}
 .acct-meta{font-size:.7rem;color:var(--text2);margin-top:2px;font-weight:600;}
+.acct-market-chip{display:inline-flex;align-items:center;justify-content:center;min-width:30px;margin-right:6px;padding:2px 6px;border-radius:999px;background:#eef6ff;color:var(--accent4);font-size:.62rem;font-weight:950;vertical-align:1px;}
+.acct-row.usd-asset .acct-market-chip{background:#edfff5;color:var(--accent);}
 .acct-split-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;}
 .acct-panel{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);}
 .acct-panel-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:.88rem;font-weight:900;color:var(--text);}
@@ -384,6 +388,9 @@ select.sheet-input{cursor:pointer;}
 .price-card-change.up{color:var(--up);}
 .price-card-change.down{color:var(--down);}
 .price-card-change.flat{color:var(--text2);}
+.price-card-pnl{margin-top:3px;font-size:.72rem;font-weight:800;text-align:right;white-space:nowrap;}
+.price-card-pnl.up{color:var(--up);}
+.price-card-pnl.down{color:var(--down);}
 .price-card-supply{margin-top:7px;display:grid;gap:3px;font-size:.68rem;color:var(--text2);}
 .price-card-supply div{display:flex;justify-content:space-between;gap:6px;}
 .price-card-supply strong{font-weight:800;}
@@ -702,7 +709,8 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .price-card-code{grid-column:2;grid-row:2;font-size:.65rem;margin:3px 0 0;color:var(--text2);}
   .price-card-price{grid-column:3;grid-row:1;text-align:right;font-size:.92rem;white-space:nowrap;}
   .price-card-change{grid-column:3;grid-row:2;text-align:right;font-size:.68rem;white-space:nowrap;}
-  .price-card-supply{grid-column:2 / 4;margin-top:5px;font-size:.62rem;gap:2px;}
+  .price-card-pnl{grid-column:3;grid-row:3;margin-top:2px;font-size:.66rem;text-align:right;}
+  .price-card-supply{grid-column:2 / 4;grid-row:4;margin-top:5px;font-size:.62rem;gap:2px;}
   .price-card-ghost::before{background:#dfe7ef;color:transparent;}
   .stock-detail-grid{grid-template-columns:1fr;}
   .stock-detail-head{display:grid;}
@@ -714,8 +722,9 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .quant-result{grid-template-columns:1fr;}
   .quant-result-score{text-align:left;}
   .quant-result-metrics{grid-template-columns:repeat(2,minmax(0,1fr));}
-  .acct-row{grid-template-columns:1fr;gap:6px;padding:10px 0;}
-  .acct-amt,.acct-pct,.acct-rate{text-align:left;}
+  .acct-row{grid-template-columns:1fr auto;gap:5px 8px;padding:10px 0;}
+  .acct-amt{text-align:left;}
+  .acct-pct,.acct-rate{text-align:right;}
   .toast{left:12px;right:12px;bottom:18px;transform:translateY(20px);white-space:normal;text-align:center;}
   .toast.show{transform:translateY(0);}
 
@@ -2882,17 +2891,19 @@ function renderMpSummary(data){
 function accountCurrencyRows(rows,currency='KRW'){
   const grouped={};
   (rows||[]).forEach(a=>{
-    const isUsd=currencyForCode(a.code)==='USD';
+    const region=stockRegionForCode(a.code);
+    if(!region)return;
+    const isUsd=region==='overseas';
     if((currency==='USD')!==isUsd)return;
     const name=[a.brokerage||a.name||'미지정',a.acctType].filter(Boolean).join(' ');
     const ev=displayCurrencyValue(a.price&&a.qty?a.qty*a.price:(a.eval||0),a.code);
     const pur=displayCurrencyValue(a.avgBuy&&a.qty?a.qty*a.avgBuy:(a.purchase||0),a.code);
     if(!ev&&!pur)return;
-    if(!grouped[name])grouped[name]={name,eval:0,purchase:0,count:0,stockCount:0,currency};
+    if(!grouped[name])grouped[name]={name,eval:0,purchase:0,count:0,stockCount:0,currency,region};
     grouped[name].eval+=ev;
     grouped[name].purchase+=pur;
     grouped[name].count+=1;
-    if(normalizeStockCode(a.code))grouped[name].stockCount+=1;
+    grouped[name].stockCount+=1;
   });
   return Object.values(grouped).map(a=>({
     ...a,
@@ -2915,11 +2926,13 @@ function renderAccountPanel(wrapId,totalId,summary,currency){
   wrap.innerHTML=summary.map(a=>{
     if(!a.eval&&!a.purchase)return '';
     const pct=totE>0?(a.eval/totE*100).toFixed(1):0;
+    const pnlCls=a.pnl>0?'up-chip':a.pnl<0?'down-chip':'neutral';
+    const market=currency==='USD'?'USA':'KOR';
     return`<div class="acct-row ${[a.stockCount?'stock-asset':'',currency==='USD'?'usd-asset':''].filter(Boolean).join(' ')}">
-      <div class="acct-name">${a.name}<div class="acct-meta">${a.count}종목 · 매입 ${formatAccountAmount(a.purchase,currency)}</div></div>
-      <div class="acct-amt">${formatAccountAmount(a.eval,currency)}</div>
+      <div class="acct-name"><span class="acct-market-chip">${market}</span>${escapeHtml(a.name)}<div class="acct-meta">${a.count}종목 · 매입 ${formatAccountAmount(a.purchase,currency)}</div></div>
+      <div class="acct-amt">${formatAccountAmount(a.eval,currency)}<div class="acct-meta ${pnlCls}">손익 ${a.pnl>=0?'+':'-'}${formatAccountAmount(Math.abs(a.pnl),currency)}</div></div>
       <div class="acct-bar-wrap"><div class="acct-bar" style="width:${(a.eval/maxE*100).toFixed(1)}%"></div></div>
-      <div class="acct-pct">${pct}%</div>
+      <div class="acct-pct">비중 ${pct}%</div>
       <div class="acct-rate ${a.rate>=0?'up-chip':'down-chip'}">${a.rate>=0?'+':''}${(a.rate||0).toFixed(1)}%</div>
     </div>`;
   }).join('');
@@ -2977,7 +2990,7 @@ function looksLikeStockCodeText(name,code=''){
   return normalized==='#N/A'
     || (!!clean && normalized===clean)
     || /^종목\s*[A-Z0-9.]+$/i.test(s)
-    || /^[A-Z]{1,8}$/.test(normalized) && !!clean && isOverseasCode(clean);
+    || (stockRegionForCode(normalized)==='overseas' && !!clean && isOverseasCode(clean));
 }
 function resolveStockName(code,current='',apiName=''){
   const clean=normalizeStockCode(code);
@@ -3458,10 +3471,10 @@ function pricePlaceholderCards(count=3){
   </div>`).join('');
 }
 function portfolioAccountCodeCount(){
-  return (_acctRows||[]).filter(a=>normalizeStockCode(a.code)).length;
+  return (_acctRows||[]).filter(a=>stockRegionForCode(a.code)).length;
 }
 function portfolioAnyCodeCount(){
-  const txCount=Object.values(mpData?.transactions||{}).flat().filter(t=>normalizeStockCode(t.code)).length;
+  const txCount=Object.values(mpData?.transactions||{}).flat().filter(t=>stockRegionForCode(t.code)).length;
   return portfolioAccountCodeCount()+txCount;
 }
 function schedulePortfolioAutoQuote(force=false){
@@ -3489,9 +3502,10 @@ async function fetchAllPrices(options={}){
   const holdings=[];const seen=new Set();
   const addHolding=(code,name,qty=0,avgBuy=0)=>{
     const clean=normalizeStockCode(code);
-    if(clean&&!seen.has(clean)&&clean!=='#N/A'){
+    const region=stockRegionForCode(clean);
+    if(region&&!seen.has(clean)&&clean!=='#N/A'){
       seen.add(clean);
-      holdings.push({code:clean,name:resolveStockName(clean,name||''),market:marketForCode(clean),qty:qty||0,avgBuy:avgBuy||0});
+      holdings.push({code:clean,name:resolveStockName(clean,name||''),market:marketForCode(clean),region,qty:qty||0,avgBuy:avgBuy||0});
     }
   };
   (_acctRows||[]).forEach(a=>addHolding(a.code,a.stockName,a.qty,a.avgBuy));
@@ -3501,7 +3515,7 @@ async function fetchAllPrices(options={}){
     });
   }
   if(!holdings.length){grid.innerHTML=pricePlaceholderCards(3);_priceBusy=false;return false;}
-  grid.innerHTML=holdings.map(h=>`<div class="price-card stock-asset ${currencyForCode(h.code)==='USD'?'usd-asset':''}" id="pc-${escapeAttr(h.code)}" onclick="showHoldingDetail('${escapeJsAttr(h.code)}')"><div class="price-card-name">${escapeHtml(h.name)}</div><div class="price-card-code">${escapeHtml(h.code)}</div><div class="price-card-price" style="color:var(--text2)">조회 중...</div></div>`).join('');
+  grid.innerHTML=holdings.map(h=>`<div class="price-card stock-asset ${h.region==='overseas'?'usd-asset':'kor-asset'}" id="pc-${escapeAttr(h.code)}" onclick="showHoldingDetail('${escapeJsAttr(h.code)}')"><div class="price-card-name">${escapeHtml(h.name)}</div><div class="price-card-code">${h.region==='overseas'?'USA':'KOR'} · ${escapeHtml(h.code)}</div><div class="price-card-price" style="color:var(--text2)">조회 중...</div></div>`).join('');
   try{
     const res=await apiFetch('/api/kis-price',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:holdings})});
     if(!res.ok)throw new Error('HTTP '+res.status);
@@ -3516,10 +3530,10 @@ async function fetchAllPrices(options={}){
       const pnl=h.qty>0?Math.round((p.price-h.avgBuy)*h.qty):null;
       const displayName=resolveStockName(h.code,h.name,p.name);
       card.innerHTML=`<div class="price-card-name">${escapeHtml(displayName)}</div>
-        <div class="price-card-code">${escapeHtml(h.code)}${h.qty?' · '+escapeHtml(h.qty)+'주':''}</div>
+        <div class="price-card-code">${h.region==='overseas'?'USA':'KOR'} · ${escapeHtml(h.code)}${h.qty?' · '+escapeHtml(h.qty)+'주':''}</div>
         <div class="price-card-price">${formatPriceByQuote(p,h.code)}</div>
         <div class="price-card-change ${cls}">${sym} ${formatMoneyByCode(Math.abs(p.change),h.code)} (${p.changeRate>=0?'+':''}${p.changeRate.toFixed(2)}%)</div>
-        ${pnl!==null?`<div style="margin-top:3px;font-size:.72rem;font-weight:700;color:${pnl>=0?'var(--up)':'var(--down)'}">손익 ${pnl>=0?'+':'-'}${formatMoneyByCode(Math.abs(pnl),h.code)}</div>`:''}
+        ${pnl!==null?`<div class="price-card-pnl ${pnl>=0?'up':'down'}">손익 ${pnl>=0?'+':'-'}${formatMoneyByCode(Math.abs(pnl),h.code)}</div>`:''}
         ${supplyMiniHtml(supplies[h.code],h.code)}`;
     });
     const now=new Date();
@@ -4028,11 +4042,22 @@ async function loadAutoFxRate(force=false){
   }
 }
 function normalizeStockCode(code){
-  return (code||'').trim().toUpperCase();
+  let clean=(code||'').trim().toUpperCase().replace(/\s+/g,'').replace(/-/g,'.');
+  if(/^\d{6}\.(KS|KQ)$/.test(clean))clean=clean.slice(0,6);
+  return clean;
+}
+function stockRegionForCode(code){
+  const clean=normalizeStockCode(code);
+  if(!clean||clean==='#N/A')return '';
+  if(/^\d{6}$/.test(clean))return 'domestic';
+  if(OVERSEAS_STOCK_DB[clean] || OVERSEAS_CODES.has(clean) || /^[A-Z][A-Z0-9.]{0,9}$/.test(clean))return 'overseas';
+  return '';
+}
+function isDomesticCode(code){
+  return stockRegionForCode(code)==='domestic';
 }
 function isOverseasCode(code){
-  const clean=normalizeStockCode(code);
-  return !!OVERSEAS_STOCK_DB[clean] || OVERSEAS_CODES.has(clean) || /^[A-Z][A-Z.]{0,7}$/.test(clean);
+  return stockRegionForCode(code)==='overseas';
 }
 function marketForCode(code){
   return isOverseasCode(code)?'NAS':'J';
@@ -4074,8 +4099,7 @@ function fillInputValue(row,field,value,overwrite=false){
   if(input && (overwrite || !input.value)) input.value=value;
 }
 function shouldFetchQuote(code){
-  const clean=normalizeStockCode(code);
-  return /^\d{6}$/.test(clean) || /^[A-Z.]{1,8}$/.test(clean);
+  return !!stockRegionForCode(code);
 }
 function markQuotePending(codeInput){
   const row=codeInput?.closest('tr');
@@ -4409,9 +4433,10 @@ function drawAcctRows(rows) {
     const rc   = rate > 0 ? 'up' : rate < 0 ? 'down' : 'money-neutral';
     const valueCls = pnl > 0 ? 'up' : pnl < 0 ? 'down' : 'money-neutral';
     const codeClean = normalizeStockCode(a.code);
+    const region = stockRegionForCode(codeClean);
     const bOpts = BROKERS.map(b => `<option${b===a.brokerage?' selected':''}>${escapeHtml(b)}</option>`).join('');
     const aOpts = ACCT_TYPES.map(t => `<option${t===a.acctType?' selected':''}>${escapeHtml(t)}</option>`).join('');
-    return `<tr class="${[codeClean?'stock-asset':'',currencyForCode(a.code)==='USD'?'usd-asset':''].filter(Boolean).join(' ')}" data-aidx="${i}" onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))showHoldingDetail('${escapeJsAttr(a.code||'')}')">
+    return `<tr class="${[region?'stock-asset':'',region==='overseas'?'usd-asset':''].filter(Boolean).join(' ')}" data-aidx="${i}" onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))showHoldingDetail('${escapeJsAttr(a.code||'')}')">
       <td class="row-num" title="Delete row">${rowDeleteButton(`deleteAcctRow(${i})`)}</td>
       <td><select class="sheet-input" data-field="brokerage" onchange="acctCellChange(${i},this)" style="min-width:100px"><option value="">선택</option>${bOpts}</select></td>
       <td><select class="sheet-input" data-field="acctType" onchange="acctCellChange(${i},this)" style="min-width:72px"><option value="">선택</option>${aOpts}</select></td>
@@ -4548,7 +4573,7 @@ async function saveAcctSheet() {
 async function fetchAndUpdateAcctPrices(options={}) {
   const silent=!!options.silent;
   const holdings = _acctRows
-    .filter(a => a.code)
+    .filter(a => stockRegionForCode(a.code))
     .map(a => ({code:normalizeStockCode(a.code), name:resolveStockName(a.code,a.stockName||''), market:marketForCode(a.code), qty:a.qty||0, avgBuy:a.avgBuy||0}));
   if (!holdings.length) { if(!silent)showToast("종목 코드를 먼저 입력하세요", "err"); return false; }
   if(!silent)showToast("현재가 조회 중...", "ok");
