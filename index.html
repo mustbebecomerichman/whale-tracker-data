@@ -244,6 +244,8 @@ td.name{font-weight:600;color:var(--text);}
 .myasset-total{text-align:center;padding:4px 0 14px;}
 .myasset-total-label{font-size:.76rem;color:var(--text2);font-weight:800;margin-bottom:5px;}
 .myasset-total #mp-total{font-size:2.4rem;letter-spacing:0;line-height:1.05;}
+.myasset-total #mp-total .split-money{flex-direction:row;align-items:baseline;justify-content:center;gap:10px;flex-wrap:wrap;}
+.myasset-total #mp-total .split-money .usd{font-size:.52em;}
 .myasset-profit-line{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;color:var(--text2);font-size:.9rem;margin-top:10px;}
 .myasset-profit-line .mp-val{font-size:.95rem;line-height:1.2;}
 .myasset-submetrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:12px;}
@@ -265,6 +267,7 @@ td.name{font-weight:600;color:var(--text);}
 #page-mypage.stock-only .price-card:not(.stock-asset):not(.price-card-ghost),
 #page-mypage.stock-only #acct-body tr:not(.stock-asset),
 #page-mypage.stock-only .acct-row:not(.stock-asset){display:none!important;}
+#page-mypage.asset-tab-all .portfolio-product-section{display:none!important;}
 #page-mypage.asset-tab-domestic .price-card.usd-asset,
 #page-mypage.asset-tab-domestic #acct-body tr.usd-asset,
 #page-mypage.asset-tab-domestic .acct-row.usd-asset{display:none!important;}
@@ -568,7 +571,8 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .grid-2,.grid-3{grid-template-columns:1fr;}
   #page-mypage{margin:0 -12px;padding:0 12px 40px;background:var(--bg);}
   #page-mypage .hero{display:block;padding:18px 0 12px;margin-bottom:6px;border-bottom:none;}
-  #page-mypage .hero h1{font-size:1.45rem;margin-bottom:4px;}
+  #page-mypage .hero h1{font-size:1.45rem;margin-bottom:4px;display:flex;align-items:baseline;gap:6px;}
+  #page-mypage .hero h1 .myasset-date-badge{font-size:.62rem;}
   #page-mypage .hero p{font-size:.76rem;line-height:1.35;}
   .myasset-mobile-header{display:none;}
   .myasset-back,.myasset-gear{
@@ -578,6 +582,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   }
   .myasset-title{flex:1;font-size:1.45rem;font-weight:950;letter-spacing:0;}
   .myasset-title span{font-size:.82rem;color:#e67e22;font-style:italic;margin-left:3px;}
+  .myasset-date-badge{font-size:.65rem;font-weight:700;color:var(--text2);font-style:normal;margin-left:6px;vertical-align:middle;letter-spacing:0;}
   .myasset-tabs{
     display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
     margin:0 -12px 18px;border-bottom:1px solid var(--border);
@@ -611,6 +616,8 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .myasset-total{padding:0 0 18px;}
   .myasset-total-label{display:none;}
   .myasset-total #mp-total{font-size:2.65rem;font-weight:950;}
+  .myasset-total #mp-total .split-money{flex-direction:row;align-items:baseline;justify-content:center;gap:8px;flex-wrap:wrap;}
+  .myasset-total #mp-total .split-money .usd{font-size:.48em;}
   .myasset-profit-line{font-size:1rem;margin-top:12px;}
   .myasset-submetrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
   .myasset-submetric{background:#fff;padding:9px 10px;box-shadow:var(--shadow);}
@@ -687,6 +694,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .kis-status .btn{width:auto;padding:6px 10px;}
   #page-mypage.product-view-products .portfolio-account-section{display:none;}
   #page-mypage.product-view-accounts .portfolio-product-section{display:none;}
+  #page-mypage.asset-tab-all .portfolio-product-section{display:none!important;}
   #page-mypage.asset-tab-domestic .price-card.usd-asset,
   #page-mypage.asset-tab-domestic #acct-body tr.usd-asset{display:none!important;}
   #page-mypage.asset-tab-overseas .price-card:not(.usd-asset):not(.price-card-ghost),
@@ -1147,11 +1155,11 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
 <div class="page active product-view-products asset-tab-all stock-only" id="page-mypage">
   <div class="myasset-mobile-header" aria-label="MY asset header">
     <button type="button" class="myasset-back" onclick="showPage('nps')" aria-label="뒤로">‹</button>
-    <div class="myasset-title">MY자산</div>
+    <div class="myasset-title">MY자산<span class="myasset-date-badge" id="mp-title-date-m"></span></div>
     <button type="button" class="myasset-gear" onclick="setPortfolioProductView('accounts',this)" aria-label="설정">⚙</button>
   </div>
   <div class="hero">
-    <h1>MY<span>자산</span></h1>
+    <h1>MY<span>자산</span><span class="myasset-date-badge" id="mp-title-date"></span></h1>
     <p>개인 투자 현황 · 연간 실현 손익 · 계좌별 성과</p>
   </div>
   <div class="myasset-tabs" role="tablist" aria-label="자산 분류">
@@ -1176,8 +1184,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       </div>
       <div id="mp-stock-stats" style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap;justify-content:center;"></div>
     </div>
-    <div class="myasset-submetrics">
-      <div class="myasset-submetric"><span>기준일</span><strong id="mp-updated-date">-</strong></div>
+    <div class="myasset-submetrics" style="grid-template-columns:repeat(2,minmax(0,1fr))">
       <div class="myasset-submetric"><span>매입금액</span><strong id="mp-purchase-sub">-</strong></div>
       <div class="myasset-submetric"><span>실현손익</span><strong class="mp-val" id="mp-realized">-</strong><small id="mp-realized-sub">거래 내역 기준</small></div>
     </div>
@@ -2280,6 +2287,9 @@ function readWhaleDataCache(){
   try{
     const cached=JSON.parse(localStorage.getItem(WHALE_DATA_CACHE_KEY)||'null');
     if(!cached?.savedAt)return null;
+    const today=new Date().toISOString().slice(0,10);
+    const savedDay=new Date(cached.savedAt).toISOString().slice(0,10);
+    if(today!==savedDay)return null;
     if(Date.now()-cached.savedAt>WHALE_DATA_CACHE_TTL)return null;
     return cached;
   }catch(e){
@@ -2876,7 +2886,11 @@ function renderMpSummary(data){
   const convertedPnl=parts.KRW.pnl+(parts.USD.pnl*_fxTtsRate);
   const totalEl=document.getElementById('mp-total');
   if(totalEl)totalEl.innerHTML=(convertedTotal||hasUsd)?splitMoneyHtml(convertedTotal,parts.USD.eval,{forceUsd:hasUsd}):W(s.total);
-  document.getElementById('mp-updated-date').textContent=data.updatedAt?'기준일: '+data.updatedAt:'';
+  const _dateText=data.updatedAt?data.updatedAt:'';
+  const _titleDateEl=document.getElementById('mp-title-date');
+  const _titleDateMEl=document.getElementById('mp-title-date-m');
+  if(_titleDateEl)_titleDateEl.textContent=_dateText?'('+_dateText+')':'';
+  if(_titleDateMEl)_titleDateMEl.textContent=_dateText?'('+_dateText+')':'';
   const rEl=document.getElementById('mp-rate');
   if(s.returnRate!==undefined){rEl.textContent=sgn(s.returnRate)+s.returnRate.toFixed(1)+'%';rEl.className='mp-val '+(s.returnRate>=0?'up':'down');}
   const purEl=document.getElementById('mp-purchase-sub');
