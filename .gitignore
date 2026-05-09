@@ -3,6 +3,8 @@ secrets_local.py
 serviceAccountKey.json
 *.env
 .env*
+# 템플릿 파일은 예외
+!.env.example
 my_portfolio.json
 whale_data.json
 global_whales.json
