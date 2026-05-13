@@ -243,9 +243,9 @@ td.name{font-weight:600;color:var(--text);}
 .myasset-pill.primary{background:#edfff5;color:#16794b;}
 .myasset-total{text-align:center;padding:4px 0 14px;}
 .myasset-total-label{font-size:.76rem;color:var(--text2);font-weight:800;margin-bottom:5px;}
-.myasset-total #mp-total{font-size:2.4rem;letter-spacing:0;line-height:1.05;}
-.myasset-total #mp-total .split-money{flex-direction:row;align-items:baseline;justify-content:center;gap:10px;flex-wrap:wrap;}
-.myasset-total #mp-total .split-money .usd{font-size:.52em;}
+.myasset-total #mp-total{font-size:clamp(1.4rem,4.5vw,2.4rem);letter-spacing:-0.01em;line-height:1.05;}
+.myasset-total #mp-total .split-money{flex-direction:row;align-items:baseline;justify-content:center;gap:10px;flex-wrap:nowrap;white-space:nowrap;}
+.myasset-total #mp-total .split-money .usd{font-size:.5em;}
 .myasset-profit-line{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;color:var(--text2);font-size:.9rem;margin-top:10px;}
 .myasset-profit-line .mp-val{font-size:.95rem;line-height:1.2;}
 .myasset-submetrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:12px;}
@@ -571,8 +571,8 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .grid-2,.grid-3{grid-template-columns:1fr;}
   #page-mypage{margin:0 -12px;padding:0 12px 40px;background:var(--bg);}
   #page-mypage .hero{display:block;padding:18px 0 12px;margin-bottom:6px;border-bottom:none;}
-  #page-mypage .hero h1{font-size:1.45rem;margin-bottom:4px;display:flex;align-items:baseline;gap:6px;}
-  #page-mypage .hero h1 .myasset-date-badge{font-size:.62rem;}
+  #page-mypage .hero h1{font-size:1.45rem;margin-bottom:4px;display:flex;align-items:baseline;justify-content:center;gap:8px;flex-wrap:wrap;}
+  #page-mypage .hero h1 .myasset-date-badge{font-size:.78rem;}
   #page-mypage .hero p{font-size:.76rem;line-height:1.35;}
   .myasset-mobile-header{display:none;}
   .myasset-back,.myasset-gear{
@@ -582,7 +582,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   }
   .myasset-title{flex:1;font-size:1.45rem;font-weight:950;letter-spacing:0;}
   .myasset-title span{font-size:.82rem;color:#e67e22;font-style:italic;margin-left:3px;}
-  .myasset-date-badge{font-size:.65rem;font-weight:700;color:var(--text2);font-style:normal;margin-left:6px;vertical-align:middle;letter-spacing:0;}
+  .myasset-date-badge{font-size:.78rem;font-weight:700;color:var(--text);opacity:.7;font-style:normal;margin-left:8px;vertical-align:middle;letter-spacing:0;}
   .myasset-tabs{
     display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
     margin:0 -12px 18px;border-bottom:1px solid var(--border);
@@ -615,9 +615,9 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .myasset-pill.primary{background:#edfff5;border-color:#abe5c3;color:#16794b;}
   .myasset-total{padding:0 0 18px;}
   .myasset-total-label{display:none;}
-  .myasset-total #mp-total{font-size:2.65rem;font-weight:950;}
-  .myasset-total #mp-total .split-money{flex-direction:row;align-items:baseline;justify-content:center;gap:8px;flex-wrap:wrap;}
-  .myasset-total #mp-total .split-money .usd{font-size:.48em;}
+  .myasset-total #mp-total{font-size:clamp(1.5rem,5.5vw,2.2rem);font-weight:950;}
+  .myasset-total #mp-total .split-money{flex-direction:row;align-items:baseline;justify-content:center;gap:8px;flex-wrap:nowrap;white-space:nowrap;}
+  .myasset-total #mp-total .split-money .usd{font-size:.5em;}
   .myasset-profit-line{font-size:1rem;margin-top:12px;}
   .myasset-submetrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
   .myasset-submetric{background:#fff;padding:9px 10px;box-shadow:var(--shadow);}
