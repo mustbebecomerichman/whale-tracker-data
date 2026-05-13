@@ -803,13 +803,14 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   #acct-body td:nth-child(3)::before{content:"계좌유형";}
   #acct-body td:nth-child(4)::before{content:"종목코드";}
   #acct-body td:nth-child(5)::before{content:"종목명";}
-  #acct-body td:nth-child(6)::before{content:"수량";}
-  #acct-body td:nth-child(7)::before{content:"평균매입가";}
-  #acct-body td:nth-child(8)::before{content:"현재가";}
-  #acct-body td:nth-child(9)::before{content:"평가금액";}
-  #acct-body td:nth-child(10)::before{content:"매입금액";}
-  #acct-body td:nth-child(11)::before{content:"수익률";}
-  #acct-body td:nth-child(12)::before{content:"평가손익";}
+  #acct-body td:nth-child(6)::before{content:"Wilder";}
+  #acct-body td:nth-child(7)::before{content:"수량";}
+  #acct-body td:nth-child(8)::before{content:"평균매입가";}
+  #acct-body td:nth-child(9)::before{content:"현재가";}
+  #acct-body td:nth-child(10)::before{content:"평가금액";}
+  #acct-body td:nth-child(11)::before{content:"매입금액";}
+  #acct-body td:nth-child(12)::before{content:"수익률";}
+  #acct-body td:nth-child(13)::before{content:"평가손익";}
 
   #sheet-body td:nth-child(2)::before{content:"날짜";}
   #sheet-body td:nth-child(3)::before{content:"증권사";}
@@ -991,6 +992,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     <div class="logo" onclick="showPage('mypage')">🐋 <span>Whale</span>Tracker Pro</div>
     <nav id="main-nav">
       <button class="active" onclick="showPage('mypage')">MY자산</button>
+      <button onclick="showPage('wilder')">🧮 Wilder BUY</button>
       <button onclick="showPage('nps')">퀀트 스크리너</button>
       <button onclick="showPage('national')">국민연금</button>
       <button onclick="showPage('alert')">대량보유</button>
@@ -1267,6 +1269,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <thead><tr>
           <th style="width:34px">#</th>
           <th>증권사</th><th>계좌유형</th><th>종목코드</th><th>종목명</th>
+          <th style="width:90px">Wilder</th>
           <th>수량</th><th>평균매입가</th>
           <th class="calc-col">현재가</th>
           <th class="calc-col">평가금액</th>
@@ -1276,7 +1279,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         </tr></thead>
         <tbody id="acct-body"></tbody>
         <tfoot><tr>
-          <td colspan="8" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
+          <td colspan="9" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
           <td id="af-eval" style="padding:8px 10px;font-weight:700;"></td>
           <td id="af-purchase" style="padding:8px 10px;font-weight:700;"></td>
           <td id="af-rate" style="padding:8px 10px;font-weight:700;"></td>
@@ -1449,6 +1452,40 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         </div>
       </div>
     </details>
+  </div>
+</div>
+
+<!-- ── Wilder BUY PAGE ── -->
+<div class="page" id="page-wilder">
+  <div class="hero">
+    <h1>🧮 <span>Wilder BUY</span> 종목 리스트</h1>
+    <p>웰스 와일더의 RSI · RTS · ASI 3종 알고리즘이 매수 신호를 발생시킨 종목만 모았습니다.</p>
+  </div>
+  <div class="tab-row" id="wilder-tabs">
+    <div class="tab active" data-wilder-tab="my" onclick="switchWilderUniverse('my',this)">📂 보유 종목</div>
+    <div class="tab" data-wilder-tab="kospi" onclick="switchWilderUniverse('kospi',this)">🇰🇷 코스피 대형</div>
+    <div class="tab" data-wilder-tab="dow" onclick="switchWilderUniverse('dow',this)">🇺🇸 다우 30</div>
+    <div class="tab" data-wilder-tab="nasdaq" onclick="switchWilderUniverse('nasdaq',this)">💻 나스닥 핵심</div>
+  </div>
+  <div class="hero-stats" style="margin:14px 0 18px;">
+    <div class="hero-stat"><div class="num" id="wilder-progress">0 / 0</div><div class="lbl">분석 진행</div></div>
+    <div class="hero-stat"><div class="num" id="wilder-buy-count">0개</div><div class="lbl">BUY 시그널</div></div>
+    <div class="hero-stat"><div class="num" id="wilder-watch-count">0개</div><div class="lbl">관찰 대상</div></div>
+  </div>
+  <div class="section">
+    <div class="section-title">
+      <div class="section-title-left">🟢 매수 후보 (BUY/REDUCE는 신중히)</div>
+      <button class="btn btn-outline btn-sm" onclick="rerunWilderUniverse()">🔄 재계산</button>
+    </div>
+    <div id="wilder-buy-list" class="grid-3"></div>
+  </div>
+  <div class="section">
+    <div class="section-title"><div class="section-title-left">👀 관찰 대상 (WATCH/HOLD)</div></div>
+    <div id="wilder-watch-list" class="grid-3"></div>
+  </div>
+  <div class="section">
+    <div class="section-title"><div class="section-title-left">🔴 매도/청산 시그널 (SELL/EXIT)</div></div>
+    <div id="wilder-sell-list" class="grid-3"></div>
   </div>
 </div>
 
@@ -3900,19 +3937,62 @@ function renderWilderSection(result) {
   const { final, reasons = [], rsi, rts, asi, barsCount } = result;
   const rsiVal = rsi?.rsi != null ? rsi.rsi.toFixed(1) : '-';
   const asiVal = asi?.asi != null ? asi.asi.toFixed(1) : '-';
-  const sarTxt = asi?.sarExit?.triggered ? `발동 (-${asi.sarExit.drop.toFixed(1)}pt)` : `정상 (피크 ${asi?.sarExit?.peak?.toFixed(1) ?? '-'} / 현재 -${(asi?.sarExit?.drop||0).toFixed(1)}pt)`;
+  const sarTxt = asi?.sarExit?.triggered ? `🚨 발동 (피크 대비 -${asi.sarExit.drop.toFixed(1)}pt)` : `정상 (피크 ${asi?.sarExit?.peak?.toFixed(1) ?? '-'} / 현재 -${(asi?.sarExit?.drop||0).toFixed(1)}pt)`;
+
+  // RSI 상태 평가
+  let rsiState = '';
+  if (rsi?.rsi != null) {
+    if (rsi.rsi >= 70) rsiState = `<span class="down-chip">과매수권</span>`;
+    else if (rsi.rsi <= 30) rsiState = `<span class="up-chip">과매도권</span>`;
+    else rsiState = `<span class="neutral">중립권</span>`;
+  }
+
+  // 최종 시그널에 따른 액션 설명
+  const actionGuide = {
+    BUY:    { color:'var(--up)',   text:'매수 진입 신호. RSI 실패스윙 또는 ASI HSP 돌파 또는 RTS HBOP 상향 돌파가 감지되었습니다.' },
+    SELL:   { color:'var(--down)', text:'매도/공매도 신호. RSI 70 돌파 후 실패스윙 또는 RTS LBOP 하향 이탈이 감지되었습니다.' },
+    EXIT:   { color:'var(--down)', text:'⚠ 트레일링 SAR 발동. ASI가 진입 이후 최고치 대비 60pt 이상 하락 → 추세 종료로 판단, 즉시 청산 권고.' },
+    REDUCE: { color:'#e67e22',     text:'베어리시 다이버전스. 가격은 신고가지만 RSI는 하향 → 상승 모멘텀 소진, 비중 축소 권고.' },
+    WATCH:  { color:'var(--text2)',text:'중립 관망. 과매수/과매도 구간이지만 추가 트리거 필요. 포지션 변경 없이 모니터링.' },
+    HOLD:   { color:'var(--text2)',text:'특별한 시그널 없음. 기존 포지션 유지.' },
+  }[final] || { color:'var(--text2)', text:'-' };
+
   return `<div style="font-size:.82rem;font-weight:900;margin:14px 0 7px;">🧮 Wilder 퀀트 신호 <span class="badge">${barsCount||0}봉</span></div>
-    <div class="stock-detail-grid">
-      <div class="stock-detail-metric"><div class="k">종합 시그널</div><div class="v">${wilderSignalChip(final)}</div></div>
-      <div class="stock-detail-metric"><div class="k">RSI(14)</div><div class="v">${rsiVal}</div></div>
-      <div class="stock-detail-metric"><div class="k">ASI 누적</div><div class="v">${asiVal}</div></div>
-      <div class="stock-detail-metric"><div class="k">RTS 모드</div><div class="v">${escapeHtml(rts?.mode||'-')}</div></div>
-      <div class="stock-detail-metric"><div class="k">HBOP / LBOP</div><div class="v" style="font-size:.78rem;">${rts?.hbop?.toFixed(2)||'-'} / ${rts?.lbop?.toFixed(2)||'-'}</div></div>
-      <div class="stock-detail-metric"><div class="k">SAR 추적</div><div class="v" style="font-size:.72rem;">${escapeHtml(sarTxt)}</div></div>
+
+    <!-- 최종 시그널 강조 박스 -->
+    <div style="background:#fff;border:1px solid var(--border);border-left:5px solid ${actionGuide.color};border-radius:10px;padding:11px 13px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+        <div style="font-size:.74rem;color:var(--text2);font-weight:700;">종합 시그널</div>
+        ${wilderSignalChip(final)}
+      </div>
+      <div style="font-size:.78rem;color:var(--text);line-height:1.45;">${escapeHtml(actionGuide.text)}</div>
     </div>
-    <div class="stock-detail-list" style="margin-top:8px;">
-      ${reasons.map(r => `<div class="stock-detail-list-row"><span>${escapeHtml(r.split(':')[0])}</span><strong style="font-size:.78rem;font-weight:700;">${escapeHtml(r.split(':').slice(1).join(':').trim())}</strong></div>`).join('')}
-    </div>`;
+
+    <!-- 3개 모듈 지표 그리드 -->
+    <div class="stock-detail-grid">
+      <div class="stock-detail-metric"><div class="k">📐 RSI(14)</div><div class="v" style="display:flex;align-items:center;gap:6px;">${rsiVal} ${rsiState}</div></div>
+      <div class="stock-detail-metric"><div class="k">💹 ASI 누적</div><div class="v">${asiVal}</div></div>
+      <div class="stock-detail-metric"><div class="k">🔄 RTS 모드</div><div class="v">${rts?.mode==='TREND'?'<span class="up-chip">추세</span>':'<span class="neutral">박스권</span>'}</div></div>
+      <div class="stock-detail-metric"><div class="k">⛔ HBOP / LBOP</div><div class="v" style="font-size:.78rem;">${rts?.hbop?.toFixed(2)||'-'} / ${rts?.lbop?.toFixed(2)||'-'}</div></div>
+      <div class="stock-detail-metric"><div class="k">🛡 SAR 추적</div><div class="v" style="font-size:.72rem;">${escapeHtml(sarTxt)}</div></div>
+      <div class="stock-detail-metric"><div class="k">📉 트레일 손절</div><div class="v" style="font-size:.78rem;">${rts?.trailStop?.toFixed(2)||'-'}</div></div>
+    </div>
+
+    <!-- 각 모듈별 진단 사유 -->
+    <div style="font-size:.78rem;font-weight:900;margin:14px 0 6px;">모듈별 진단</div>
+    <div class="stock-detail-list">
+      ${reasons.map(r => `<div class="stock-detail-list-row"><span style="min-width:50px;">${escapeHtml(r.split(':')[0])}</span><strong style="font-size:.74rem;font-weight:600;text-align:right;">${escapeHtml(r.split(':').slice(1).join(':').trim())}</strong></div>`).join('')}
+    </div>
+
+    <!-- 매뉴얼 요약 (접힘) -->
+    <details style="margin-top:14px;background:var(--bg3);border-radius:10px;padding:10px 12px;">
+      <summary style="font-size:.78rem;font-weight:800;cursor:pointer;color:var(--text2);">📖 Wilder 알고리즘 해설</summary>
+      <div style="margin-top:10px;font-size:.72rem;line-height:1.55;color:var(--text);">
+        <p><b>RSI (상대강도지수)</b> — 14일간 상승폭/하락폭 평균 비율을 Wilder smoothing으로 누적. 70 초과는 과매수, 30 미만은 과매도. <b>실패 스윙</b>(70 돌파 후 직전 저점 이탈 = SELL, 30 미만 후 직전 고점 돌파 = BUY)이 가장 강력한 반전 신호.</p>
+        <p><b>RTS (반응 추세 시스템)</b> — 전일 가격 범위로 HBOP/LBOP를 계산. 박스권 모드는 B/O/S 사이클로 단기 스윙, HBOP 돌파 시 추세 모드로 전환하고 과거 2일 저가 이탈 시까지 추세 추종.</p>
+        <p><b>ASI (스윙 인덱스 누적)</b> — 일일 SI(시가/고가/저가/종가 가중치)를 누적해 실제 매수 세력 자금 유입을 추적. HSP 상향 돌파 = BUY, LSP 하향 이탈 = SELL. 매수 후 피크 대비 60pt 하락 시 트레일링 SAR 청산.</p>
+      </div>
+    </details>`;
 }
 
 // MY자산 행 옆에 시그널 배지를 비동기로 채워준다
@@ -3926,12 +4006,30 @@ async function refreshWilderBadgesForHoldings() {
     const result = await fetchWilderForCode(code);
     const targets = document.querySelectorAll(`[data-wilder-badge="${CSS.escape(code)}"]`);
     if (result && !result.error) {
-      targets.forEach(el => { el.innerHTML = wilderSignalChip(result.final); el.title = (result.reasons || []).join('\n'); });
+      targets.forEach(el => {
+        el.innerHTML = wilderSignalChip(result.final);
+        el.title = '클릭하여 RSI / RTS / ASI 상세 보기\n\n' + (result.reasons || []).join('\n');
+      });
     } else {
-      targets.forEach(el => { el.innerHTML = ''; });
+      targets.forEach(el => {
+        el.innerHTML = '<span style="color:var(--text2);font-size:.65rem;">-</span>';
+        el.title = result?.error || '데이터 없음';
+      });
     }
     await new Promise(r => setTimeout(r, 80));
   }
+}
+
+// 배지 클릭 시 종목 상세 + Wilder 섹션 자동 스크롤
+async function openWilderDetail(code) {
+  const clean = normalizeStockCode(code);
+  if (!clean) return;
+  await showHoldingDetail(clean);
+  // 상세패널 렌더 직후 Wilder 섹션으로 스크롤
+  setTimeout(() => {
+    const w = document.getElementById('wilder-section-' + clean);
+    if (w) w.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 350);
 }
 
 async function showHoldingDetail(code){
@@ -4127,12 +4225,196 @@ function showPage(p){
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   document.body.classList.toggle('mypage-active',p==='mypage');
-  document.getElementById('page-'+p).classList.add('active');
-  const map={mypage:0,nps:1,national:2,alert:3,legend:4,admin:5};
+  const target=document.getElementById('page-'+p);
+  if(target)target.classList.add('active');
+  const map={mypage:0,wilder:1,nps:2,national:3,alert:4,legend:5,admin:6};
   const btns=document.querySelectorAll('nav button');
   if(btns[map[p]]) btns[map[p]].classList.add('active');
   if(p==='admin'){loadUserList();loadChangelog();}
   if(p==='mypage') initMyPage();
+  if(p==='wilder') initWilderPage();
+}
+
+// ── Wilder BUY 페이지 ────────────────────────────────────
+const WILDER_UNIVERSES = {
+  kospi: [
+    {code:'005930',name:'삼성전자',market:'J'},{code:'000660',name:'SK하이닉스',market:'J'},
+    {code:'373220',name:'LG에너지솔루션',market:'J'},{code:'207940',name:'삼성바이오로직스',market:'J'},
+    {code:'005380',name:'현대차',market:'J'},{code:'000270',name:'기아',market:'J'},
+    {code:'005490',name:'POSCO홀딩스',market:'J'},{code:'006400',name:'삼성SDI',market:'J'},
+    {code:'035420',name:'NAVER',market:'J'},{code:'035720',name:'카카오',market:'J'},
+    {code:'105560',name:'KB금융',market:'J'},{code:'055550',name:'신한지주',market:'J'},
+    {code:'086790',name:'하나금융지주',market:'J'},{code:'028260',name:'삼성물산',market:'J'},
+    {code:'015760',name:'한국전력',market:'J'},{code:'051910',name:'LG화학',market:'J'},
+    {code:'012450',name:'한화에어로스페이스',market:'J'},{code:'068270',name:'셀트리온',market:'J'},
+    {code:'003670',name:'포스코퓨처엠',market:'J'},{code:'010130',name:'고려아연',market:'J'},
+    {code:'011200',name:'HMM',market:'J'},{code:'009150',name:'삼성전기',market:'J'},
+    {code:'003490',name:'대한항공',market:'J'},{code:'247540',name:'에코프로비엠',market:'J'},
+    {code:'086520',name:'에코프로',market:'J'},{code:'096770',name:'SK이노베이션',market:'J'},
+    {code:'316140',name:'우리금융지주',market:'J'},{code:'033780',name:'KT&G',market:'J'},
+    {code:'017670',name:'SK텔레콤',market:'J'},{code:'030200',name:'KT',market:'J'},
+  ],
+  dow: [
+    {code:'AAPL',name:'Apple',market:'NAS'},{code:'MSFT',name:'Microsoft',market:'NAS'},
+    {code:'JPM',name:'JPMorgan Chase',market:'NYS'},{code:'V',name:'Visa',market:'NYS'},
+    {code:'JNJ',name:'Johnson & Johnson',market:'NYS'},{code:'WMT',name:'Walmart',market:'NYS'},
+    {code:'PG',name:'Procter & Gamble',market:'NYS'},{code:'MA',name:'Mastercard',market:'NYS'},
+    {code:'UNH',name:'UnitedHealth',market:'NYS'},{code:'HD',name:'Home Depot',market:'NYS'},
+    {code:'MRK',name:'Merck',market:'NYS'},{code:'KO',name:'Coca-Cola',market:'NYS'},
+    {code:'MCD',name:"McDonald's",market:'NYS'},{code:'CSCO',name:'Cisco',market:'NAS'},
+    {code:'CVX',name:'Chevron',market:'NYS'},{code:'NKE',name:'Nike',market:'NYS'},
+    {code:'HON',name:'Honeywell',market:'NAS'},{code:'AMGN',name:'Amgen',market:'NAS'},
+    {code:'IBM',name:'IBM',market:'NYS'},{code:'CRM',name:'Salesforce',market:'NYS'},
+    {code:'GS',name:'Goldman Sachs',market:'NYS'},{code:'BA',name:'Boeing',market:'NYS'},
+    {code:'AXP',name:'American Express',market:'NYS'},{code:'MMM',name:'3M',market:'NYS'},
+    {code:'DIS',name:'Disney',market:'NYS'},{code:'CAT',name:'Caterpillar',market:'NYS'},
+    {code:'TRV',name:'Travelers',market:'NYS'},{code:'VZ',name:'Verizon',market:'NYS'},
+    {code:'NVDA',name:'NVIDIA',market:'NAS'},{code:'SHW',name:'Sherwin-Williams',market:'NYS'},
+  ],
+  nasdaq: [
+    {code:'AAPL',name:'Apple',market:'NAS'},{code:'MSFT',name:'Microsoft',market:'NAS'},
+    {code:'NVDA',name:'NVIDIA',market:'NAS'},{code:'AMZN',name:'Amazon',market:'NAS'},
+    {code:'GOOGL',name:'Alphabet A',market:'NAS'},{code:'META',name:'Meta',market:'NAS'},
+    {code:'TSLA',name:'Tesla',market:'NAS'},{code:'AVGO',name:'Broadcom',market:'NAS'},
+    {code:'PEP',name:'PepsiCo',market:'NAS'},{code:'COST',name:'Costco',market:'NAS'},
+    {code:'ADBE',name:'Adobe',market:'NAS'},{code:'NFLX',name:'Netflix',market:'NAS'},
+    {code:'AMD',name:'AMD',market:'NAS'},{code:'INTC',name:'Intel',market:'NAS'},
+    {code:'QCOM',name:'Qualcomm',market:'NAS'},{code:'INTU',name:'Intuit',market:'NAS'},
+    {code:'TXN',name:'Texas Instruments',market:'NAS'},{code:'AMAT',name:'Applied Materials',market:'NAS'},
+    {code:'SBUX',name:'Starbucks',market:'NAS'},{code:'ISRG',name:'Intuitive Surgical',market:'NAS'},
+    {code:'BKNG',name:'Booking',market:'NAS'},{code:'GILD',name:'Gilead',market:'NAS'},
+    {code:'ADP',name:'ADP',market:'NAS'},{code:'MDLZ',name:'Mondelez',market:'NAS'},
+    {code:'REGN',name:'Regeneron',market:'NAS'},{code:'LRCX',name:'Lam Research',market:'NAS'},
+    {code:'MU',name:'Micron',market:'NAS'},{code:'PANW',name:'Palo Alto Networks',market:'NAS'},
+    {code:'ASML',name:'ASML',market:'NAS'},{code:'KLAC',name:'KLA Corp',market:'NAS'},
+  ],
+};
+
+let _wilderUniverse = 'my';
+let _wilderResults = {};   // universe → [{code,name,market,result}]
+
+function initWilderPage() {
+  // 최초 진입 시 my 유니버스로 시작
+  if (!_wilderResults[_wilderUniverse]) {
+    switchWilderUniverse(_wilderUniverse);
+  } else {
+    drawWilderResults();
+  }
+}
+
+function switchWilderUniverse(name, btn) {
+  _wilderUniverse = name;
+  document.querySelectorAll('#wilder-tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.wilderTab === name));
+  if (!btn) {
+    const found = document.querySelector(`#wilder-tabs [data-wilder-tab="${name}"]`);
+    if (found) document.querySelectorAll('#wilder-tabs .tab').forEach(t => t.classList.toggle('active', t === found));
+  }
+  // 기존 결과가 있으면 재사용, 없으면 새로 분석
+  if (_wilderResults[name]) {
+    drawWilderResults();
+  } else {
+    runWilderAnalysisForUniverse(name);
+  }
+}
+
+function rerunWilderUniverse() {
+  delete _wilderResults[_wilderUniverse];
+  // 캐시도 비워서 강제 재계산
+  const items = getWilderUniverse(_wilderUniverse);
+  items.forEach(it => { delete _wilderCache[`${it.market}:${it.code}`]; });
+  runWilderAnalysisForUniverse(_wilderUniverse);
+}
+
+function getWilderUniverse(name) {
+  if (name === 'my') {
+    const seen = new Set();
+    return (_acctRows || []).filter(a => stockRegionForCode(a.code)).map(a => {
+      const code = normalizeStockCode(a.code);
+      const market = stockRegionForCode(code) === 'overseas' ? 'NAS' : 'J';
+      return { code, name: a.stockName || code, market };
+    }).filter(it => it.code && !seen.has(it.code) && seen.add(it.code));
+  }
+  return WILDER_UNIVERSES[name] || [];
+}
+
+async function runWilderAnalysisForUniverse(name) {
+  const items = getWilderUniverse(name);
+  if (!items.length) {
+    setText('wilder-progress', '0 / 0');
+    setText('wilder-buy-count', '0개');
+    setText('wilder-watch-count', '0개');
+    document.getElementById('wilder-buy-list').innerHTML = '<div class="muted-card">분석할 종목이 없습니다.</div>';
+    document.getElementById('wilder-watch-list').innerHTML = '';
+    document.getElementById('wilder-sell-list').innerHTML = '';
+    return;
+  }
+  _wilderResults[name] = new Array(items.length).fill(null);
+  let done = 0;
+  setText('wilder-progress', `0 / ${items.length}`);
+  document.getElementById('wilder-buy-list').innerHTML = '<div class="muted-card">분석 중입니다...</div>';
+
+  // concurrency 3
+  const CONCURRENT = 3;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      const it = items[idx];
+      try {
+        const result = await fetchWilderForCode(it.code);
+        _wilderResults[name][idx] = { ...it, result };
+      } catch (e) {
+        _wilderResults[name][idx] = { ...it, result: { error: e.message } };
+      }
+      done++;
+      setText('wilder-progress', `${done} / ${items.length}`);
+      if (_wilderUniverse === name && done % 3 === 0) drawWilderResults();
+    }
+  }
+  await Promise.all(Array.from({ length: CONCURRENT }, worker));
+  if (_wilderUniverse === name) drawWilderResults();
+}
+
+function wilderCardHtml(item) {
+  const r = item.result;
+  if (!r || r.error) {
+    return `<div class="quant-pick">
+      <div class="quant-pick-top">
+        <div class="quant-pick-name">${escapeHtml(item.name)} <span class="quant-pick-meta">${escapeHtml(item.code)}</span></div>
+      </div>
+      <div style="font-size:.72rem;color:var(--text2);">⚠ ${escapeHtml(r?.error || '데이터 없음')}</div>
+    </div>`;
+  }
+  const rsiVal = r.rsi?.rsi != null ? r.rsi.rsi.toFixed(1) : '-';
+  const asiVal = r.asi?.asi != null ? r.asi.asi.toFixed(1) : '-';
+  const rtsMode = r.rts?.mode || '-';
+  return `<div class="quant-pick" onclick="openWilderDetail('${escapeJsAttr(item.code)}')" style="cursor:pointer;">
+    <div class="quant-pick-top">
+      <div class="quant-pick-name">${escapeHtml(item.name)} <span class="quant-pick-meta">${escapeHtml(item.code)}</span></div>
+      ${wilderSignalChip(r.final)}
+    </div>
+    <div class="quant-metrics">
+      <div class="quant-metric"><div class="k">RSI(14)</div><div class="v">${rsiVal}</div></div>
+      <div class="quant-metric"><div class="k">RTS</div><div class="v" style="font-size:.78rem;">${rtsMode === 'TREND' ? '추세' : '박스권'}</div></div>
+      <div class="quant-metric"><div class="k">ASI</div><div class="v">${asiVal}</div></div>
+    </div>
+    <div style="font-size:.7rem;color:var(--text2);margin-top:7px;">${escapeHtml((r.reasons || [])[0] || '')}</div>
+  </div>`;
+}
+
+function drawWilderResults() {
+  const arr = (_wilderResults[_wilderUniverse] || []).filter(Boolean);
+  const buy = arr.filter(x => x.result && !x.result.error && ['BUY'].includes(x.result.final));
+  const watch = arr.filter(x => x.result && !x.result.error && ['WATCH', 'HOLD', 'REDUCE'].includes(x.result.final));
+  const sell = arr.filter(x => x.result && !x.result.error && ['SELL', 'EXIT'].includes(x.result.final));
+  setText('wilder-buy-count', buy.length + '개');
+  setText('wilder-watch-count', watch.length + '개');
+  const buyEl = document.getElementById('wilder-buy-list');
+  const watchEl = document.getElementById('wilder-watch-list');
+  const sellEl = document.getElementById('wilder-sell-list');
+  buyEl.innerHTML = buy.length ? buy.map(wilderCardHtml).join('') : '<div class="muted-card" style="grid-column:1/-1;color:var(--text2);padding:14px;text-align:center;">현재 매수 시그널이 발생한 종목이 없습니다.</div>';
+  watchEl.innerHTML = watch.length ? watch.map(wilderCardHtml).join('') : '<div class="muted-card" style="grid-column:1/-1;color:var(--text2);padding:14px;text-align:center;">관찰 대상 없음</div>';
+  sellEl.innerHTML = sell.length ? sell.map(wilderCardHtml).join('') : '<div class="muted-card" style="grid-column:1/-1;color:var(--text2);padding:14px;text-align:center;">매도/청산 시그널 없음</div>';
 }
 function toggleMobileSection(group,btn){
   const items=document.querySelectorAll(`[data-mobile-group="${group}"]`);
@@ -4783,7 +5065,8 @@ function drawAcctRows(rows) {
       <td><input class="sheet-input" type="text" value="${escapeAttr(a.code||'')}" data-field="code" placeholder="005930"
           oninput="acctCellChange(${i},this);queueAcctCodeLookup(${i},this)" onchange="acctCellChange(${i},this)" onblur="handleAcctCodeInput(${i},this)" style="width:78px"/></td>
       <td><input class="sheet-input${a._autoName?' auto-filled':''}" type="text" value="${escapeAttr(a.stockName||'')}" data-field="stockName" placeholder="종목명"
-          onchange="acctCellChange(${i},this)" style="min-width:110px"/><span class="wilder-badge-slot" data-wilder-badge="${escapeAttr(normalizeStockCode(a.code||''))}" style="margin-left:6px;display:inline-block;vertical-align:middle;"></span></td>
+          onchange="acctCellChange(${i},this)" style="min-width:110px"/></td>
+      <td class="wilder-cell" style="text-align:center;cursor:pointer;" data-wilder-badge="${escapeAttr(normalizeStockCode(a.code||''))}" onclick="event.stopPropagation();openWilderDetail('${escapeJsAttr(a.code||'')}')"><span class="wilder-loading" style="color:var(--text2);font-size:.7rem;">…</span></td>
       <td><input class="sheet-input" type="number" value="${a.qty||''}" data-field="qty" placeholder="100"
           oninput="acctCellChange(${i},this)" style="width:65px"/></td>
       <td><input class="sheet-input" type="number" value="${a.avgBuy||''}" data-field="avgBuy" placeholder="70000"
@@ -4890,12 +5173,28 @@ function updateMpSummaryFromAccountRows(rows) {
 }
 
 function addAcctRow() {
-  _acctRows.unshift({brokerage:'',acctType:'위탁',code:'',stockName:'',qty:0,avgBuy:0,price:0,eval:0,purchase:0,_draftId:String(Date.now())});
-  drawAcctRows(_acctRows);
-  syncAcctRowsToMpData();
-  schedulePortfolioAutosave(true,120);
-  const fi = document.querySelector('#acct-body tr:first-child input[data-field="code"]');
-  if (fi) fi.focus();
+  try {
+    if (!Array.isArray(_acctRows)) _acctRows = [];
+    _acctRows.unshift({brokerage:'',acctType:'위탁',code:'',stockName:'',qty:0,avgBuy:0,price:0,eval:0,purchase:0,_draftId:String(Date.now())});
+    drawAcctRows(_acctRows);
+    syncAcctRowsToMpData();
+    schedulePortfolioAutosave(true,120);
+    // 상품/계좌 분리 뷰에서 계좌 표가 숨겨져 있으면 자동 전환
+    const page = document.getElementById('page-mypage');
+    if (page && !page.classList.contains('product-view-accounts') && window.innerWidth <= 760) {
+      setPortfolioProductView('accounts');
+    }
+    // 모바일 collapsed면 펴기
+    document.querySelectorAll('.portfolio-account-section .mobile-collapsible').forEach(el => el.classList.remove('mobile-hidden'));
+    setTimeout(() => {
+      const fi = document.querySelector('#acct-body tr:first-child input[data-field="code"]');
+      if (fi) { fi.scrollIntoView({behavior:'smooth',block:'center'}); fi.focus(); }
+      else { try{ showToast('행은 추가되었으나 입력 칸을 못 찾았습니다. 새로고침 후 다시 시도해 주세요.', 'err'); }catch(e){} }
+    }, 60);
+  } catch (e) {
+    console.error('addAcctRow failed:', e);
+    try { showToast('종목 추가 실패: ' + (e.message||e), 'err'); } catch(_) { alert('종목 추가 실패: ' + (e.message||e)); }
+  }
 }
 
 function deleteAcctRow(idx) {
@@ -4973,15 +5272,23 @@ function calcDivNet(d) { return calcDivGross(d) - calcDivTax(d); }
 function renderDivYearChips(divByYear) {
   const years = Object.keys(divByYear || {}).sort((a,b) => b-a);
   if (!years.length) years.push('2026');
-  document.getElementById('div-year-chips').innerHTML = years.map(yr => {
+  // 전체 합계
+  const allTotal = years.reduce((sum, yr) => sum + (divByYear[yr]||[]).reduce((s,d) => s+calcDivNet(d), 0), 0);
+  const chips = [];
+  chips.push(`<div class="year-chip ${_divYear==='all'?'active':''}" onclick="switchDivYear('all',this)">
+    <div class="yc-yr">전체</div>
+    <div class="yc-pnl up-chip">+${allTotal.toLocaleString('ko-KR')}원</div>
+  </div>`);
+  years.forEach(yr => {
     const total = (divByYear[yr]||[]).reduce((s,d) => s+calcDivNet(d), 0);
-    return `<div class="year-chip ${yr===_divYear?'active':''}" onclick="switchDivYear('${yr}',this)">
+    chips.push(`<div class="year-chip ${yr===_divYear?'active':''}" onclick="switchDivYear('${yr}',this)">
       <div class="yc-yr">${yr}년</div>
       <div class="yc-pnl up-chip">+${total.toLocaleString('ko-KR')}원</div>
-    </div>`;
-  }).join('');
+    </div>`);
+  });
+  document.getElementById('div-year-chips').innerHTML = chips.join('');
   const badge = document.getElementById('div-year-badge');
-  if (badge) badge.textContent = _divYear + '년';
+  if (badge) badge.textContent = _divYear==='all' ? '전체' : (_divYear + '년');
 }
 
 function switchDivYear(yr, el) {
@@ -4989,12 +5296,20 @@ function switchDivYear(yr, el) {
   document.querySelectorAll('#div-year-chips .year-chip').forEach(c => c.classList.remove('active'));
   if (el) el.classList.add('active');
   const badge = document.getElementById('div-year-badge');
-  if (badge) badge.textContent = yr + '년';
+  if (badge) badge.textContent = yr==='all' ? '전체' : (yr + '년');
   renderDivSheet(yr, mpData?.dividends || {});
 }
 
 function renderDivSheet(year, allDivs) {
-  const divs = (allDivs[year] || []);
+  let divs;
+  if (year === 'all') {
+    // 전체: 모든 연도의 배당을 합치고 year 필드를 보존해 표에 표시
+    divs = Object.entries(allDivs || {}).flatMap(([yr, rows]) =>
+      (rows || []).map(d => ({...d, _year: yr}))
+    ).sort((a,b) => (b.date||b._year||'').localeCompare(a.date||a._year||''));
+  } else {
+    divs = (allDivs[year] || []);
+  }
   _divRows = divs.map(d => {
     const code=normalizeStockCode(d.code||'');
     const name=code?resolveStockName(code,d.name||''):(d.name||'');

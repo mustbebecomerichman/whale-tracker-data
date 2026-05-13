@@ -1,4 +1,4 @@
-const CACHE_NAME = 'whaletracker-shell-v20260514';
+const CACHE_NAME = 'whaletracker-shell-v20260514-wilder';
 const APP_SHELL = [
   '/',
   '/index.html',
