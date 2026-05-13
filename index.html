@@ -2544,18 +2544,22 @@ function renderQuant(rows=_quantAll){
   renderQuantResult(scored);
   if(picks){
     picks.innerHTML=scored.slice(0,3).map((d,i)=>`
-      <div class="quant-pick" onclick="document.getElementById('quant-search').value='${d.code}';filterQuantSearch();">
+      <div class="quant-pick">
         <div class="quant-pick-top">
           <div class="quant-pick-name">${i+1}. ${d.name}</div>
           <span class="quant-score ${scoreClass(d.score)}">${d.score}</span>
         </div>
-        <div class="quant-pick-meta"><span class="tag">${d.code}</span><span class="tag">${d.sector}</span>${quantSignal(d.score)}</div>
+        <div class="quant-pick-meta"><span class="tag">${d.code}</span><span class="tag">${d.sector}</span>${quantSignal(d.score)}<span data-wilder-cross="${d.code}" style="font-size:.7rem;color:var(--text2);">Wilder 분석 중…</span></div>
         <div class="quant-metrics">
           <div class="quant-metric"><div class="k">PER</div><div class="v">${d.per.toFixed(1)}</div></div>
           <div class="quant-metric"><div class="k">ROE</div><div class="v">${d.roe.toFixed(1)}%</div></div>
           <div class="quant-metric"><div class="k">6M</div><div class="v ${d.momentum>=0?'up-chip':'down-chip'}">${d.momentum>=0?'+':''}${d.momentum.toFixed(1)}%</div></div>
         </div>
+        <div data-wilder-cross-comment="${d.code}" style="margin-top:8px;font-size:.7rem;line-height:1.5;color:var(--text2);"></div>
       </div>`).join('');
+    // Wilder 교차 분석 비동기 로드
+    clearTimeout(window._quantPicksWilderTimer);
+    window._quantPicksWilderTimer = setTimeout(() => refreshQuantPicksWilder(scored.slice(0,3)), 400);
   }
   if(!tbody)return;
   tbody.innerHTML=scored.map((d,i)=>`
@@ -3870,6 +3874,71 @@ const Wilder = (() => {
     return { final: 'HOLD', reasons };
   }
 
+  // 가격 타겟 계산 (Wilder 매뉴얼 기반)
+  function computePriceTargets(bars, rsiRes, rtsRes, asiRes, final) {
+    const n = bars.length;
+    const last = bars[n - 1];
+    const current = last.close;
+    const stopLoss = rtsRes?.trailStop ?? Math.min(...bars.slice(-3).map(b => b.low));
+
+    // 최근 30~60봉 최고가/최저가 (저항/지지)
+    const recent60 = bars.slice(-60);
+    const recent20 = bars.slice(-20);
+    const resistance60 = Math.max(...recent60.map(b => b.high));
+    const support60 = Math.min(...recent60.map(b => b.low));
+    const resistance20 = Math.max(...recent20.map(b => b.high));
+
+    // ATR (14일)
+    let atrSum = 0;
+    const atrPeriod = Math.min(14, bars.length - 1);
+    for (let i = bars.length - atrPeriod; i < bars.length; i++) {
+      const tr = Math.max(
+        bars[i].high - bars[i].low,
+        Math.abs(bars[i].high - bars[i - 1].close),
+        Math.abs(bars[i].low - bars[i - 1].close)
+      );
+      atrSum += tr;
+    }
+    const atr = atrSum / atrPeriod;
+
+    let entryPrice, targetPrice, action;
+    if (final === 'BUY') {
+      entryPrice = current;
+      const risk = Math.max(0.01, current - stopLoss);
+      const reward2x = current + risk * 2;
+      targetPrice = Math.min(reward2x, resistance60); // 1:2 보상 또는 60봉 저항
+      if (targetPrice <= current) targetPrice = current + atr * 3; // 보수적 fallback
+      action = 'BUY';
+    } else if (final === 'SELL' || final === 'EXIT') {
+      entryPrice = current;
+      targetPrice = Math.max(support60, current - atr * 3);
+      action = 'SELL';
+    } else if (final === 'REDUCE') {
+      entryPrice = current;
+      targetPrice = current - atr * 2;
+      action = 'REDUCE';
+    } else {
+      entryPrice = current;
+      targetPrice = resistance20;
+      action = 'WATCH';
+    }
+    const upsidePct = ((targetPrice - current) / current) * 100;
+    const downsidePct = ((stopLoss - current) / current) * 100;
+    return {
+      current,
+      entry: entryPrice,
+      stopLoss,
+      target: targetPrice,
+      atr,
+      resistance60,
+      support60,
+      upsidePct,
+      downsidePct,
+      riskReward: Math.abs((targetPrice - current) / (current - stopLoss)),
+      action,
+    };
+  }
+
   // 단일 진입점
   function analyze(bars) {
     if (!Array.isArray(bars) || bars.length < 20) {
@@ -3881,7 +3950,8 @@ const Wilder = (() => {
     const asiSeries = computeASISeries(bars);
     const asiRes = detectASISignals(bars, asiSeries);
     const combo = combineSignals(rsiRes, rtsRes, asiRes);
-    return { ...combo, rsi: rsiRes, rts: rtsRes, asi: asiRes };
+    const priceTargets = computePriceTargets(bars, rsiRes, rtsRes, asiRes, combo.final);
+    return { ...combo, rsi: rsiRes, rts: rtsRes, asi: asiRes, priceTargets };
   }
 
   return { computeRSISeries, computeASISeries, computeRTS, analyze };
@@ -3889,7 +3959,7 @@ const Wilder = (() => {
 
 // ── Wilder 신호 캐시 + 페치 ────────────────────────
 const _wilderCache = {}; // { 'J:005930': { savedAt, result } }
-const WILDER_TTL_MS = 30 * 60 * 1000;
+const WILDER_TTL_MS = 24 * 60 * 60 * 1000; // 24h: 일봉 데이터라 매일 1회 갱신으로 충분
 function wilderApiBase(){
   const host=location.hostname;
   return (host.endsWith('pages.dev') || host.endsWith('web.app') || host.endsWith('firebaseapp.com') || host==='localhost') ? location.origin : null;
@@ -3997,6 +4067,10 @@ function renderWilderSection(result) {
 
 // MY자산 행 옆에 시그널 배지를 비동기로 채워준다
 async function refreshWilderBadgesForHoldings() {
+  // 먼저 region 없는(빈/불완전) 행의 슬롯은 즉시 "-"로 마무리
+  document.querySelectorAll('.wilder-cell[data-wilder-badge=""]').forEach(el => {
+    el.innerHTML = '<span style="color:var(--text2);font-size:.7rem;">-</span>';
+  });
   const rows = (_acctRows || []).filter(a => stockRegionForCode(a.code));
   const seen = new Set();
   for (const a of rows) {
@@ -4253,6 +4327,41 @@ const WILDER_UNIVERSES = {
     {code:'086520',name:'에코프로',market:'J'},{code:'096770',name:'SK이노베이션',market:'J'},
     {code:'316140',name:'우리금융지주',market:'J'},{code:'033780',name:'KT&G',market:'J'},
     {code:'017670',name:'SK텔레콤',market:'J'},{code:'030200',name:'KT',market:'J'},
+    {code:'066570',name:'LG전자',market:'J'},{code:'034730',name:'SK',market:'J'},
+    {code:'018260',name:'삼성에스디에스',market:'J'},{code:'032830',name:'삼성생명',market:'J'},
+    {code:'009540',name:'HD한국조선해양',market:'J'},{code:'010950',name:'S-Oil',market:'J'},
+    {code:'034220',name:'LG디스플레이',market:'J'},{code:'139480',name:'이마트',market:'J'},
+    {code:'042660',name:'한화오션',market:'J'},{code:'329180',name:'HD현대중공업',market:'J'},
+    {code:'180640',name:'한진칼',market:'J'},{code:'024110',name:'기업은행',market:'J'},
+    {code:'138040',name:'메리츠금융지주',market:'J'},{code:'006800',name:'미래에셋증권',market:'J'},
+    {code:'010140',name:'삼성중공업',market:'J'},{code:'047050',name:'포스코인터내셔널',market:'J'},
+    {code:'267260',name:'HD현대일렉트릭',market:'J'},{code:'259960',name:'크래프톤',market:'J'},
+    {code:'097950',name:'CJ제일제당',market:'J'},{code:'128940',name:'한미약품',market:'J'},
+    {code:'000810',name:'삼성화재',market:'J'},{code:'051900',name:'LG생활건강',market:'J'},
+    {code:'000720',name:'현대건설',market:'J'},{code:'271560',name:'오리온',market:'J'},
+    {code:'090430',name:'아모레퍼시픽',market:'J'},{code:'161390',name:'한국타이어앤테크놀로지',market:'J'},
+    {code:'285130',name:'SK케미칼',market:'J'},{code:'267250',name:'HD현대',market:'J'},
+    {code:'010120',name:'LS ELECTRIC',market:'J'},{code:'006260',name:'LS',market:'J'},
+    {code:'251270',name:'넷마블',market:'J'},{code:'036570',name:'엔씨소프트',market:'J'},
+    {code:'034020',name:'두산에너빌리티',market:'J'},{code:'241560',name:'두산밥캣',market:'J'},
+    {code:'064350',name:'현대로템',market:'J'},{code:'112610',name:'씨에스윈드',market:'J'},
+    {code:'009830',name:'한화솔루션',market:'J'},{code:'079550',name:'LIG넥스원',market:'J'},
+    {code:'012330',name:'현대모비스',market:'J'},{code:'011170',name:'롯데케미칼',market:'J'},
+    {code:'271940',name:'일진하이솔루스',market:'J'},{code:'307950',name:'현대오토에버',market:'J'},
+    {code:'058470',name:'리노공업',market:'J'},{code:'196170',name:'알테오젠',market:'J'},
+    {code:'041510',name:'에스엠',market:'J'},{code:'352820',name:'하이브',market:'J'},
+    {code:'042700',name:'한미반도체',market:'J'},{code:'278280',name:'천보',market:'J'},
+    {code:'214150',name:'클래시스',market:'J'},{code:'095340',name:'ISC',market:'J'},
+    {code:'214450',name:'파마리서치',market:'J'},{code:'253450',name:'스튜디오드래곤',market:'J'},
+    {code:'214370',name:'케어젠',market:'J'},{code:'039030',name:'이오테크닉스',market:'J'},
+    {code:'095660',name:'네오위즈',market:'J'},{code:'277810',name:'레인보우로보틱스',market:'J'},
+    {code:'112040',name:'위메이드',market:'J'},{code:'079160',name:'CJ CGV',market:'J'},
+    {code:'066970',name:'엘앤에프',market:'J'},{code:'460850',name:'엘앤씨바이오',market:'J'},
+    {code:'196460',name:'레고켐바이오',market:'J'},{code:'237690',name:'에스티팜',market:'J'},
+    {code:'064290',name:'인텍플러스',market:'J'},{code:'108860',name:'셀바스AI',market:'J'},
+    {code:'200470',name:'유테크놀로지',market:'J'},{code:'393890',name:'더블유씨피',market:'J'},
+    {code:'041830',name:'영진약품',market:'J'},{code:'182360',name:'쿠콘',market:'J'},
+    {code:'418550',name:'제이오',market:'J'},{code:'278470',name:'에이피알',market:'J'},
   ],
   dow: [
     {code:'AAPL',name:'Apple',market:'NAS'},{code:'MSFT',name:'Microsoft',market:'NAS'},
@@ -4274,19 +4383,54 @@ const WILDER_UNIVERSES = {
   nasdaq: [
     {code:'AAPL',name:'Apple',market:'NAS'},{code:'MSFT',name:'Microsoft',market:'NAS'},
     {code:'NVDA',name:'NVIDIA',market:'NAS'},{code:'AMZN',name:'Amazon',market:'NAS'},
-    {code:'GOOGL',name:'Alphabet A',market:'NAS'},{code:'META',name:'Meta',market:'NAS'},
-    {code:'TSLA',name:'Tesla',market:'NAS'},{code:'AVGO',name:'Broadcom',market:'NAS'},
-    {code:'PEP',name:'PepsiCo',market:'NAS'},{code:'COST',name:'Costco',market:'NAS'},
-    {code:'ADBE',name:'Adobe',market:'NAS'},{code:'NFLX',name:'Netflix',market:'NAS'},
-    {code:'AMD',name:'AMD',market:'NAS'},{code:'INTC',name:'Intel',market:'NAS'},
-    {code:'QCOM',name:'Qualcomm',market:'NAS'},{code:'INTU',name:'Intuit',market:'NAS'},
-    {code:'TXN',name:'Texas Instruments',market:'NAS'},{code:'AMAT',name:'Applied Materials',market:'NAS'},
-    {code:'SBUX',name:'Starbucks',market:'NAS'},{code:'ISRG',name:'Intuitive Surgical',market:'NAS'},
-    {code:'BKNG',name:'Booking',market:'NAS'},{code:'GILD',name:'Gilead',market:'NAS'},
-    {code:'ADP',name:'ADP',market:'NAS'},{code:'MDLZ',name:'Mondelez',market:'NAS'},
-    {code:'REGN',name:'Regeneron',market:'NAS'},{code:'LRCX',name:'Lam Research',market:'NAS'},
-    {code:'MU',name:'Micron',market:'NAS'},{code:'PANW',name:'Palo Alto Networks',market:'NAS'},
-    {code:'ASML',name:'ASML',market:'NAS'},{code:'KLAC',name:'KLA Corp',market:'NAS'},
+    {code:'GOOGL',name:'Alphabet A',market:'NAS'},{code:'GOOG',name:'Alphabet C',market:'NAS'},
+    {code:'META',name:'Meta',market:'NAS'},{code:'TSLA',name:'Tesla',market:'NAS'},
+    {code:'AVGO',name:'Broadcom',market:'NAS'},{code:'PEP',name:'PepsiCo',market:'NAS'},
+    {code:'COST',name:'Costco',market:'NAS'},{code:'ADBE',name:'Adobe',market:'NAS'},
+    {code:'NFLX',name:'Netflix',market:'NAS'},{code:'AMD',name:'AMD',market:'NAS'},
+    {code:'INTC',name:'Intel',market:'NAS'},{code:'QCOM',name:'Qualcomm',market:'NAS'},
+    {code:'INTU',name:'Intuit',market:'NAS'},{code:'TXN',name:'Texas Instruments',market:'NAS'},
+    {code:'AMAT',name:'Applied Materials',market:'NAS'},{code:'SBUX',name:'Starbucks',market:'NAS'},
+    {code:'ISRG',name:'Intuitive Surgical',market:'NAS'},{code:'BKNG',name:'Booking',market:'NAS'},
+    {code:'GILD',name:'Gilead',market:'NAS'},{code:'ADP',name:'ADP',market:'NAS'},
+    {code:'MDLZ',name:'Mondelez',market:'NAS'},{code:'REGN',name:'Regeneron',market:'NAS'},
+    {code:'LRCX',name:'Lam Research',market:'NAS'},{code:'MU',name:'Micron',market:'NAS'},
+    {code:'PANW',name:'Palo Alto Networks',market:'NAS'},{code:'ASML',name:'ASML',market:'NAS'},
+    {code:'KLAC',name:'KLA Corp',market:'NAS'},{code:'ADI',name:'Analog Devices',market:'NAS'},
+    {code:'CSCO',name:'Cisco',market:'NAS'},{code:'CMCSA',name:'Comcast',market:'NAS'},
+    {code:'HON',name:'Honeywell',market:'NAS'},{code:'AMGN',name:'Amgen',market:'NAS'},
+    {code:'VRTX',name:'Vertex Pharmaceuticals',market:'NAS'},{code:'ABNB',name:'Airbnb',market:'NAS'},
+    {code:'CHTR',name:'Charter Communications',market:'NAS'},{code:'CRWD',name:'CrowdStrike',market:'NAS'},
+    {code:'CDNS',name:'Cadence Design',market:'NAS'},{code:'SNPS',name:'Synopsys',market:'NAS'},
+    {code:'MAR',name:'Marriott',market:'NAS'},{code:'PYPL',name:'PayPal',market:'NAS'},
+    {code:'ORLY',name:"O'Reilly Automotive",market:'NAS'},{code:'MNST',name:'Monster Beverage',market:'NAS'},
+    {code:'CTAS',name:'Cintas',market:'NAS'},{code:'NXPI',name:'NXP Semiconductors',market:'NAS'},
+    {code:'KDP',name:'Keurig Dr Pepper',market:'NAS'},{code:'PCAR',name:'PACCAR',market:'NAS'},
+    {code:'WDAY',name:'Workday',market:'NAS'},{code:'PAYX',name:'Paychex',market:'NAS'},
+    {code:'ROST',name:'Ross Stores',market:'NAS'},{code:'ODFL',name:'Old Dominion',market:'NAS'},
+    {code:'FAST',name:'Fastenal',market:'NAS'},{code:'EA',name:'Electronic Arts',market:'NAS'},
+    {code:'KHC',name:'Kraft Heinz',market:'NAS'},{code:'IDXX',name:'IDEXX Labs',market:'NAS'},
+    {code:'EXC',name:'Exelon',market:'NAS'},{code:'AEP',name:'American Electric Power',market:'NAS'},
+    {code:'CTSH',name:'Cognizant',market:'NAS'},{code:'DLTR',name:'Dollar Tree',market:'NAS'},
+    {code:'GEHC',name:'GE HealthCare',market:'NAS'},{code:'TTD',name:'Trade Desk',market:'NAS'},
+    {code:'FTNT',name:'Fortinet',market:'NAS'},{code:'BIIB',name:'Biogen',market:'NAS'},
+    {code:'MRVL',name:'Marvell',market:'NAS'},{code:'ON',name:'ON Semiconductor',market:'NAS'},
+    {code:'CSX',name:'CSX',market:'NAS'},{code:'DXCM',name:'DexCom',market:'NAS'},
+    {code:'DDOG',name:'Datadog',market:'NAS'},{code:'ZS',name:'Zscaler',market:'NAS'},
+    {code:'TEAM',name:'Atlassian',market:'NAS'},{code:'WBD',name:'Warner Bros Discovery',market:'NAS'},
+    {code:'ANSS',name:'ANSYS',market:'NAS'},{code:'MELI',name:'MercadoLibre',market:'NAS'},
+    {code:'ROP',name:'Roper',market:'NAS'},{code:'CPRT',name:'Copart',market:'NAS'},
+    {code:'AZN',name:'AstraZeneca',market:'NAS'},{code:'BIDU',name:'Baidu',market:'NAS'},
+    {code:'JD',name:'JD.com',market:'NAS'},{code:'PDD',name:'PDD Holdings',market:'NAS'},
+    {code:'NTES',name:'NetEase',market:'NAS'},{code:'ENPH',name:'Enphase Energy',market:'NAS'},
+    {code:'ILMN',name:'Illumina',market:'NAS'},{code:'OKTA',name:'Okta',market:'NAS'},
+    {code:'ZM',name:'Zoom',market:'NAS'},{code:'DOCU',name:'DocuSign',market:'NAS'},
+    {code:'MRNA',name:'Moderna',market:'NAS'},{code:'COIN',name:'Coinbase',market:'NAS'},
+    {code:'LULU',name:'Lululemon',market:'NAS'},{code:'PLTR',name:'Palantir',market:'NAS'},
+    {code:'SHOP',name:'Shopify',market:'NAS'},{code:'SQ',name:'Block',market:'NAS'},
+    {code:'UBER',name:'Uber',market:'NAS'},{code:'LYFT',name:'Lyft',market:'NAS'},
+    {code:'RBLX',name:'Roblox',market:'NAS'},{code:'NET',name:'Cloudflare',market:'NAS'},
+    {code:'SNOW',name:'Snowflake',market:'NAS'},{code:'MDB',name:'MongoDB',market:'NAS'},
   ],
 };
 
@@ -4375,6 +4519,22 @@ async function runWilderAnalysisForUniverse(name) {
   if (_wilderUniverse === name) drawWilderResults();
 }
 
+// 종목코드에 대응되는 퀀트 점수 찾기
+function lookupQuantScore(code) {
+  if (!Array.isArray(_quantAll) || !_quantAll.length) return null;
+  const row = _quantAll.find(r => r.code === code || r.code === String(code).padStart(6, '0'));
+  if (!row) return null;
+  try {
+    const scored = scoreQuantRows([row], _quantFilter || 'balanced', _quantAll);
+    return scored[0] || null;
+  } catch (e) { return null; }
+}
+
+function fmtPriceForCard(price, code) {
+  if (!Number.isFinite(price)) return '-';
+  try { return formatMoneyByCode(price, code); } catch(e) { return price.toLocaleString(); }
+}
+
 function wilderCardHtml(item) {
   const r = item.result;
   if (!r || r.error) {
@@ -4388,6 +4548,33 @@ function wilderCardHtml(item) {
   const rsiVal = r.rsi?.rsi != null ? r.rsi.rsi.toFixed(1) : '-';
   const asiVal = r.asi?.asi != null ? r.asi.asi.toFixed(1) : '-';
   const rtsMode = r.rts?.mode || '-';
+  const pt = r.priceTargets;
+  const reasons = r.reasons || [];
+  const isBuy = r.final === 'BUY';
+
+  // 퀀트 점수 매칭 (국내만)
+  const quantRow = lookupQuantScore(item.code);
+  const quantBlock = quantRow ? `<div style="margin-top:8px;padding:6px 9px;background:#edfff5;border:1px solid #abe5c3;border-radius:7px;font-size:.7rem;color:#16794b;">
+    <b>퀀트 점수 ${Math.round(quantRow._score||0)}점</b> · ${escapeHtml(quantRow.note||'-')}
+    ${(quantRow._score||0) >= 80 && isBuy ? ' · <b>🌟 교차 신호</b>' : ''}
+  </div>` : '';
+
+  // 가격 타겟 블록 (BUY일 때만 강조)
+  const priceBlock = pt ? `<div style="margin-top:9px;padding:8px 10px;background:#fff;border:1px solid var(--border);border-radius:8px;font-size:.72rem;">
+    <div style="display:flex;justify-content:space-between;gap:6px;"><span style="color:var(--text2);">현재가</span><strong>${fmtPriceForCard(pt.current, item.code)}</strong></div>
+    <div style="display:flex;justify-content:space-between;gap:6px;"><span style="color:var(--text2);">${isBuy?'권장 진입':'기준가'}</span><strong>${fmtPriceForCard(pt.entry, item.code)}</strong></div>
+    <div style="display:flex;justify-content:space-between;gap:6px;"><span style="color:var(--text2);">목표 매도</span><strong class="up-chip">${fmtPriceForCard(pt.target, item.code)} (${pt.upsidePct>=0?'+':''}${pt.upsidePct.toFixed(1)}%)</strong></div>
+    <div style="display:flex;justify-content:space-between;gap:6px;"><span style="color:var(--text2);">손절 (트레일)</span><strong class="down-chip">${fmtPriceForCard(pt.stopLoss, item.code)} (${pt.downsidePct.toFixed(1)}%)</strong></div>
+    <div style="display:flex;justify-content:space-between;gap:6px;"><span style="color:var(--text2);">손익비</span><strong>1 : ${pt.riskReward.toFixed(1)}</strong></div>
+  </div>` : '';
+
+  // 사유 (BUY는 모두, 다른건 첫 1줄)
+  const reasonsBlock = isBuy && reasons.length
+    ? `<div style="margin-top:7px;font-size:.7rem;color:var(--text);line-height:1.45;">
+        ${reasons.map(r => `<div>· ${escapeHtml(r)}</div>`).join('')}
+      </div>`
+    : `<div style="font-size:.7rem;color:var(--text2);margin-top:7px;">${escapeHtml(reasons[0] || '')}</div>`;
+
   return `<div class="quant-pick" onclick="openWilderDetail('${escapeJsAttr(item.code)}')" style="cursor:pointer;">
     <div class="quant-pick-top">
       <div class="quant-pick-name">${escapeHtml(item.name)} <span class="quant-pick-meta">${escapeHtml(item.code)}</span></div>
@@ -4398,8 +4585,43 @@ function wilderCardHtml(item) {
       <div class="quant-metric"><div class="k">RTS</div><div class="v" style="font-size:.78rem;">${rtsMode === 'TREND' ? '추세' : '박스권'}</div></div>
       <div class="quant-metric"><div class="k">ASI</div><div class="v">${asiVal}</div></div>
     </div>
-    <div style="font-size:.7rem;color:var(--text2);margin-top:7px;">${escapeHtml((r.reasons || [])[0] || '')}</div>
+    ${priceBlock}
+    ${quantBlock}
+    ${reasonsBlock}
   </div>`;
+}
+
+// 퀀트 스크리너 상위 종목에 Wilder 교차 분석 코멘트 추가
+async function refreshQuantPicksWilder(picks) {
+  for (const d of picks) {
+    const code = String(d.code).padStart(6, '0');
+    const result = await fetchWilderForCode(code);
+    const chip = document.querySelector(`[data-wilder-cross="${CSS.escape(d.code)}"]`);
+    const comment = document.querySelector(`[data-wilder-cross-comment="${CSS.escape(d.code)}"]`);
+    if (!result || result.error) {
+      if (chip) chip.innerHTML = `<span style="color:var(--text2);font-size:.7rem;">Wilder 데이터 없음</span>`;
+      continue;
+    }
+    if (chip) chip.innerHTML = wilderSignalChip(result.final);
+    if (comment) {
+      const isQuantStrong = (d.score || 0) >= 75;
+      const isWilderBuy = result.final === 'BUY';
+      let msg;
+      if (isQuantStrong && isWilderBuy) {
+        msg = `🌟 <b style="color:var(--up);">퀀트 ${d.score}점 + Wilder BUY 교차 신호.</b> 펀더멘털과 기술적 모멘텀 모두 강함. 우선순위 매수 후보.`;
+      } else if (isQuantStrong && (result.final === 'WATCH' || result.final === 'HOLD')) {
+        msg = `퀀트 점수 ${d.score}점으로 우수하지만 Wilder는 ${result.final}. 매수 타이밍 더 기다릴 것.`;
+      } else if (isQuantStrong && (result.final === 'SELL' || result.final === 'EXIT' || result.final === 'REDUCE')) {
+        msg = `⚠ 퀀트 ${d.score}점은 양호하나 Wilder가 <b style="color:var(--down);">${result.final}</b>. 기술적 약세 — 진입 보류 권고.`;
+      } else if (isWilderBuy) {
+        msg = `Wilder는 BUY지만 퀀트 점수 ${d.score}점은 평범. 단기 모멘텀 트레이딩 후보.`;
+      } else {
+        msg = `퀀트 ${d.score}점 / Wilder ${result.final}. 특별한 교차 신호 없음.`;
+      }
+      comment.innerHTML = msg;
+    }
+    await new Promise(r => setTimeout(r, 60));
+  }
 }
 
 function drawWilderResults() {
@@ -5066,7 +5288,7 @@ function drawAcctRows(rows) {
           oninput="acctCellChange(${i},this);queueAcctCodeLookup(${i},this)" onchange="acctCellChange(${i},this)" onblur="handleAcctCodeInput(${i},this)" style="width:78px"/></td>
       <td><input class="sheet-input${a._autoName?' auto-filled':''}" type="text" value="${escapeAttr(a.stockName||'')}" data-field="stockName" placeholder="종목명"
           onchange="acctCellChange(${i},this)" style="min-width:110px"/></td>
-      <td class="wilder-cell" style="text-align:center;cursor:pointer;" data-wilder-badge="${escapeAttr(normalizeStockCode(a.code||''))}" onclick="event.stopPropagation();openWilderDetail('${escapeJsAttr(a.code||'')}')"><span class="wilder-loading" style="color:var(--text2);font-size:.7rem;">…</span></td>
+      <td class="wilder-cell" style="text-align:center;cursor:pointer;" data-wilder-badge="${escapeAttr(normalizeStockCode(a.code||''))}" onclick="event.stopPropagation();openWilderDetail('${escapeJsAttr(a.code||'')}')">${normalizeStockCode(a.code||'') ? '<span class="wilder-loading" style="color:var(--text2);font-size:.7rem;">…</span>' : '<span style="color:var(--text2);font-size:.7rem;">-</span>'}</td>
       <td><input class="sheet-input" type="number" value="${a.qty||''}" data-field="qty" placeholder="100"
           oninput="acctCellChange(${i},this)" style="width:65px"/></td>
       <td><input class="sheet-input" type="number" value="${a.avgBuy||''}" data-field="avgBuy" placeholder="70000"
@@ -5173,29 +5395,37 @@ function updateMpSummaryFromAccountRows(rows) {
 }
 
 function addAcctRow() {
+  console.log('[addAcctRow] called', { acctRowsType: typeof _acctRows, isArr: Array.isArray(_acctRows), len: _acctRows?.length });
   try {
     if (!Array.isArray(_acctRows)) _acctRows = [];
+    const before = _acctRows.length;
     _acctRows.unshift({brokerage:'',acctType:'위탁',code:'',stockName:'',qty:0,avgBuy:0,price:0,eval:0,purchase:0,_draftId:String(Date.now())});
+    console.log('[addAcctRow] unshift ok', before, '->', _acctRows.length);
     drawAcctRows(_acctRows);
     syncAcctRowsToMpData();
     schedulePortfolioAutosave(true,120);
     // 상품/계좌 분리 뷰에서 계좌 표가 숨겨져 있으면 자동 전환
     const page = document.getElementById('page-mypage');
-    if (page && !page.classList.contains('product-view-accounts') && window.innerWidth <= 760) {
-      setPortfolioProductView('accounts');
+    if (page && !page.classList.contains('product-view-accounts')) {
+      try { setPortfolioProductView('accounts'); } catch(e) { console.warn('setPortfolioProductView failed:', e); }
     }
     // 모바일 collapsed면 펴기
-    document.querySelectorAll('.portfolio-account-section .mobile-collapsible').forEach(el => el.classList.remove('mobile-hidden'));
+    document.querySelectorAll('.portfolio-account-section .mobile-collapsible').forEach(el => el.classList.remove('mobile-hidden','is-collapsed'));
+    // 자산 탭에 있으면 도메스틱/오버시스 필터링으로 새 빈 행이 숨겨질 수 있으니 'all'로 강제
+    setPortfolioAssetTab('all');
+    try { showToast('✅ 새 종목 행이 추가되었습니다. 종목코드를 입력하세요.', 'ok'); } catch(_) {}
     setTimeout(() => {
       const fi = document.querySelector('#acct-body tr:first-child input[data-field="code"]');
-      if (fi) { fi.scrollIntoView({behavior:'smooth',block:'center'}); fi.focus(); }
-      else { try{ showToast('행은 추가되었으나 입력 칸을 못 찾았습니다. 새로고침 후 다시 시도해 주세요.', 'err'); }catch(e){} }
-    }, 60);
+      if (fi) { fi.scrollIntoView({behavior:'smooth',block:'center'}); fi.focus(); console.log('[addAcctRow] focused new row'); }
+      else { console.warn('[addAcctRow] new row input not found'); try{ showToast('행은 추가되었으나 입력 칸을 못 찾았습니다.', 'err'); }catch(e){} }
+    }, 80);
   } catch (e) {
-    console.error('addAcctRow failed:', e);
+    console.error('[addAcctRow] failed:', e);
     try { showToast('종목 추가 실패: ' + (e.message||e), 'err'); } catch(_) { alert('종목 추가 실패: ' + (e.message||e)); }
   }
 }
+// 글로벌 노출 (인라인 onclick에서 함수를 못 찾는 경우 방지)
+window.addAcctRow = addAcctRow;
 
 function deleteAcctRow(idx) {
   if (!confirm('이 행을 삭제하시겠습니까?')) return;
