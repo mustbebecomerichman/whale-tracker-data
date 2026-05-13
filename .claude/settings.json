@@ -1,0 +1,61 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/auto-deploy.ps1",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(git show*)",
+      "Bash(git fetch*)",
+      "Bash(git pull*)",
+      "Bash(git add *)",
+      "Bash(git commit -m *)",
+      "Bash(git commit -F *)",
+      "Bash(git push*)",
+      "Bash(git remote*)",
+      "Bash(git rev-parse*)",
+      "Bash(git merge*)",
+      "Bash(git checkout*)",
+      "Bash(node --check*)",
+      "Bash(node -e *)",
+      "Bash(ls*)",
+      "Bash(echo *)",
+      "Bash(wc*)",
+      "Bash(cat *)",
+      "PowerShell(git *)",
+      "PowerShell(Invoke-RestMethod*)",
+      "PowerShell(Get-Content*)",
+      "PowerShell(Set-Content*)",
+      "Read(*)",
+      "Glob(*)",
+      "Grep(*)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard*)",
+      "Read(./secrets_local.py)",
+      "Read(./serviceAccountKey.json)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./my_portfolio.json)",
+      "Read(./whale_data.json)",
+      "Read(./global_whales.json)"
+    ]
+  }
+}
