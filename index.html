@@ -3614,6 +3614,326 @@ function etfHoldingsHtml(code){
       <div class="stock-detail-list-row"><span>${escapeHtml(x.name)}</span><strong>${escapeHtml(x.weight)}%</strong></div>
     `).join('')}</div>`;
 }
+// ── Wilder Quant Modules (RSI / Reaction Trend System / Accumulative Swing Index) ──
+// 외부 의존성 없음, 모든 계산은 일봉 OHLC 배열만 받아 동작한다.
+// bars: [{date, open, high, low, close, volume}, ...]  (오래된 → 최신 순)
+const Wilder = (() => {
+  // ── Module 1. RSI (period N=14, Wilder smoothing) ─────────────
+  function computeRSISeries(bars, period = 14) {
+    const closes = bars.map(b => b.close);
+    if (closes.length < period + 1) return [];
+    let upSum = 0, dnSum = 0;
+    for (let i = 1; i <= period; i++) {
+      const d = closes[i] - closes[i - 1];
+      if (d > 0) upSum += d; else dnSum += -d;
+    }
+    let upAvg = upSum / period;
+    let dnAvg = dnSum / period;
+    const rsi = new Array(closes.length).fill(null);
+    rsi[period] = dnAvg === 0 ? 100 : 100 - 100 / (1 + upAvg / dnAvg);
+    for (let i = period + 1; i < closes.length; i++) {
+      const d = closes[i] - closes[i - 1];
+      const up = d > 0 ? d : 0;
+      const dn = d < 0 ? -d : 0;
+      upAvg = (upAvg * (period - 1) + up) / period;
+      dnAvg = (dnAvg * (period - 1) + dn) / period;
+      rsi[i] = dnAvg === 0 ? 100 : 100 - 100 / (1 + upAvg / dnAvg);
+    }
+    return rsi;
+  }
+
+  // 실패 스윙 + 다이버전스 트리거 감지
+  function detectRSISignals(bars, rsi) {
+    const n = bars.length;
+    const last = rsi[n - 1];
+    if (last == null) return { signal: 'HOLD', reason: 'RSI 미산출', rsi: null };
+
+    // Recent 5 bars 안에서 트리거 탐색
+    const win = 20;
+
+    // 1) Bottom Failure Swing: rsi 30 미만 후 반등, 다시 하락하지만 1차바닥 갱신 실패 → 직전 고점 돌파
+    for (let i = Math.max(2, n - win); i < n; i++) {
+      const r0 = rsi[i - 2], r1 = rsi[i - 1], r2 = rsi[i];
+      if (r0 == null || r1 == null || r2 == null) continue;
+      // 최근 N봉 내 최저 RSI가 30 미만이고, 현재 RSI가 직전 고점 돌파
+      const recent = rsi.slice(Math.max(0, i - 10), i + 1).filter(v => v != null);
+      if (!recent.length) continue;
+      const minR = Math.min(...recent);
+      if (minR < 30 && r2 > r1 && r1 < r0 + 0.5 && r2 > Math.max(...recent.slice(-5, -1))) {
+        if (i === n - 1) return { signal: 'BUY', reason: '실패 스윙 (Bottom Failure)', rsi: last };
+      }
+    }
+
+    // 2) Top Failure Swing: rsi 70 돌파 후 하락, 직전저점 하향 이탈
+    for (let i = Math.max(2, n - win); i < n; i++) {
+      const r0 = rsi[i - 2], r1 = rsi[i - 1], r2 = rsi[i];
+      if (r0 == null || r1 == null || r2 == null) continue;
+      const recent = rsi.slice(Math.max(0, i - 10), i + 1).filter(v => v != null);
+      if (!recent.length) continue;
+      const maxR = Math.max(...recent);
+      if (maxR > 70 && r2 < r1 && r1 > r0 - 0.5 && r2 < Math.min(...recent.slice(-5, -1))) {
+        if (i === n - 1) return { signal: 'SELL', reason: '실패 스윙 (Top Failure)', rsi: last };
+      }
+    }
+
+    // 3) Bearish Divergence: 가격 신고가, RSI는 신저고 → 비중 축소
+    const lookback = 30;
+    const start = Math.max(period_safe(), n - lookback);
+    let priceHi1 = -Infinity, priceHi1Idx = -1;
+    let priceHi2 = -Infinity, priceHi2Idx = -1;
+    for (let i = start; i < n; i++) {
+      if (bars[i].high > priceHi1) {
+        priceHi2 = priceHi1; priceHi2Idx = priceHi1Idx;
+        priceHi1 = bars[i].high; priceHi1Idx = i;
+      } else if (bars[i].high > priceHi2 && i !== priceHi1Idx) {
+        priceHi2 = bars[i].high; priceHi2Idx = i;
+      }
+    }
+    if (priceHi1Idx > priceHi2Idx && priceHi2Idx >= 0 && priceHi1 > priceHi2 &&
+        rsi[priceHi1Idx] != null && rsi[priceHi2Idx] != null &&
+        rsi[priceHi1Idx] < rsi[priceHi2Idx] && (n - 1 - priceHi1Idx) <= 3) {
+      return { signal: 'REDUCE', reason: '상승 모멘텀 소진 (Bearish Divergence)', rsi: last };
+    }
+
+    // 4) 과매수/과매도 단순 분류
+    if (last >= 70) return { signal: 'OVERBOUGHT', reason: `RSI ${last.toFixed(1)} (과매수)`, rsi: last };
+    if (last <= 30) return { signal: 'OVERSOLD', reason: `RSI ${last.toFixed(1)} (과매도)`, rsi: last };
+    return { signal: 'HOLD', reason: `RSI ${last.toFixed(1)} (중립)`, rsi: last };
+  }
+  function period_safe() { return 14; }
+
+  // ── Module 2. Reaction Trend System (HBOP / LBOP, 박스권↔추세 State Machine) ──
+  // HBOP = 전일 High + (전일 High - 전일 Low)
+  // LBOP = 전일 Low  - (전일 High - 전일 Low)
+  function computeRTS(bars) {
+    const n = bars.length;
+    if (n < 5) return { mode: 'REACTION', signal: 'HOLD', reason: '데이터 부족', hbop: null, lbop: null };
+    const prev = bars[n - 2];
+    const today = bars[n - 1];
+    const range = prev.high - prev.low;
+    const hbop = prev.high + range;
+    const lbop = prev.low - range;
+    let mode = 'REACTION';
+    let signal = 'HOLD';
+    let reason = `박스권 (HBOP ${hbop.toFixed(2)} / LBOP ${lbop.toFixed(2)})`;
+
+    if (today.high > hbop) {
+      mode = 'TREND';
+      signal = 'BUY';
+      reason = `상방 돌파 (HBOP ${hbop.toFixed(2)} 돌파)`;
+    } else if (today.low < lbop) {
+      mode = 'TREND';
+      signal = 'SELL';
+      reason = `하방 이탈 (LBOP ${lbop.toFixed(2)} 이탈)`;
+    } else {
+      // 반응 모드: 사이클 스케줄러 (최근 15봉 내 가장 낮은 저가일=B일)
+      const window = bars.slice(-15);
+      let minIdx = 0;
+      for (let i = 1; i < window.length; i++) if (window[i].low < window[minIdx].low) minIdx = i;
+      const phaseMod = (window.length - 1 - minIdx) % 3; // 0=B일, 1=O일, 2=S일
+      const phase = ['B', 'O', 'S'][phaseMod];
+      reason = `반응 모드 · 사이클 ${phase}일 (HBOP ${hbop.toFixed(2)} / LBOP ${lbop.toFixed(2)})`;
+      if (phase === 'B') signal = 'BUY';
+      else if (phase === 'S') signal = 'SELL';
+    }
+
+    // 매수 포지션 트레일링 스탑: 과거 2일 저가 중 더 낮은 값
+    const trailStop = n >= 3 ? Math.min(bars[n - 2].low, bars[n - 3].low) : null;
+    return { mode, signal, reason, hbop, lbop, trailStop };
+  }
+
+  // ── Module 3. Accumulative Swing Index (ASI) ────────────────
+  // Wilder's Swing Index (단순화된 공식)
+  // SI = 50 * ((C - Cp) + 0.5*(C - O) + 0.25*(Cp - Op)) / R * (K / T)
+  // R = TR with sign adjustment (간략화: True Range)
+  // K = max(|H - Cp|, |L - Cp|), T = 한 틱 단위(미국 1.0, 한국 100원 등) — 여기선 정규화 위해 1.0 사용
+  function computeASISeries(bars) {
+    const n = bars.length;
+    if (n < 2) return [];
+    const T = 1.0;
+    const si = new Array(n).fill(0);
+    const asi = new Array(n).fill(0);
+    for (let i = 1; i < n; i++) {
+      const H = bars[i].high, L = bars[i].low, C = bars[i].close, O = bars[i].open;
+      const Cp = bars[i - 1].close, Op = bars[i - 1].open;
+      const K = Math.max(Math.abs(H - Cp), Math.abs(L - Cp));
+      const TRn = Math.max(H - L, Math.abs(H - Cp), Math.abs(L - Cp));
+      if (TRn === 0) { si[i] = 0; asi[i] = asi[i - 1]; continue; }
+      const numerator = (C - Cp) + 0.5 * (C - O) + 0.25 * (Cp - Op);
+      si[i] = 50 * (numerator / TRn) * (K / T);
+      asi[i] = asi[i - 1] + si[i];
+    }
+    return asi;
+  }
+
+  function detectASISignals(bars, asi) {
+    const n = bars.length;
+    if (n < 4) return { signal: 'HOLD', reason: 'ASI 데이터 부족', asi: 0, hsp: null, lsp: null };
+
+    // HSP / LSP 탐색 (최근 60봉 내)
+    const start = Math.max(1, n - 60);
+    const hsps = [], lsps = [];
+    for (let i = start + 1; i < n - 1; i++) {
+      if (asi[i - 1] < asi[i] && asi[i] > asi[i + 1]) hsps.push({ idx: i, val: asi[i] });
+      if (asi[i - 1] > asi[i] && asi[i] < asi[i + 1]) lsps.push({ idx: i, val: asi[i] });
+    }
+    const lastHSP = hsps.length ? hsps[hsps.length - 1] : null;
+    const lastLSP = lsps.length ? lsps[lsps.length - 1] : null;
+    const lastASI = asi[n - 1];
+    const prevASI = asi[n - 2];
+
+    let signal = 'HOLD';
+    let reason = `ASI ${lastASI.toFixed(1)}`;
+
+    // 진입 트리거
+    if (lastHSP && prevASI <= lastHSP.val && lastASI > lastHSP.val) {
+      signal = 'BUY';
+      reason = `ASI HSP(${lastHSP.val.toFixed(1)}) 상향 돌파`;
+    } else if (lastLSP && prevASI >= lastLSP.val && lastASI < lastLSP.val) {
+      signal = 'SELL';
+      reason = `ASI LSP(${lastLSP.val.toFixed(1)}) 하향 이탈`;
+    }
+
+    // 트레일링 SAR: 진입 이후 최고치 대비 -60pt 추적
+    // (실제 진입가 없이도 최근 30봉 내 ASI 고점 대비 60pt 하락 여부 점검)
+    const recentMax = Math.max(...asi.slice(Math.max(0, n - 30)));
+    const drawdown = recentMax - lastASI;
+    let sarExit = null;
+    if (drawdown >= 60) {
+      sarExit = { triggered: true, peak: recentMax, drop: drawdown };
+      if (signal !== 'SELL') {
+        signal = 'EXIT';
+        reason = `Trailing SAR 발동 (피크 ${recentMax.toFixed(1)} 대비 ${drawdown.toFixed(1)}pt 하락)`;
+      }
+    } else {
+      sarExit = { triggered: false, peak: recentMax, drop: drawdown };
+    }
+
+    return { signal, reason, asi: lastASI, hsp: lastHSP?.val ?? null, lsp: lastLSP?.val ?? null, sarExit };
+  }
+
+  // ── 종합 시그널 결합 ──
+  // 우선순위: ASI SAR EXIT > RSI 실패스윙(SELL) > RTS 추세(BUY/SELL) > RSI 실패스윙(BUY) > REDUCE > HOLD
+  function combineSignals(rsiRes, rtsRes, asiRes) {
+    const reasons = [];
+    if (rsiRes?.reason) reasons.push('RSI: ' + rsiRes.reason);
+    if (rtsRes?.reason) reasons.push('RTS: ' + rtsRes.reason);
+    if (asiRes?.reason) reasons.push('ASI: ' + asiRes.reason);
+
+    if (asiRes?.signal === 'EXIT') return { final: 'EXIT', reasons };
+    if (rsiRes?.signal === 'SELL') return { final: 'SELL', reasons };
+    if (rtsRes?.signal === 'SELL' && rtsRes.mode === 'TREND') return { final: 'SELL', reasons };
+    if (asiRes?.signal === 'SELL') return { final: 'SELL', reasons };
+    if (rsiRes?.signal === 'BUY') return { final: 'BUY', reasons };
+    if (rtsRes?.signal === 'BUY' && rtsRes.mode === 'TREND') return { final: 'BUY', reasons };
+    if (asiRes?.signal === 'BUY') return { final: 'BUY', reasons };
+    if (rsiRes?.signal === 'REDUCE') return { final: 'REDUCE', reasons };
+    if (rsiRes?.signal === 'OVERBOUGHT') return { final: 'WATCH', reasons };
+    if (rsiRes?.signal === 'OVERSOLD') return { final: 'WATCH', reasons };
+    return { final: 'HOLD', reasons };
+  }
+
+  // 단일 진입점
+  function analyze(bars) {
+    if (!Array.isArray(bars) || bars.length < 20) {
+      return { final: 'HOLD', reasons: ['데이터 부족 (20봉 미만)'], rsi: null, rts: null, asi: null };
+    }
+    const rsiSeries = computeRSISeries(bars, 14);
+    const rsiRes = detectRSISignals(bars, rsiSeries);
+    const rtsRes = computeRTS(bars);
+    const asiSeries = computeASISeries(bars);
+    const asiRes = detectASISignals(bars, asiSeries);
+    const combo = combineSignals(rsiRes, rtsRes, asiRes);
+    return { ...combo, rsi: rsiRes, rts: rtsRes, asi: asiRes };
+  }
+
+  return { computeRSISeries, computeASISeries, computeRTS, analyze };
+})();
+
+// ── Wilder 신호 캐시 + 페치 ────────────────────────
+const _wilderCache = {}; // { 'J:005930': { savedAt, result } }
+const WILDER_TTL_MS = 30 * 60 * 1000;
+function wilderApiBase(){
+  const host=location.hostname;
+  return (host.endsWith('pages.dev') || host.endsWith('web.app') || host.endsWith('firebaseapp.com') || host==='localhost') ? location.origin : null;
+}
+async function fetchWilderForCode(code, opts = {}) {
+  const clean = normalizeStockCode(code);
+  if (!clean) return null;
+  const region = stockRegionForCode(clean);
+  const market = region === 'overseas' ? 'NAS' : 'J';
+  const key = `${market}:${clean}`;
+  const cached = _wilderCache[key];
+  if (!opts.force && cached && (Date.now() - cached.savedAt) < WILDER_TTL_MS) return cached.result;
+  try {
+    const res = await apiFetch(`/api/ohlc-history?code=${encodeURIComponent(clean)}&market=${market}&days=120`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const item = data[key] || Object.values(data)[0];
+    if (!item || item.error || !Array.isArray(item.bars)) throw new Error(item?.error || 'no bars');
+    const result = Wilder.analyze(item.bars);
+    result.lastBar = item.bars[item.bars.length - 1];
+    result.barsCount = item.bars.length;
+    _wilderCache[key] = { savedAt: Date.now(), result };
+    return result;
+  } catch (e) {
+    return { error: e.message || 'fetch failed' };
+  }
+}
+
+function wilderSignalChip(signal) {
+  const map = {
+    BUY:    { cls: 'up-chip', label: '🟢 BUY' },
+    SELL:   { cls: 'down-chip', label: '🔴 SELL' },
+    EXIT:   { cls: 'down-chip', label: '🚪 EXIT' },
+    REDUCE: { cls: 'down-chip', label: '🟡 REDUCE' },
+    WATCH:  { cls: 'neutral', label: '👀 WATCH' },
+    HOLD:   { cls: 'neutral', label: '⏸ HOLD' },
+  };
+  const m = map[signal] || map.HOLD;
+  return `<span class="status-chip ${m.cls}" style="font-size:.7rem;font-weight:900;">${m.label}</span>`;
+}
+
+function renderWilderSection(result) {
+  if (!result) return '';
+  if (result.error) return `<div class="stock-detail-list-row"><span>Wilder 신호</span><strong class="down-chip">${escapeHtml(result.error)}</strong></div>`;
+  const { final, reasons = [], rsi, rts, asi, barsCount } = result;
+  const rsiVal = rsi?.rsi != null ? rsi.rsi.toFixed(1) : '-';
+  const asiVal = asi?.asi != null ? asi.asi.toFixed(1) : '-';
+  const sarTxt = asi?.sarExit?.triggered ? `발동 (-${asi.sarExit.drop.toFixed(1)}pt)` : `정상 (피크 ${asi?.sarExit?.peak?.toFixed(1) ?? '-'} / 현재 -${(asi?.sarExit?.drop||0).toFixed(1)}pt)`;
+  return `<div style="font-size:.82rem;font-weight:900;margin:14px 0 7px;">🧮 Wilder 퀀트 신호 <span class="badge">${barsCount||0}봉</span></div>
+    <div class="stock-detail-grid">
+      <div class="stock-detail-metric"><div class="k">종합 시그널</div><div class="v">${wilderSignalChip(final)}</div></div>
+      <div class="stock-detail-metric"><div class="k">RSI(14)</div><div class="v">${rsiVal}</div></div>
+      <div class="stock-detail-metric"><div class="k">ASI 누적</div><div class="v">${asiVal}</div></div>
+      <div class="stock-detail-metric"><div class="k">RTS 모드</div><div class="v">${escapeHtml(rts?.mode||'-')}</div></div>
+      <div class="stock-detail-metric"><div class="k">HBOP / LBOP</div><div class="v" style="font-size:.78rem;">${rts?.hbop?.toFixed(2)||'-'} / ${rts?.lbop?.toFixed(2)||'-'}</div></div>
+      <div class="stock-detail-metric"><div class="k">SAR 추적</div><div class="v" style="font-size:.72rem;">${escapeHtml(sarTxt)}</div></div>
+    </div>
+    <div class="stock-detail-list" style="margin-top:8px;">
+      ${reasons.map(r => `<div class="stock-detail-list-row"><span>${escapeHtml(r.split(':')[0])}</span><strong style="font-size:.78rem;font-weight:700;">${escapeHtml(r.split(':').slice(1).join(':').trim())}</strong></div>`).join('')}
+    </div>`;
+}
+
+// MY자산 행 옆에 시그널 배지를 비동기로 채워준다
+async function refreshWilderBadgesForHoldings() {
+  const rows = (_acctRows || []).filter(a => stockRegionForCode(a.code));
+  const seen = new Set();
+  for (const a of rows) {
+    const code = normalizeStockCode(a.code);
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    const result = await fetchWilderForCode(code);
+    const targets = document.querySelectorAll(`[data-wilder-badge="${CSS.escape(code)}"]`);
+    if (result && !result.error) {
+      targets.forEach(el => { el.innerHTML = wilderSignalChip(result.final); el.title = (result.reasons || []).join('\n'); });
+    } else {
+      targets.forEach(el => { el.innerHTML = ''; });
+    }
+    await new Promise(r => setTimeout(r, 80));
+  }
+}
+
 async function showHoldingDetail(code){
   const clean=normalizeStockCode(code);
   const panel=document.getElementById('stock-detail-panel');
@@ -3645,7 +3965,13 @@ async function showHoldingDetail(code){
   </div>`}
   <div style="font-size:.82rem;font-weight:900;margin-bottom:7px;">투자자 수급</div>
   <div class="stock-detail-list">${supplyDemandHtml(supply,clean)}</div>
-  ${etfHoldingsHtml(clean)}`;
+  ${etfHoldingsHtml(clean)}
+  <div id="wilder-section-${escapeAttr(clean)}"><div class="price-loading" style="margin-top:14px;">Wilder 퀀트 신호 분석 중...</div></div>`;
+  // Wilder 분석 비동기 로드
+  fetchWilderForCode(clean).then(result=>{
+    const wEl=document.getElementById('wilder-section-'+clean);
+    if(wEl)wEl.innerHTML=renderWilderSection(result);
+  });
 }
 
 // ── JSON 파일 업로드 ────────────────────────────────────
@@ -4457,7 +4783,7 @@ function drawAcctRows(rows) {
       <td><input class="sheet-input" type="text" value="${escapeAttr(a.code||'')}" data-field="code" placeholder="005930"
           oninput="acctCellChange(${i},this);queueAcctCodeLookup(${i},this)" onchange="acctCellChange(${i},this)" onblur="handleAcctCodeInput(${i},this)" style="width:78px"/></td>
       <td><input class="sheet-input${a._autoName?' auto-filled':''}" type="text" value="${escapeAttr(a.stockName||'')}" data-field="stockName" placeholder="종목명"
-          onchange="acctCellChange(${i},this)" style="min-width:110px"/></td>
+          onchange="acctCellChange(${i},this)" style="min-width:110px"/><span class="wilder-badge-slot" data-wilder-badge="${escapeAttr(normalizeStockCode(a.code||''))}" style="margin-left:6px;display:inline-block;vertical-align:middle;"></span></td>
       <td><input class="sheet-input" type="number" value="${a.qty||''}" data-field="qty" placeholder="100"
           oninput="acctCellChange(${i},this)" style="width:65px"/></td>
       <td><input class="sheet-input" type="number" value="${a.avgBuy||''}" data-field="avgBuy" placeholder="70000"
@@ -4471,6 +4797,9 @@ function drawAcctRows(rows) {
   }).join('');
   updateAcctFooter(rows);
   renderBrokerPnlChart(rows);
+  // Wilder 시그널 배지 비동기 로드 (debounce)
+  clearTimeout(window._wilderBadgeTimer);
+  window._wilderBadgeTimer=setTimeout(()=>{ try{ refreshWilderBadgesForHoldings(); }catch(e){} }, 400);
 }
 
 function acctCellChange(idx, input) {
