@@ -1,87 +1,158 @@
-# WhaleTracker Pro — Claude 작업 가이드
+# WhaleTracker Pro — Claude Context
 
-기관 투자자 지분 추적 + 개인 포트폴리오 관리 PWA. 모바일 최적화 단일 페이지 앱(SPA)이며 Cloudflare Pages + Firebase로 운영된다.
+## 프로젝트 개요
 
-## 배포·런타임 구조
+기관 투자자(고래) 공시 데이터를 추적하고, 사용자 개인 포트폴리오를 관리하는 웹/PWA 앱.
+- **앱 이름**: WhaleTracker Pro
+- **도메인**: https://whale-tracker-data.pages.dev
+- **GitHub**: https://github.com/mustbebecomerichman/whale-tracker-data
+- **호스팅**: Cloudflare Pages (정적 파일) + Firebase (Auth/Firestore/Functions)
+- **연락처**: smmoon2030@gmail.com
 
-- **호스팅**: Cloudflare Pages (`/functions/api/*` 서버리스 함수 포함)
-- **인증·DB**: Firebase Authentication(Google 로그인 우선) + Firestore
-- **PWA**: `manifest.webmanifest` + `sw.js`
-- **GitHub Pages 미러**: 정적만 동작, `/api` 함수는 Cloudflare Pages 도메인에서만 호출 가능
-- **저장소**: `mustbebecomerichman/whale-tracker-data` (origin/main 배포 트리거)
+---
 
-## 핵심 파일
+## 아키텍처
 
-| 파일/디렉토리 | 역할 |
-|---|---|
-| `index.html` (≈4,800줄) | **SPA 전체** — HTML/CSS/JS 모두 인라인. 모든 페이지·기능이 여기 있음 |
-| `dart_fetcher.py` | DART(전자공시) 대량보유·임원 데이터 수집 스크립트 |
-| `firestore.rules` | DB 보안 규칙. 관리자: `smmoon2030@gmail.com` 또는 custom claim `admin=true` 또는 `admins/{uid}` 문서 |
-| `firebase.json` | Firestore rules 배포 설정만 (호스팅은 Cloudflare) |
-| `functions/api/fx-rate.js` | 환율(KRW/USD TTS) 조회 |
-| `functions/api/kis-price.js` | 한국·미국 시세 조회 (KIS, Stooq fallback) |
-| `functions/api/supply-demand.js` | 종목 수급 데이터 |
-| `functions/_shared/firebase-auth.js` | API 함수용 Firebase 토큰 검증 |
-| `_headers` | Cloudflare Pages 보안 헤더 (CSP, HSTS 등) |
-| `sw.js`, `manifest.webmanifest` | PWA 캐시·설치 |
-| `privacy.html`, `about.html` | 개인정보처리방침·소개 |
-| `docs/android-store-and-ads.md` | Google Play 스토어 등록·광고 가이드 |
-| `docs/frontend-security-checklist.md` | 프런트 보안 체크리스트 |
-| `docs/assetlinks.template.json` | Android Digital Asset Links 템플릿 |
+```
+whale tracker pro/
+├── index.html              # 메인 SPA (단일 파일 앱, 259KB — 전체 프론트엔드)
+├── about.html              # 서비스 소개 페이지
+├── privacy.html            # 개인정보처리방침
+├── manifest.webmanifest    # PWA 매니페스트
+├── sw.js                   # 서비스 워커
+├── ads.txt / app-ads.txt   # AdSense/AdMob 퍼블리셔 인증 파일
+├── _headers                # Cloudflare Pages 보안 헤더 (CSP 등)
+├── firebase.json           # Firebase 프로젝트 설정
+├── firestore.rules         # Firestore 보안 규칙
+├── dart_fetcher.py         # DART/SEC 데이터 수집 Python 스크립트
+├── functions/              # Firebase Cloud Functions (Node.js)
+│   ├── api/                # API 엔드포인트 (모두 requireFirebaseUser + rejectUntrustedOrigin 필수)
+│   └── _shared/            # 공통 미들웨어
+├── icons/                  # PWA 아이콘 (192px, 512px)
+├── docs/                   # 작업 계획 문서
+│   ├── android-store-and-ads.md      # Play Store 출시 로드맵
+│   ├── frontend-security-checklist.md
+│   └── assetlinks.template.json      # Digital Asset Links 템플릿
+└── .github/
+    ├── workflows/
+    │   ├── daily_update.yml           # 매일 10시 KST DART/SEC 데이터 수집
+    │   ├── deploy_firestore_rules.yml # firestore.rules 변경 시 자동 배포
+    │   └── security_guard.yml        # API 보안 패턴 강제 검사
+    └── scripts/
+        └── deploy-firestore-rules.js
+```
 
-## index.html 페이지 구조
+---
 
-`showPage(id)`로 전환되는 SPA 페이지들:
+## 기술 스택
 
-| ID | 라벨 | 설명 |
-|---|---|---|
-| `page-mypage` | MY자산 | 개인 포트폴리오. 탭: 자산/국내주식/해외주식. 계좌별·종목별 현황, 기간 손익, 배당, 거래내역 |
-| `page-nps` | 퀀트 스크리너 | 5종 퀀트 전략(밸런스/가치/모멘텀 등) 점수화. `_quantAll` + `scoreQuantRows()` |
-| `page-alert` | 국민연금 | 국민연금 보유 종목 + 해외 13F |
-| `page-legend` | 대량보유 / 투자전설 | 5%이상 대량보유 + 글로벌 슈퍼투자자 13F |
-| `page-admin` | 관리자 | 데이터 업로드, 사용자 승인 |
+| 레이어 | 기술 |
+|--------|------|
+| 프론트엔드 | Vanilla JS + HTML (단일 index.html SPA) |
+| 인증 | Firebase Auth (Google 로그인) |
+| DB | Firebase Firestore |
+| API | Firebase Cloud Functions (Node.js 22) |
+| 데이터 수집 | Python 3.11 (dart_fetcher.py) |
+| 호스팅 | Cloudflare Pages |
+| CI/CD | GitHub Actions |
+| 모바일 | PWA (Android TWA 예정) |
 
-## 데이터 흐름
+---
 
-- **whale_data 문서**: Firestore `whale_data/current` (국내), `whale_data/global` (해외 13F·전설 투자자)
-- **클라이언트 캐시**: `localStorage['whaleDataCacheV2']`. TTL 30분 + **날짜 비교**로 매일 자정에 만료 (`readWhaleDataCache()`)
-- **포트폴리오**: Firestore `portfolios/{uid}` — 계좌별 행(`_acctRows`), 거래내역, 배당
-- **시세**: `/api/kis-price` 호출, 결과는 행에 즉시 반영 (Cloudflare Pages 도메인에서만)
-- **환율(TTS)**: `/api/fx-rate` 자동 조회, `localStorage['fxTtsRate']`에 캐시
+## GitHub Secrets (Actions에서 필요)
 
-## 코드 스타일·관습
+| 시크릿 이름 | 설명 |
+|-------------|------|
+| `DART_API_KEY` | 금융감독원 DART Open API 키 |
+| `FIREBASE_SERVICE_ACCOUNT` | Firebase 서비스 계정 JSON (project_id: `whaletracker-pro`) |
 
-- **CSS·JS 모두 `index.html`에 인라인**. 파일 분리 X. 새 기능 추가 시에도 인라인 유지.
-- **Vanilla JS**, 빌드 도구 없음. 함수형으로 글로벌 변수(`_quantAll`, `_acctRows`, `_fxTtsRate` 등) 사용.
-- **모바일 퍼스트**: `@media(max-width:760px)` 블록(약 567~900줄)에 모바일 전용 규칙. 데스크톱과 모바일 양쪽 모두 확인 필요.
-- **탭 토글**: `setPortfolioAssetTab('all'|'domestic'|'overseas')`가 `#page-mypage`에 `asset-tab-*` 클래스를 토글, CSS로 표시/숨김 처리.
-- **금액 표시**: KRW/USD 듀얼은 `splitMoneyHtml(krw,usd)` — `.split-money` 컨테이너에 `.krw`/`.usd` 두 줄. 메인 총 평가금액(`#mp-total`)은 CSS로 수평 정렬.
-- **커밋 메시지**: 짧은 영문 동사구 (예: `Add ...`, `Improve ...`, `Fix ...`). 한국어 본문 가능.
+로컬 개발용 시크릿은 `.env.local` 또는 `secrets_local.py`에 보관 (`.gitignore`에 포함).
 
-## 보안 주의사항
+---
 
-- `.gitignore`에 있는 파일들 **절대 커밋 금지**: `secrets_local.py`, `serviceAccountKey.json`, `.env*`, `my_portfolio.json`, `whale_data.json`, `global_whales.json`
-- Firestore 규칙은 `primaryAdmin || adminByClaim || adminByDoc` 패턴. 관리자 권한 변경 시 반드시 3가지 모두 일관 유지.
-- `_headers`의 CSP 손대지 말 것. 외부 스크립트 추가 시 CSP도 함께 갱신.
-- API Origin 검증: `functions/_shared/firebase-auth.js`에서 토큰 + Origin 화이트리스트 검사.
+## 로컬 개발 환경 세팅
 
-## 자주 하는 작업
+새 PC에서 시작할 때:
 
-- **신규 페이지 추가**: `<div class="page" id="page-XXX">` HTML + `showPage` 분기 + 헤더 nav 버튼.
-- **퀀트 전략 추가**: `QUANT_METHODS` 객체에 weights 추가, `#quant-tabs`에 버튼 추가.
-- **시세 API 변경**: `functions/api/kis-price.js`만 수정. 클라이언트는 `fetchAndUpdateAcctPrices()`/`showHoldingDetail()`.
-- **Firestore 규칙 배포**: 자동 — `firestore.rules` 푸시 시 GitHub Actions가 배포 (`Auto deploy Firestore rules` 커밋 참고).
+```powershell
+# Windows
+git clone https://github.com/mustbebecomerichman/whale-tracker-data.git "whale tracker pro"
+cd "whale tracker pro"
+.\setup.ps1
+```
 
-## 환경별 주의
+```bash
+# Linux / Mac
+git clone https://github.com/mustbebecomerichman/whale-tracker-data.git "whale tracker pro"
+cd "whale tracker pro"
+bash setup.sh
+```
 
-- **로컬 개발**: `index.html`을 직접 열면 `/api` 호출 실패. Wrangler(`npx wrangler pages dev .`) 또는 배포 후 확인.
-- **GitHub Pages**: 정적 미러 — 시세 조회 안 됨. 안내 메시지 표시됨.
-- **Cloudflare Pages**: 풀 기능. 환경변수(KIS API 키 등)는 Cloudflare Dashboard에서 설정.
+---
 
-## 작업 시 체크리스트
+## 보안 규칙 (Claude가 반드시 지켜야 할 사항)
 
-1. 모바일/데스크톱 양쪽 CSS 모두 확인 (`@media(max-width:760px)`)
-2. 자산 탭 3종(자산/국내/해외) 모두 정상 표시 확인
-3. 금액 표시는 KRW/USD 듀얼 케이스 확인
-4. Firestore 규칙 수정 시 관리자/일반사용자/비로그인 3케이스 검증
-5. 커밋 메시지는 영문 동사구, 한국어 본문 OK
+1. **API 함수** (`functions/api/*.js`): 반드시 `requireFirebaseUser` AND `rejectUntrustedOrigin` 포함
+2. **브라우저 → API 호출**: 반드시 `apiFetch()` 사용 (Firebase ID 토큰 자동 첨부)
+3. **CORS**: `Access-Control-Allow-Origin: *` 절대 금지
+4. **사용자 입력값**: HTML 삽입 전 반드시 이스케이프 처리
+5. **시크릿**: `secrets_local.py`, `serviceAccountKey.json`, `.env*`, `my_portfolio.json` — 절대 커밋 금지
+
+---
+
+## 현재 작업 상태 (2026-05-09 기준)
+
+### 완료된 작업
+- [x] 모바일 UI (컴팩트 헤더, 바텀 네비, 아이콘 기반 포트폴리오)
+- [x] PWA 기반 (manifest, sw.js, icons)
+- [x] Cloudflare Pages 보안 헤더 (`_headers`)
+- [x] AdSense/AdMob 스캐폴딩 (비활성화 상태, 실제 ID 발급 후 활성화)
+- [x] Play Store 출시 계획 문서 완성
+- [x] 포트폴리오 자산 분류 개선
+
+### 진행 중 / 대기 중
+- [ ] Google Play Store 등록 (패키지명, 서명 SHA-256 확보 필요)
+- [ ] `assetlinks.json` 실제 값으로 배포 (플레이스홀더 → 실제 값)
+- [ ] AdSense 승인 → 실제 `ca-pub-...` ID로 교체
+- [ ] AdMob 앱 등록 → `app-ads.txt` 실제 값으로 교체
+- [ ] Firebase Cloud Functions 추가 개발
+
+### Owner 입력 필요
+- Google Play 패키지명 (예: `com.whaletracker.pro`)
+- Android 서명 SHA-256 지문
+- Play Store 그래픽 (앱 아이콘, 피처 그래픽, 스크린샷)
+- AdSense 퍼블리셔 ID / 광고 슬롯 ID
+- AdMob 앱 ID / 광고 유닛 ID
+
+---
+
+## GitHub Actions 자동화
+
+| 워크플로우 | 트리거 | 역할 |
+|-----------|--------|------|
+| `daily_update.yml` | 매일 UTC 01:00 (KST 10:00) + push | DART 국민연금·대량보유, SEC 13F 글로벌 고래 수집 |
+| `deploy_firestore_rules.yml` | `firestore.rules` 변경 push | Firestore 보안 규칙 자동 배포 |
+| `security_guard.yml` | `index.html`, `functions/**` 변경 | API 보안 패턴 검사 |
+
+---
+
+## 배포 절차
+
+```bash
+# 1. 정적 파일은 main 브랜치에 push하면 Cloudflare Pages가 자동 배포
+git push origin main
+
+# 2. Firestore 규칙은 firestore.rules 수정 후 push하면 GitHub Actions가 배포
+# 3. Firebase Functions는 별도 수동 배포
+cd functions && firebase deploy --only functions
+```
+
+---
+
+## 코드 수정 전 검증 (업로드 후보 전 실행)
+
+```powershell
+node -e "const fs=require('fs'); JSON.parse(fs.readFileSync('manifest.webmanifest','utf8')); console.log('manifest ok')"
+node -e "const fs=require('fs'),vm=require('vm'); const html=fs.readFileSync('index.html','utf8'); [...html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/gi)].forEach((m,i)=>new vm.Script(m[1],{filename:'index-inline-'+i+'.js'})); console.log('inline scripts ok')"
+git diff --check
+```
