@@ -233,7 +233,7 @@ td.name{font-weight:600;color:var(--text);}
 
 /* MY PAGE SUMMARY CARDS */
 .myasset-mobile-header,.myasset-segment-row,.myasset-product-toolbar{display:none;}
-.myasset-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin:0 0 18px;border-bottom:1px solid var(--border);}
+.myasset-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin:0 0 18px;border-bottom:1px solid var(--border);}
 .myasset-tab{border:none;background:transparent;color:var(--text2);font-family:inherit;padding:13px 4px 12px;font-size:.95rem;font-weight:900;position:relative;cursor:pointer;}
 .myasset-tab.active{color:var(--text);}
 .myasset-tab.active::after{content:'';position:absolute;left:18%;right:18%;bottom:0;height:3px;border-radius:999px;background:var(--accent);}
@@ -267,12 +267,12 @@ td.name{font-weight:600;color:var(--text);}
 #page-mypage.stock-only .price-card:not(.stock-asset):not(.price-card-ghost),
 #page-mypage.stock-only #acct-body tr:not(.stock-asset),
 #page-mypage.stock-only .acct-row:not(.stock-asset){display:none!important;}
-/* MY자산 섹션 네비게이션 (자산변동/계좌별현황/거래내역/배당수익) */
-#page-mypage [data-asset-section]{display:none;}
-#page-mypage.asset-section-change [data-asset-section="change"],
-#page-mypage.asset-section-accounts [data-asset-section="accounts"],
-#page-mypage.asset-section-tx [data-asset-section="tx"],
-#page-mypage.asset-section-div [data-asset-section="div"]{display:block;}
+/* MY자산 섹션 네비게이션 (자산변동/계좌별현황/거래내역/배당수익) — 직계 자식만 대상 (탭 버튼 제외) */
+#page-mypage > [data-asset-section]{display:none;}
+#page-mypage.asset-section-change > [data-asset-section="change"],
+#page-mypage.asset-section-accounts > [data-asset-section="accounts"],
+#page-mypage.asset-section-tx > [data-asset-section="tx"],
+#page-mypage.asset-section-div > [data-asset-section="div"]{display:block;}
 /* Wilder BUY: 보유종목 탭에서만 현재가 시세판 표시 */
 #page-wilder:not(.wilder-tab-my) .wilder-my-only{display:none!important;}
 .mp-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:22px;}
@@ -585,7 +585,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .myasset-title span{font-size:.82rem;color:#e67e22;font-style:italic;margin-left:3px;}
   .myasset-date-badge{font-size:.78rem;font-weight:700;color:var(--text);opacity:.7;font-style:normal;margin-left:8px;vertical-align:middle;letter-spacing:0;}
   .myasset-tabs{
-    display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+    display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
     margin:0 -12px 18px;border-bottom:1px solid var(--border);
   }
   .myasset-tab{
