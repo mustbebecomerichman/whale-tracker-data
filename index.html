@@ -267,13 +267,14 @@ td.name{font-weight:600;color:var(--text);}
 #page-mypage.stock-only .price-card:not(.stock-asset):not(.price-card-ghost),
 #page-mypage.stock-only #acct-body tr:not(.stock-asset),
 #page-mypage.stock-only .acct-row:not(.stock-asset){display:none!important;}
-#page-mypage.asset-tab-all .portfolio-product-section{display:none!important;}
-#page-mypage.asset-tab-domestic .price-card.usd-asset,
-#page-mypage.asset-tab-domestic #acct-body tr.usd-asset,
-#page-mypage.asset-tab-domestic .acct-row.usd-asset{display:none!important;}
-#page-mypage.asset-tab-overseas .price-card:not(.usd-asset):not(.price-card-ghost),
-#page-mypage.asset-tab-overseas #acct-body tr:not(.usd-asset),
-#page-mypage.asset-tab-overseas .acct-row:not(.usd-asset){display:none!important;}
+/* MY자산 섹션 네비게이션 (자산변동/계좌별현황/거래내역/배당수익) */
+#page-mypage [data-asset-section]{display:none;}
+#page-mypage.asset-section-change [data-asset-section="change"],
+#page-mypage.asset-section-accounts [data-asset-section="accounts"],
+#page-mypage.asset-section-tx [data-asset-section="tx"],
+#page-mypage.asset-section-div [data-asset-section="div"]{display:block;}
+/* Wilder BUY: 보유종목 탭에서만 현재가 시세판 표시 */
+#page-wilder:not(.wilder-tab-my) .wilder-my-only{display:none!important;}
 .mp-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:22px;}
 @media(max-width:900px){.mp-summary-grid{grid-template-columns:1fr 1fr;}}
 @media(max-width:520px){.mp-summary-grid{grid-template-columns:1fr;}}
@@ -692,13 +693,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .kis-status p{display:none;}
   .kis-status > div:last-child{grid-column:auto;margin-left:0;}
   .kis-status .btn{width:auto;padding:6px 10px;}
-  #page-mypage.product-view-products .portfolio-account-section{display:none;}
-  #page-mypage.product-view-accounts .portfolio-product-section{display:none;}
-  #page-mypage.asset-tab-all .portfolio-product-section{display:none!important;}
-  #page-mypage.asset-tab-domestic .price-card.usd-asset,
-  #page-mypage.asset-tab-domestic #acct-body tr.usd-asset{display:none!important;}
-  #page-mypage.asset-tab-overseas .price-card:not(.usd-asset):not(.price-card-ghost),
-  #page-mypage.asset-tab-overseas #acct-body tr:not(.usd-asset){display:none!important;}
+  /* mobile: section-based show/hide inherits from desktop rule */
   .price-grid{display:grid;grid-template-columns:1fr;gap:0;margin-bottom:12px;background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);}
   .price-card{
     display:grid;grid-template-columns:46px minmax(0,1fr) auto;grid-template-rows:auto auto;
@@ -1154,7 +1149,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
 </div>
 
 <!-- ── MY자산 PAGE ── -->
-<div class="page active product-view-products asset-tab-all stock-only" id="page-mypage">
+<div class="page active product-view-products asset-section-change stock-only" id="page-mypage">
   <div class="myasset-mobile-header" aria-label="MY asset header">
     <button type="button" class="myasset-back" onclick="showPage('nps')" aria-label="뒤로">‹</button>
     <div class="myasset-title">MY자산<span class="myasset-date-badge" id="mp-title-date-m"></span></div>
@@ -1164,10 +1159,11 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     <h1>MY<span>자산</span><span class="myasset-date-badge" id="mp-title-date"></span></h1>
     <p>개인 투자 현황 · 연간 실현 손익 · 계좌별 성과</p>
   </div>
-  <div class="myasset-tabs" role="tablist" aria-label="자산 분류">
-    <button type="button" class="myasset-tab active" data-asset-tab="all" onclick="setPortfolioAssetTab('all',this)">자산</button>
-    <button type="button" class="myasset-tab" data-asset-tab="domestic" onclick="setPortfolioAssetTab('domestic',this)">국내주식</button>
-    <button type="button" class="myasset-tab" data-asset-tab="overseas" onclick="setPortfolioAssetTab('overseas',this)">해외주식</button>
+  <div class="myasset-tabs" role="tablist" aria-label="MY자산 섹션">
+    <button type="button" class="myasset-tab active" data-asset-section="change" onclick="setMyAssetSection('change',this)">자산변동</button>
+    <button type="button" class="myasset-tab" data-asset-section="accounts" onclick="setMyAssetSection('accounts',this)">계좌별현황</button>
+    <button type="button" class="myasset-tab" data-asset-section="tx" onclick="setMyAssetSection('tx',this)">거래내역</button>
+    <button type="button" class="myasset-tab" data-asset-section="div" onclick="setMyAssetSection('div',this)">배당수익</button>
   </div>
 
   <!-- 요약 카드 -->
@@ -1192,7 +1188,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     </div>
   </div>
 
-  <div class="mp-period-grid" id="portfolio-period-metrics">
+  <div class="mp-period-grid" id="portfolio-period-metrics" data-asset-section="change">
     <div class="mp-card c-blue">
       <div class="mp-lbl">전일 대비</div>
       <div class="mp-val" id="period-daily">-</div>
@@ -1210,49 +1206,10 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     </div>
   </div>
 
-  <div class="mobile-section-hub" id="portfolio-mobile-hub" aria-label="Portfolio quick sections">
-    <button type="button" class="mobile-hub-btn" data-hub-group="profit-history" onclick="openMobilePortfolioGroup('profit-history','mp-total-history-chart')"><span>▣</span><b>투자수익</b></button>
-    <button type="button" class="mobile-hub-btn" data-hub-group="acct-detail" onclick="setPortfolioProductView('accounts',this)"><span>▤</span><b>종합잔고</b></button>
-    <button type="button" class="mobile-hub-btn" data-hub-group="div-detail" onclick="openMobilePortfolioGroup('div-detail','div-table')"><span>☂</span><b>MY 연금</b></button>
-    <button type="button" class="mobile-hub-btn" data-hub-group="tx-detail" onclick="openMobilePortfolioGroup('tx-detail','sheet-table')"><span>↗</span><b>거래내역</b></button>
-  </div>
-
   <div class="ad-slot" data-ad-slot-key="portfolio-mobile"></div>
 
-  <div class="myasset-segment-row" aria-label="포트폴리오 보기 방식">
-    <button type="button" class="myasset-segment-btn active" data-product-view="products" onclick="setPortfolioProductView('products',this)">투자상품</button>
-    <button type="button" class="myasset-segment-btn" data-product-view="accounts" onclick="setPortfolioProductView('accounts',this)">계좌</button>
-  </div>
-  <div class="myasset-product-toolbar">
-    <label class="myasset-check"><input type="checkbox" checked onchange="togglePortfolioStockOnly(this)"> 주식만 보기</label>
-  </div>
-
-  <!-- 현재가 시세판 -->
-  <div class="section portfolio-product-section">
-    <div class="section-title">
-      <div class="section-title-left">📈 보유 종목 현재가 <span class="badge" id="price-last-update">조회 전</span>
-        <span class="badge" id="price-api-status">API 대기</span></div>
-      <button class="btn btn-outline btn-sm mobile-toggle" onclick="toggleMobileSection('price-detail',this)">숨기기</button>
-    </div>
-    <div class="price-grid mobile-collapsible" id="price-grid" data-mobile-group="price-detail">
-      <div class="price-card price-card-ghost" aria-hidden="true">
-        <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
-        <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
-      </div>
-      <div class="price-card price-card-ghost" aria-hidden="true">
-        <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
-        <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
-      </div>
-      <div class="price-card price-card-ghost" aria-hidden="true">
-        <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
-        <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
-      </div>
-    </div>
-    <div class="stock-detail-panel mobile-collapsible" id="stock-detail-panel" data-mobile-group="price-detail"></div>
-  </div>
-
   <!-- 계좌별 현황 -->
-  <div class="section portfolio-account-section">
+  <div class="section portfolio-account-section" data-asset-section="accounts">
     <div class="section-title">
       <div class="section-title-left">🏦 계좌별 현황</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -1300,7 +1257,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   </div>
 
   <!-- 증권사별 손익 그래프 -->
-  <div class="section">
+  <div class="section" data-asset-section="accounts">
     <div class="section-title"><div class="section-title-left">증권사별 손익 그래프</div>
       <button class="btn btn-outline btn-sm mobile-toggle" onclick="toggleMobileSection('broker-chart',this)">숨기기</button></div>
     <div class="chart-wrap mobile-collapsible" id="mp-history-chart" data-mobile-group="broker-chart">
@@ -1309,7 +1266,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   </div>
 
   <!-- 연간 거래 내역 (스프레드시트형) -->
-  <div class="section">
+  <div class="section" data-asset-section="tx">
     <div class="section-title">
       <div class="section-title-left">
         📋 거래 내역
@@ -1361,7 +1318,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   </div>
 
   <!-- 배당 수익 -->
-  <div class="section">
+  <div class="section" data-asset-section="div">
     <div class="section-title">
       <div class="section-title-left">
         💰 배당 수익
@@ -1369,11 +1326,12 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <span class="badge" id="div-year-badge">2026년</span>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="div-year-chips"></div>
         <button class="btn btn-outline btn-sm mobile-toggle" onclick="toggleMobileSection('div-detail',this)">숨기기</button>
         <button class="btn btn-primary btn-sm" onclick="addDivRow()">＋ 배당 추가</button>
       </div>
     </div>
+    <!-- 배당 연도 선택 (전체/연도별) -->
+    <div class="div-year-filter mobile-collapsible" data-mobile-group="div-detail" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;" id="div-year-chips"></div>
     <!-- 배당 요약 카드 -->
     <div class="mobile-collapsible" data-mobile-group="div-detail" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:14px;">
       <div class="mp-card c-green"><div class="mp-lbl">총 배당금</div><div class="mp-val" id="div-total-gross">0원</div></div>
@@ -1411,7 +1369,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   </div>
 
   <!-- 전체 손익 그래프 -->
-  <div class="section">
+  <div class="section" data-asset-section="change">
     <div class="section-title">
       <div class="section-title-left">📉 전체 손익 그래프 <span class="badge" id="portfolio-history-badge">매일 08:00 기준</span></div>
       <button class="btn btn-outline btn-sm mobile-toggle" onclick="toggleMobileSection('profit-history',this)">숨기기</button>
@@ -1421,7 +1379,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     </div>
   </div>
 
-  <div class="section">
+  <div class="section" data-asset-section="change">
     <div class="section-title">
       <div class="section-title-left">전일 대비 자산 변동 <span class="badge" id="daily-change-badge">직전 스냅샷 기준</span></div>
       <button class="btn btn-outline btn-sm mobile-toggle" onclick="toggleMobileSection('daily-change',this)">숨기기</button>
@@ -1456,7 +1414,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
 </div>
 
 <!-- ── Wilder BUY PAGE ── -->
-<div class="page" id="page-wilder">
+<div class="page wilder-tab-my" id="page-wilder">
   <div class="hero">
     <h1>🧮 <span>Wilder BUY</span> 종목 리스트</h1>
     <p>웰스 와일더의 RSI · RTS · ASI 3종 알고리즘이 매수 신호를 발생시킨 종목만 모았습니다.</p>
@@ -1472,6 +1430,31 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     <div class="hero-stat"><div class="num" id="wilder-buy-count">0개</div><div class="lbl">BUY 시그널</div></div>
     <div class="hero-stat"><div class="num" id="wilder-watch-count">0개</div><div class="lbl">관찰 대상</div></div>
   </div>
+
+  <!-- 보유 종목 현재가 (MY자산에서 머지) — 보유종목 탭에서만 표시 -->
+  <div class="section wilder-my-only" id="wilder-price-section">
+    <div class="section-title">
+      <div class="section-title-left">📈 보유 종목 현재가 <span class="badge" id="price-last-update">조회 전</span>
+        <span class="badge" id="price-api-status">API 대기</span></div>
+      <button class="btn btn-outline btn-sm" onclick="fetchAllPrices()">🔄 새로고침</button>
+    </div>
+    <div class="price-grid" id="price-grid">
+      <div class="price-card price-card-ghost" aria-hidden="true">
+        <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
+        <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
+      </div>
+      <div class="price-card price-card-ghost" aria-hidden="true">
+        <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
+        <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
+      </div>
+      <div class="price-card price-card-ghost" aria-hidden="true">
+        <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
+        <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
+      </div>
+    </div>
+    <div class="stock-detail-panel" id="stock-detail-panel"></div>
+  </div>
+
   <div class="section">
     <div class="section-title">
       <div class="section-title-left">🟢 매수 후보 (BUY/REDUCE는 신중히)</div>
@@ -4267,13 +4250,19 @@ async function loadChangelog(){
 // ═══════════════════════════════════════════════════════
 //  네비게이션 & 토스트
 // ═══════════════════════════════════════════════════════
-function setPortfolioAssetTab(tab='all',btn=null){
+function setMyAssetSection(section='change',btn=null){
   const page=document.getElementById('page-mypage');
   if(!page)return;
-  page.classList.remove('asset-tab-all','asset-tab-domestic','asset-tab-overseas');
-  page.classList.add(`asset-tab-${tab}`);
-  document.querySelectorAll('.myasset-tab').forEach(x=>x.classList.toggle('active',x.dataset.assetTab===tab));
+  page.classList.remove('asset-section-change','asset-section-accounts','asset-section-tx','asset-section-div');
+  page.classList.add(`asset-section-${section}`);
+  document.querySelectorAll('.myasset-tab').forEach(x=>x.classList.toggle('active',x.dataset.assetSection===section));
   if(btn)btn.classList.add('active');
+  try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(_){}
+}
+// 구버전 호환: 기존 호출은 새 섹션으로 매핑
+function setPortfolioAssetTab(tab='all',btn=null){
+  const map={all:'change',domestic:'accounts',overseas:'accounts'};
+  setMyAssetSection(map[tab]||'change',btn);
 }
 function setPortfolioProductView(view='products',btn=null,options={}){
   const page=document.getElementById('page-mypage');
@@ -4453,6 +4442,11 @@ function switchWilderUniverse(name, btn) {
     const found = document.querySelector(`#wilder-tabs [data-wilder-tab="${name}"]`);
     if (found) document.querySelectorAll('#wilder-tabs .tab').forEach(t => t.classList.toggle('active', t === found));
   }
+  // 보유종목 탭일 때만 현재가 시세판 표시
+  const wilderPage = document.getElementById('page-wilder');
+  if (wilderPage) wilderPage.classList.toggle('wilder-tab-my', name === 'my');
+  // 보유종목 탭으로 진입 시 현재가 자동 조회
+  if (name === 'my') { try { fetchAllPrices({silent:true,auto:true}); } catch(_){} }
   // 기존 결과가 있으면 재사용, 없으면 새로 분석
   if (_wilderResults[name]) {
     drawWilderResults();
@@ -4694,7 +4688,7 @@ function initPortfolioDetailVisibility(force=false){
     updateDetailToggleButtons(group,collapsed);
   });
   if(isMobile){
-    setPortfolioAssetTab('all');
+    setMyAssetSection('change');
     setPortfolioProductView('products',null,{noScroll:true});
     setMobileHubActive('price-detail',true);
   }else{
@@ -5280,7 +5274,8 @@ function drawAcctRows(rows) {
     const region = stockRegionForCode(codeClean);
     const bOpts = BROKERS.map(b => `<option${b===a.brokerage?' selected':''}>${escapeHtml(b)}</option>`).join('');
     const aOpts = ACCT_TYPES.map(t => `<option${t===a.acctType?' selected':''}>${escapeHtml(t)}</option>`).join('');
-    return `<tr class="${[region?'stock-asset':'',region==='overseas'?'usd-asset':''].filter(Boolean).join(' ')}" data-aidx="${i}" onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))showHoldingDetail('${escapeJsAttr(a.code||'')}')">
+    const isDraft = !codeClean && !!a._draftId;
+    return `<tr class="${[(region||isDraft)?'stock-asset':'',region==='overseas'?'usd-asset':''].filter(Boolean).join(' ')}" data-aidx="${i}" onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))showHoldingDetail('${escapeJsAttr(a.code||'')}')">
       <td class="row-num" title="Delete row">${rowDeleteButton(`deleteAcctRow(${i})`)}</td>
       <td><select class="sheet-input" data-field="brokerage" onchange="acctCellChange(${i},this)" style="min-width:100px"><option value="">선택</option>${bOpts}</select></td>
       <td><select class="sheet-input" data-field="acctType" onchange="acctCellChange(${i},this)" style="min-width:72px"><option value="">선택</option>${aOpts}</select></td>
@@ -5411,8 +5406,8 @@ function addAcctRow() {
     }
     // 모바일 collapsed면 펴기
     document.querySelectorAll('.portfolio-account-section .mobile-collapsible').forEach(el => el.classList.remove('mobile-hidden','is-collapsed'));
-    // 자산 탭에 있으면 도메스틱/오버시스 필터링으로 새 빈 행이 숨겨질 수 있으니 'all'로 강제
-    setPortfolioAssetTab('all');
+    // 새 종목을 보려면 계좌별현황 섹션이 활성화되어 있어야 함
+    setMyAssetSection('accounts');
     try { showToast('✅ 새 종목 행이 추가되었습니다. 종목코드를 입력하세요.', 'ok'); } catch(_) {}
     setTimeout(() => {
       const fi = document.querySelector('#acct-body tr:first-child input[data-field="code"]');
