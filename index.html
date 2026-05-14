@@ -561,6 +561,25 @@ footer a{color:var(--accent4);text-decoration:none;}
 code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
 
 @media(max-width:720px){
+  /* 모바일: 섹션 헤더의 KIS 버튼들이 세로로 잘 정렬 + 터치 친화적 사이즈 */
+  #page-mypage .section-title{flex-wrap:wrap;}
+  #page-mypage .section-title > div:last-child{
+    display:flex !important;flex-wrap:wrap !important;gap:6px !important;width:100%;margin-top:8px;
+  }
+  #page-mypage .section-title .btn-sm{
+    flex:1 1 auto;min-width:0;padding:9px 10px;font-size:.82rem;min-height:40px;
+  }
+  #page-mypage .section-title .fx-control{font-size:.72rem;}
+  /* KIS 연동 버튼 강조 (모바일에서 한 줄 전체 차지) */
+  #btn-kis-sync,#btn-kis-tx-sync{flex:1 1 100% !important;background:#edfff5;color:#16794b !important;font-weight:900;}
+  /* sheet 테이블은 가로 스크롤 유지 (모바일에서 컴팩트 테이블 유지) */
+  .sheet-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  #acct-table.sheet-table,
+  #sheet-table.sheet-table,
+  #div-table.sheet-table{font-size:.72rem;}
+  #acct-table.sheet-table .sheet-input,
+  #sheet-table.sheet-table .sheet-input,
+  #div-table.sheet-table .sheet-input{font-size:.7rem;padding:3px 4px;}
   html,body{width:100%;overflow-x:hidden;}
   body{font-size:14px;font-family:"SamsungOne","Samsung One","One UI Sans","Roboto","Noto Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-weight:500;}
   header{position:sticky;top:0;z-index:160;background:#fff;border-bottom:1px solid var(--border);box-shadow:0 2px 12px rgba(15,23,42,.08);}
@@ -3442,20 +3461,20 @@ function drawSheetRows(rows, filtered=false){
     const acctOpts=ACCT_TYPES.map(a=>`<option${a===(t.acctType||'위탁')?' selected':''}>${escapeHtml(a)}</option>`).join('');
     return`<tr data-idx="${rowIdx}">
       <td class="row-num" title="Delete row">${rowDeleteButton(`deleteRow(${rowIdx})`)}</td>
-      <td><input class="sheet-input" type="date" value="${escapeAttr(t.date||'')}" data-field="date" onchange="cellChange(${rowIdx},this)" style="width:118px"/></td>
-      <td><select class="sheet-input" data-field="brokerage" onchange="cellChange(${rowIdx},this)" style="width:92px"><option value="">선택</option>${brokerOpts}</select></td>
-      <td><select class="sheet-input" data-field="acctType" onchange="cellChange(${rowIdx},this)" style="width:64px"><option value="">선택</option>${acctOpts}</select></td>
-      <td><input class="sheet-input" type="text" value="${escapeAttr(t.code||'')}" data-field="code" placeholder="005930" oninput="cellChange(${rowIdx},this);queueSheetCodeLookup(${rowIdx},this)" onchange="cellChange(${rowIdx},this)" onblur="handleSheetCodeInput(${rowIdx},this)" style="width:72px"/></td>
-      <td><input class="sheet-input${t._autoName?' auto-filled':''}" type="text" value="${escapeAttr(t.name||'')}" data-field="name" placeholder="종목명" onchange="cellChange(${rowIdx},this)" style="width:120px"/></td>
-      <td><input class="sheet-input" type="number" value="${t.qty||''}" data-field="qty" placeholder="100" oninput="cellChange(${rowIdx},this)" style="width:58px"/></td>
-      <td><input class="sheet-input" type="number" value="${t.avgBuy||''}" data-field="avgBuy" placeholder="70000" oninput="cellChange(${rowIdx},this)" style="width:80px"/></td>
-      <td><input class="sheet-input${t._autoPrice?' auto-price':''} ${valueCls}" type="number" value="${t.price||''}" data-field="price" placeholder="85000" oninput="cellChange(${rowIdx},this)" style="width:80px"/></td>
-      <td><input class="sheet-input calc-input money-neutral" type="text" value="${pur?fmt(pur)+'원':''}" readonly style="width:88px"/></td>
-      <td><input class="sheet-input calc-input ${valueCls}" type="text" value="${ev?fmt(ev)+'원':''}" readonly style="width:88px"/></td>
-      <td><input class="sheet-input calc-input ${pc}" type="text" value="${pnl||pur?(pnl>=0?'+':'')+fmt(pnl)+'원':''}" readonly style="width:92px"/></td>
-      <td><input class="sheet-input calc-input ${rc}" type="text" value="${pur||ev?(rate>=0?'+':'')+rate.toFixed(2)+'%':''}" readonly style="width:62px"/></td>
-      <td><input class="sheet-input" type="number" value="${t.fee||''}" data-field="fee" placeholder="0" onchange="cellChange(${rowIdx},this)" style="width:60px"/></td>
-      <td><input class="sheet-input" type="text" value="${escapeAttr(t.note||'')}" data-field="note" placeholder="메모" onchange="cellChange(${rowIdx},this)" style="width:90px"/></td>
+      <td><input class="sheet-input" type="date" value="${escapeAttr(t.date||'')}" data-field="date" onchange="cellChange(${rowIdx},this)" style="width:108px"/></td>
+      <td><select class="sheet-input" data-field="brokerage" onchange="cellChange(${rowIdx},this)" style="width:82px"><option value="">선택</option>${brokerOpts}</select></td>
+      <td><select class="sheet-input" data-field="acctType" onchange="cellChange(${rowIdx},this)" style="width:58px"><option value="">선택</option>${acctOpts}</select></td>
+      <td><input class="sheet-input" type="text" value="${escapeAttr(t.code||'')}" data-field="code" placeholder="005930" oninput="cellChange(${rowIdx},this);queueSheetCodeLookup(${rowIdx},this)" onchange="cellChange(${rowIdx},this)" onblur="handleSheetCodeInput(${rowIdx},this)" style="width:64px"/></td>
+      <td><input class="sheet-input${t._autoName?' auto-filled':''}" type="text" value="${escapeAttr(t.name||'')}" data-field="name" placeholder="종목명" onchange="cellChange(${rowIdx},this)" style="width:108px"/></td>
+      <td><input class="sheet-input" type="number" value="${t.qty||''}" data-field="qty" placeholder="100" oninput="cellChange(${rowIdx},this)" style="width:52px"/></td>
+      <td><input class="sheet-input" type="number" value="${t.avgBuy||''}" data-field="avgBuy" placeholder="70000" oninput="cellChange(${rowIdx},this)" style="width:72px"/></td>
+      <td><input class="sheet-input${t._autoPrice?' auto-price':''} ${valueCls}" type="number" value="${t.price||''}" data-field="price" placeholder="85000" oninput="cellChange(${rowIdx},this)" style="width:72px"/></td>
+      <td><input class="sheet-input calc-input money-neutral" type="text" value="${pur?fmt(pur)+'원':''}" readonly style="width:80px"/></td>
+      <td><input class="sheet-input calc-input ${valueCls}" type="text" value="${ev?fmt(ev)+'원':''}" readonly style="width:80px"/></td>
+      <td><input class="sheet-input calc-input ${pc}" type="text" value="${pnl||pur?(pnl>=0?'+':'')+fmt(pnl)+'원':''}" readonly style="width:84px"/></td>
+      <td><input class="sheet-input calc-input ${rc}" type="text" value="${pur||ev?(rate>=0?'+':'')+rate.toFixed(2)+'%':''}" readonly style="width:56px"/></td>
+      <td><input class="sheet-input" type="number" value="${t.fee||''}" data-field="fee" placeholder="0" onchange="cellChange(${rowIdx},this)" style="width:52px"/></td>
+      <td><input class="sheet-input" type="text" value="${escapeAttr(t.note||'')}" data-field="note" placeholder="메모" onchange="cellChange(${rowIdx},this)" style="width:80px"/></td>
     </tr>`;
   }).join('');
   updateSheetFooter(rows);
@@ -5608,8 +5627,12 @@ function acctCellChange(idx, input) {
 }
 
 function updateAcctFooter(rows) {
-  const set = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
-  // 통화별로 계산
+  const setVal = (id, v, title = '') => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = v;
+    if (title) el.setAttribute('title', title); else el.removeAttribute('title');
+  };
   const krwSum = {eval:0,purchase:0};
   const usdSum = {eval:0,purchase:0};
   rows.forEach(a => {
@@ -5621,24 +5644,22 @@ function updateAcctFooter(rows) {
   });
   const hasUsd = usdSum.eval > 0 || usdSum.purchase > 0;
   const hasKrw = krwSum.eval > 0 || krwSum.purchase > 0;
-  // 통화별 합계가 두 개일 때: KRW로 환산한 통합 합계를 표시 (TTS 기준)
-  const fmtMixed = (krw, usd) => {
-    if (hasUsd && hasKrw) {
-      const conv = krw + (usd * _fxTtsRate);
-      return `₩${Math.round(conv).toLocaleString('ko-KR')} (₩${Math.round(krw).toLocaleString('ko-KR')} + $${usd.toLocaleString('ko-KR',{maximumFractionDigits:2})}×${_fxTtsRate})`;
-    }
+  // 메인 표시: 변환 통합 합계만. 상세 내역은 title (hover tooltip)
+  const formatTotal = (krw, usd) => {
+    if (hasUsd && hasKrw) return '₩' + Math.round(krw + usd * _fxTtsRate).toLocaleString('ko-KR');
     if (hasUsd) return formatAccountAmount(usd, 'USD');
     return formatAccountAmount(krw, 'KRW');
   };
-  const totalEv  = fmtMixed(krwSum.eval, usdSum.eval);
-  const totalPur = fmtMixed(krwSum.purchase, usdSum.purchase);
-  // 손익 계산용 (KRW로 환산)
+  const formatTitle = (krw, usd) => {
+    if (!(hasUsd && hasKrw)) return '';
+    return `원화: ₩${Math.round(krw).toLocaleString('ko-KR')} / 달러: $${usd.toLocaleString('ko-KR',{maximumFractionDigits:2})} × TTS ${_fxTtsRate}`;
+  };
+  setVal('af-eval', (krwSum.eval||usdSum.eval) ? formatTotal(krwSum.eval, usdSum.eval) : '-', formatTitle(krwSum.eval, usdSum.eval));
+  setVal('af-purchase', (krwSum.purchase||usdSum.purchase) ? formatTotal(krwSum.purchase, usdSum.purchase) : '-', formatTitle(krwSum.purchase, usdSum.purchase));
   const convEv  = krwSum.eval + (usdSum.eval * _fxTtsRate);
   const convPur = krwSum.purchase + (usdSum.purchase * _fxTtsRate);
   const convPnl = convEv - convPur;
   const sumRate = convPur > 0 ? Math.round(convPnl / convPur * 10000) / 100 : 0;
-  set('af-eval', (krwSum.eval||usdSum.eval) ? totalEv : '-');
-  set('af-purchase', (krwSum.purchase||usdSum.purchase) ? totalPur : '-');
   const rEl = document.getElementById('af-rate');
   if (rEl) {
     rEl.textContent = (convPur || convEv) ? (sumRate >= 0 ? '+' : '') + sumRate.toFixed(2) + '%' : '-';
@@ -5646,15 +5667,17 @@ function updateAcctFooter(rows) {
   }
   const pEl = document.getElementById('af-pnl');
   if (pEl) {
+    const krwPnl = krwSum.eval - krwSum.purchase;
+    const usdPnl = usdSum.eval - usdSum.purchase;
     if (hasUsd && hasKrw) {
-      const krwPnl = krwSum.eval - krwSum.purchase;
-      const usdPnl = usdSum.eval - usdSum.purchase;
       const sign = convPnl >= 0 ? '+' : '-';
-      pEl.textContent = (convPur||convEv) ? `${sign}₩${Math.round(Math.abs(convPnl)).toLocaleString('ko-KR')} (₩${Math.round(krwPnl).toLocaleString('ko-KR')} + $${usdPnl.toFixed(2)})` : '-';
+      pEl.textContent = (convPur||convEv) ? `${sign}₩${Math.round(Math.abs(convPnl)).toLocaleString('ko-KR')}` : '-';
+      pEl.setAttribute('title', `원화: ${krwPnl>=0?'+':''}₩${Math.round(krwPnl).toLocaleString('ko-KR')} / 달러: ${usdPnl>=0?'+':''}$${usdPnl.toFixed(2)}`);
     } else {
       const currency = hasUsd ? 'USD' : 'KRW';
-      const pnl = hasUsd ? (usdSum.eval - usdSum.purchase) : (krwSum.eval - krwSum.purchase);
+      const pnl = hasUsd ? usdPnl : krwPnl;
       pEl.textContent = (convPur||convEv) ? (pnl >= 0 ? '+' : '-') + formatAccountAmount(Math.abs(pnl), currency) : '-';
+      pEl.removeAttribute('title');
     }
     pEl.style.color = convPnl >= 0 ? 'var(--up)' : 'var(--down)';
   }
@@ -5801,13 +5824,27 @@ async function importKisBalance(){
       return;
     }
     if (!Array.isArray(_acctRows)) _acctRows = [];
-    // 강한 dedup: KIS가 가져오는 모든 종목 코드에 대해 기존 _acctRows의 동일 코드 행을 삭제
-    // (brokerage/acctType 무관 — KIS 데이터가 우선)
+    // KIS 원본 데이터를 콘솔에 dump (사용자가 한투 앱과 비교할 수 있도록)
+    console.group('[KIS Balance] 원본 응답 데이터');
+    console.log('Accounts:', data.accounts);
+    console.log('Errors:', data.errors);
+    console.table(fetched.map(h => ({
+      acctType: h.acctType,
+      code: h.code,
+      name: h.stockName,
+      qty: h.qty,
+      avgBuy: h.avgBuy,
+      price: h.price,
+      eval: h.eval,
+      purchase: h.purchase,
+      pnl: h.pnl,
+    })));
+    console.groupEnd();
+    // 강한 dedup
     const kisCodes = new Set(fetched.map(h => normalizeStockCode(h.code || '')).filter(Boolean));
     const beforeLen = _acctRows.length;
     _acctRows = _acctRows.filter(a => {
       const c = normalizeStockCode(a.code || '');
-      // 코드가 비어있는 draft 행은 유지, KIS가 안 가져온 종목도 유지
       return !c || !kisCodes.has(c);
     });
     const removed = beforeLen - _acctRows.length;
@@ -5816,16 +5853,20 @@ async function importKisBalance(){
       const code = normalizeStockCode(h.code || '');
       if (!code) return;
       const acctType = h.acctType || '위탁';
+      // KRW 종목은 평균매입가/현재가를 정수로 round (원 단위)
+      const isUsd = currencyForCode(code) === 'USD';
+      const avgBuy = isUsd ? (h.avgBuy || 0) : Math.round(h.avgBuy || 0);
+      const price = isUsd ? (h.price || 0) : Math.round(h.price || 0);
       const row = {
         brokerage: '한국투자증권',
         acctType,
         code,
         stockName: h.stockName || resolveStockName(code, ''),
         qty: h.qty || 0,
-        avgBuy: h.avgBuy || 0,
-        price: h.price || 0,
-        eval: h.eval || (h.qty * h.price) || 0,
-        purchase: h.purchase || (h.qty * h.avgBuy) || 0,
+        avgBuy,
+        price,
+        eval: h.eval || (h.qty * price) || 0,
+        purchase: h.purchase || (h.qty * avgBuy) || 0,
         _autoName: true,
         _autoPrice: true,
         _kisSync: true,
