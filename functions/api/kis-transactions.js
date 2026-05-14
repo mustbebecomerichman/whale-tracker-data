@@ -90,6 +90,33 @@ function requireAdmin(user, env) {
   return email && getAdminEmails(env).has(email);
 }
 
+// 관리자 본인 KIS 계좌 목록 (env KIS_ACCOUNTS JSON으로 override 가능)
+function getKisAccounts(env) {
+  if (env.KIS_ACCOUNTS) {
+    try { return JSON.parse(env.KIS_ACCOUNTS); } catch (_) {}
+  }
+  return [
+    { cano: '64635355', prdt: '01', acctType: 'ISA' },
+    { cano: '74118276', prdt: '01', acctType: '위탁' },
+  ];
+}
+
+async function fetchAllTransactions(env, fromYmd, toYmd) {
+  const accounts = getKisAccounts(env);
+  const allItems = [];
+  const errors = [];
+  for (const acct of accounts) {
+    try {
+      const items = await fetchTransactions(env, fromYmd, toYmd, { cano: acct.cano, prdt: acct.prdt });
+      const tagged = items.map(t => ({ ...t, acctType: acct.acctType, _cano: acct.cano }));
+      allItems.push(...tagged);
+    } catch (e) {
+      errors.push({ cano: acct.cano, acctType: acct.acctType, error: e.message || String(e) });
+    }
+  }
+  return { items: allItems, errors };
+}
+
 function ymd(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -200,16 +227,23 @@ export async function onRequestGet(context) {
     const missing = [];
     if (!appKey) missing.push('KIS_APP_KEY (env)');
     if (!appSecret) missing.push('KIS_APP_SECRET (env)');
-    if (!qCano && !(env.KIS_ACCOUNT_NUMBER || env.KIS_CANO)) missing.push('계좌번호 (cano)');
     if (missing.length) return adminError(request, env, '설정 누락: ' + missing.join(', '), 500);
     const today = new Date();
     const defFrom = new Date(today);
-    defFrom.setDate(defFrom.getDate() - 89);  // KIS는 90일 이내만 허용
+    defFrom.setDate(defFrom.getDate() - 89);
     const fromYmd = (url.searchParams.get('from') || ymd(defFrom)).replace(/-/g, '');
     const toYmd = (url.searchParams.get('to') || ymd(today)).replace(/-/g, '');
     try {
-      const items = await fetchTransactions(env, fromYmd, toYmd, { cano: qCano, prdt: qPrdt });
-      return new Response(JSON.stringify({ items, from: fromYmd, to: toYmd }), {
+      let payload;
+      if (qCano) {
+        // 단일 계좌 override
+        const items = await fetchTransactions(env, fromYmd, toYmd, { cano: qCano, prdt: qPrdt });
+        payload = { items, errors: [] };
+      } else {
+        // 고정된 2개 계좌 모두 조회
+        payload = await fetchAllTransactions(env, fromYmd, toYmd);
+      }
+      return new Response(JSON.stringify({ ...payload, from: fromYmd, to: toYmd }), {
         headers: { ...corsHeaders(request, env, METHODS), 'Content-Type': 'application/json' },
       });
     } catch (apiErr) {

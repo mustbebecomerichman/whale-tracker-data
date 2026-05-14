@@ -257,10 +257,15 @@ td.name{font-weight:600;color:var(--text);}
 #mp-stock-stats{margin-top:16px!important;gap:10px!important;}
 #mp-stock-stats .status-chip{font-size:.9rem;padding:7px 14px;border-radius:999px;font-weight:900;background:#fff;}
 .myasset-submetrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px;}
-.myasset-submetric{background:#fff;border:1px solid var(--border);border-radius:14px;padding:13px 15px;min-width:0;box-shadow:0 1px 2px rgba(0,0,0,.02);}
-.myasset-submetric span{display:block;color:var(--text2);font-size:.72rem;font-weight:800;margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase;}
-.myasset-submetric .mp-val,.myasset-submetric strong{display:block;color:var(--text);font-size:1.02rem;font-weight:900;line-height:1.25;word-break:keep-all;}
-.myasset-submetric small{display:block;margin-top:4px;color:var(--text2);font-size:.68rem;line-height:1.3;}
+.myasset-submetric{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px 18px;min-width:0;box-shadow:0 1px 2px rgba(0,0,0,.02);}
+.myasset-submetric span{display:block;color:var(--text2);font-size:.78rem;font-weight:800;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;}
+.myasset-submetric .mp-val,.myasset-submetric strong{display:block;color:var(--text);font-size:1.35rem;font-weight:900;line-height:1.25;word-break:keep-all;}
+.myasset-submetric .split-money{flex-direction:row;gap:8px;align-items:baseline;justify-content:flex-start;flex-wrap:nowrap;white-space:nowrap;}
+.myasset-submetric .split-money .krw{font-size:1em;}
+.myasset-submetric .split-money .usd{font-size:.62em;color:var(--text2);font-weight:800;}
+.myasset-submetric small{display:block;margin-top:6px;color:var(--text2);font-size:.72rem;line-height:1.3;}
+/* 배당 요약 카드도 한 줄 유지 */
+.mp-card .mp-val{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #page-mypage.amounts-hidden #mp-total,
 #page-mypage.amounts-hidden #mp-pnl,
 #page-mypage.amounts-hidden #mp-rate,
@@ -344,9 +349,15 @@ td.name{font-weight:600;color:var(--text);}
 
 /* ══ SPREADSHEET TABLE ═══════════════════════════════ */
 .sheet-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);}
-#acct-table.sheet-table{font-size:.78rem;table-layout:fixed;}
-#acct-table.sheet-table .sheet-input{font-size:.76rem;padding:4px 5px;}
-#acct-table.sheet-table tbody td{min-width:0;padding:1px 2px;}
+#acct-table.sheet-table,
+#sheet-table.sheet-table,
+#div-table.sheet-table{font-size:.78rem;table-layout:fixed;}
+#acct-table.sheet-table .sheet-input,
+#sheet-table.sheet-table .sheet-input,
+#div-table.sheet-table .sheet-input{font-size:.76rem;padding:4px 5px;}
+#acct-table.sheet-table tbody td,
+#sheet-table.sheet-table tbody td,
+#div-table.sheet-table tbody td{min-width:0;padding:1px 2px;}
 .sheet-table{width:100%;border-collapse:collapse;font-size:.83rem;background:#fff;}
 .sheet-table thead th{
   background:#F0F2F5;padding:8px 10px;font-size:.73rem;font-weight:700;
@@ -637,9 +648,11 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .myasset-profit-line .mp-val{font-size:1.25rem;font-weight:900;}
   .myasset-profit-line #mp-rate{font-size:.95rem;padding:5px 12px;}
   .myasset-submetrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px;}
-  .myasset-submetric{background:#fff;padding:13px 14px;box-shadow:0 1px 2px rgba(0,0,0,.02);border-radius:14px;}
-  .myasset-submetric span{font-size:.7rem;margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase;}
-  .myasset-submetric .mp-val,.myasset-submetric strong{font-size:.98rem;}
+  .myasset-submetric{background:#fff;padding:14px 14px;box-shadow:0 1px 2px rgba(0,0,0,.02);border-radius:14px;}
+  .myasset-submetric span{font-size:.74rem;margin-bottom:7px;letter-spacing:.04em;text-transform:uppercase;}
+  .myasset-submetric .mp-val,.myasset-submetric strong{font-size:1.18rem;}
+  .myasset-submetric .split-money{gap:6px;}
+  .myasset-submetric .split-money .usd{font-size:.6em;}
   #mp-stock-stats{justify-content:center;margin-top:16px!important;gap:10px!important;}
   #mp-stock-stats .status-chip{font-size:.86rem;padding:6px 13px;border-radius:999px;background:#fff;}
   .mp-period-grid{display:none;}
@@ -3426,20 +3439,20 @@ function drawSheetRows(rows, filtered=false){
     const acctOpts=ACCT_TYPES.map(a=>`<option${a===(t.acctType||'위탁')?' selected':''}>${escapeHtml(a)}</option>`).join('');
     return`<tr data-idx="${rowIdx}">
       <td class="row-num" title="Delete row">${rowDeleteButton(`deleteRow(${rowIdx})`)}</td>
-      <td><input class="sheet-input" type="date" value="${escapeAttr(t.date||'')}" data-field="date" onchange="cellChange(${rowIdx},this)"/></td>
-      <td><select class="sheet-input" data-field="brokerage" onchange="cellChange(${rowIdx},this)"><option value="">선택</option>${brokerOpts}</select></td>
-      <td><select class="sheet-input" data-field="acctType" onchange="cellChange(${rowIdx},this)"><option value="">선택</option>${acctOpts}</select></td>
-      <td><input class="sheet-input" type="text" value="${escapeAttr(t.code||'')}" data-field="code" placeholder="005930" oninput="cellChange(${rowIdx},this);queueSheetCodeLookup(${rowIdx},this)" onchange="cellChange(${rowIdx},this)" onblur="handleSheetCodeInput(${rowIdx},this)" style="width:80px"/></td>
-      <td><input class="sheet-input${t._autoName?' auto-filled':''}" type="text" value="${escapeAttr(t.name||'')}" data-field="name" placeholder="종목명" onchange="cellChange(${rowIdx},this)" style="min-width:120px"/></td>
-      <td><input class="sheet-input" type="number" value="${t.qty||''}" data-field="qty" placeholder="100" oninput="cellChange(${rowIdx},this)" style="width:70px"/></td>
-      <td><input class="sheet-input" type="number" value="${t.avgBuy||''}" data-field="avgBuy" placeholder="70000" oninput="cellChange(${rowIdx},this)" style="width:90px"/></td>
-      <td><input class="sheet-input${t._autoPrice?' auto-price':''} ${valueCls}" type="number" value="${t.price||''}" data-field="price" placeholder="85000" oninput="cellChange(${rowIdx},this)" style="width:90px"/></td>
-      <td><input class="sheet-input calc-input money-neutral" type="text" value="${pur?fmt(pur)+'원':''}" readonly style="width:100px"/></td>
-      <td><input class="sheet-input calc-input ${valueCls}" type="text" value="${ev?fmt(ev)+'원':''}" readonly style="width:100px"/></td>
-      <td><input class="sheet-input calc-input ${pc}" type="text" value="${pnl||pur?(pnl>=0?'+':'')+fmt(pnl)+'원':''}" readonly style="width:100px"/></td>
-      <td><input class="sheet-input calc-input ${rc}" type="text" value="${pur||ev?(rate>=0?'+':'')+rate.toFixed(2)+'%':''}" readonly style="width:72px"/></td>
-      <td><input class="sheet-input" type="number" value="${t.fee||''}" data-field="fee" placeholder="0" onchange="cellChange(${rowIdx},this)" style="width:70px"/></td>
-      <td><input class="sheet-input" type="text" value="${escapeAttr(t.note||'')}" data-field="note" placeholder="메모" onchange="cellChange(${rowIdx},this)" style="min-width:100px"/></td>
+      <td><input class="sheet-input" type="date" value="${escapeAttr(t.date||'')}" data-field="date" onchange="cellChange(${rowIdx},this)" style="width:118px"/></td>
+      <td><select class="sheet-input" data-field="brokerage" onchange="cellChange(${rowIdx},this)" style="width:92px"><option value="">선택</option>${brokerOpts}</select></td>
+      <td><select class="sheet-input" data-field="acctType" onchange="cellChange(${rowIdx},this)" style="width:64px"><option value="">선택</option>${acctOpts}</select></td>
+      <td><input class="sheet-input" type="text" value="${escapeAttr(t.code||'')}" data-field="code" placeholder="005930" oninput="cellChange(${rowIdx},this);queueSheetCodeLookup(${rowIdx},this)" onchange="cellChange(${rowIdx},this)" onblur="handleSheetCodeInput(${rowIdx},this)" style="width:72px"/></td>
+      <td><input class="sheet-input${t._autoName?' auto-filled':''}" type="text" value="${escapeAttr(t.name||'')}" data-field="name" placeholder="종목명" onchange="cellChange(${rowIdx},this)" style="width:120px"/></td>
+      <td><input class="sheet-input" type="number" value="${t.qty||''}" data-field="qty" placeholder="100" oninput="cellChange(${rowIdx},this)" style="width:58px"/></td>
+      <td><input class="sheet-input" type="number" value="${t.avgBuy||''}" data-field="avgBuy" placeholder="70000" oninput="cellChange(${rowIdx},this)" style="width:80px"/></td>
+      <td><input class="sheet-input${t._autoPrice?' auto-price':''} ${valueCls}" type="number" value="${t.price||''}" data-field="price" placeholder="85000" oninput="cellChange(${rowIdx},this)" style="width:80px"/></td>
+      <td><input class="sheet-input calc-input money-neutral" type="text" value="${pur?fmt(pur)+'원':''}" readonly style="width:88px"/></td>
+      <td><input class="sheet-input calc-input ${valueCls}" type="text" value="${ev?fmt(ev)+'원':''}" readonly style="width:88px"/></td>
+      <td><input class="sheet-input calc-input ${pc}" type="text" value="${pnl||pur?(pnl>=0?'+':'')+fmt(pnl)+'원':''}" readonly style="width:92px"/></td>
+      <td><input class="sheet-input calc-input ${rc}" type="text" value="${pur||ev?(rate>=0?'+':'')+rate.toFixed(2)+'%':''}" readonly style="width:62px"/></td>
+      <td><input class="sheet-input" type="number" value="${t.fee||''}" data-field="fee" placeholder="0" onchange="cellChange(${rowIdx},this)" style="width:60px"/></td>
+      <td><input class="sheet-input" type="text" value="${escapeAttr(t.note||'')}" data-field="note" placeholder="메모" onchange="cellChange(${rowIdx},this)" style="width:90px"/></td>
     </tr>`;
   }).join('');
   updateSheetFooter(rows);
@@ -5158,7 +5171,7 @@ function formatMoneyByCode(value,code){
     if(_showKrwConverted)return Math.round(n*_fxTtsRate).toLocaleString('ko-KR')+'원';
     return '$'+n.toLocaleString('en-US',{maximumFractionDigits:n>=100?2:4});
   }
-  return n.toLocaleString('ko-KR')+'원';
+  return Math.round(n).toLocaleString('ko-KR')+'원';
 }
 function formatAccountAmount(value,currency){
   const n=Number(value)||0;
@@ -5759,37 +5772,16 @@ async function fetchAndUpdateAcctPrices(options={}) {
   }
 }
 
-// ═══ 한국투자증권 자동 연동 (관리자 본인 계정 전용) ════════════════
-const KIS_LS_KEY = 'kis-account-config-v1';
-function getKisAccountConfig(promptIfMissing = true){
-  let cfg = null;
-  try { cfg = JSON.parse(localStorage.getItem(KIS_LS_KEY) || 'null'); } catch(_){}
-  if (cfg && cfg.cano) return cfg;
-  if (!promptIfMissing) return null;
-  const cano = (window.prompt('한국투자증권 종합계좌번호 앞 8자리를 입력하세요 (예: 12345678)') || '').replace(/[^0-9]/g, '').slice(0, 8);
-  if (!cano || cano.length !== 8) { showToast('계좌번호 8자리를 정확히 입력해주세요.', 'err'); return null; }
-  const prdt = ((window.prompt('계좌상품코드 뒤 2자리 (위탁계좌는 보통 01)', '01') || '01').replace(/[^0-9]/g, '').slice(0, 2) || '01').padStart(2, '0');
-  cfg = { cano, prdt, savedAt: new Date().toISOString() };
-  try { localStorage.setItem(KIS_LS_KEY, JSON.stringify(cfg)); } catch(_){}
-  showToast('✅ KIS 계좌번호 저장됨 (브라우저 localStorage)', 'ok');
-  return cfg;
-}
-function clearKisAccountConfig(){
-  if (!confirm('저장된 KIS 계좌번호를 삭제할까요? 다음 연동 시 다시 입력해야 합니다.')) return;
-  try { localStorage.removeItem(KIS_LS_KEY); } catch(_){}
-  showToast('삭제되었습니다.', 'ok');
-}
-window.editKisAccountConfig = () => { try { localStorage.removeItem(KIS_LS_KEY); } catch(_){} getKisAccountConfig(true); };
-window.clearKisAccountConfig = clearKisAccountConfig;
+// ═══ 한국투자증권 자동 연동 (관리자 본인 계정 — 계좌 고정) ════════════════
+// 기존 localStorage prompt 방식 정리 (서버 측에서 고정 계좌 2개 사용)
+try { localStorage.removeItem('kis-account-config-v1'); } catch(_){}
+window.editKisAccountConfig = () => showToast('KIS 계좌는 서버에 고정되어 있어 클라이언트 변경 불가입니다.', 'ok');
 
 async function importKisBalance(){
   const btn = document.getElementById('btn-kis-sync');
-  const cfg = getKisAccountConfig(true);
-  if (!cfg) return;
   if (btn) { btn.disabled = true; btn.textContent = '🔄 연동 중...'; }
   try {
-    const qs = `?cano=${encodeURIComponent(cfg.cano)}&prdt=${encodeURIComponent(cfg.prdt)}`;
-    const res = await apiFetch('/api/kis-balance' + qs, {method:'GET'});
+    const res = await apiFetch('/api/kis-balance', {method:'GET'});
     if (res.status === 403) {
       showToast('관리자 본인 계정만 사용 가능합니다.', 'err');
       return;
@@ -5806,19 +5798,22 @@ async function importKisBalance(){
       return;
     }
     if (!Array.isArray(_acctRows)) _acctRows = [];
-    // 기존 행 중 동일 종목코드를 갖는 항목 인덱스 캐시
-    const codeIdx = new Map();
+    // (code + acctType) 기준 dedup — 같은 종목이 ISA/위탁 모두 있을 수 있음
+    const dedupKey = (code, acctType) => `${normalizeStockCode(code||'')}|${acctType||'위탁'}`;
+    const idxMap = new Map();
     _acctRows.forEach((a, i) => {
-      const c = normalizeStockCode(a.code || '');
-      if (c) codeIdx.set(c, i);
+      if (a.code && a.brokerage === '한국투자증권') {
+        idxMap.set(dedupKey(a.code, a.acctType), i);
+      }
     });
     let updated = 0, added = 0;
     fetched.forEach(h => {
       const code = normalizeStockCode(h.code || '');
       if (!code) return;
+      const acctType = h.acctType || '위탁';
       const row = {
         brokerage: '한국투자증권',
-        acctType: '위탁',
+        acctType,
         code,
         stockName: h.stockName || resolveStockName(code, ''),
         qty: h.qty || 0,
@@ -5830,14 +5825,11 @@ async function importKisBalance(){
         _autoPrice: true,
         _kisSync: true,
       };
-      if (codeIdx.has(code)) {
-        const i = codeIdx.get(code);
-        // 한국투자증권 행이거나 비어있는 행만 덮어쓰기 (다른 증권사 보유분은 유지)
-        const existing = _acctRows[i];
-        if (!existing.brokerage || existing.brokerage === '한국투자증권' || existing._kisSync) {
-          _acctRows[i] = { ...existing, ...row };
-          updated++;
-        }
+      const key = dedupKey(code, acctType);
+      if (idxMap.has(key)) {
+        const i = idxMap.get(key);
+        _acctRows[i] = { ..._acctRows[i], ...row };
+        updated++;
       } else {
         _acctRows.unshift(row);
         added++;
@@ -5847,7 +5839,9 @@ async function importKisBalance(){
     syncAcctRowsToMpData();
     await persistMpData(true);
     setMyAssetSection('accounts');
-    showToast(`✅ 한국투자증권 연동 완료 — 추가 ${added}건, 갱신 ${updated}건`, 'ok');
+    const acctSummary = (data.accounts || []).map(a => `${a.acctType}:${a.holdings}건`).join(', ');
+    const errMsg = (data.errors || []).length ? ` (실패: ${data.errors.map(e=>e.acctType).join(', ')})` : '';
+    showToast(`✅ 한국투자 연동 완료 — 추가 ${added}, 갱신 ${updated} · ${acctSummary}${errMsg}`, 'ok');
   } catch (e) {
     console.error('[importKisBalance] failed', e);
     showToast('연동 실패: ' + (e.message || e), 'err');
@@ -5860,12 +5854,9 @@ window.importKisBalance = importKisBalance;
 // ═══ 한국투자 거래내역 자동 가져오기 ════════════════════════════
 async function importKisTransactions(){
   const btn = document.getElementById('btn-kis-tx-sync');
-  const cfg = getKisAccountConfig(true);
-  if (!cfg) return;
   if (btn) { btn.disabled = true; btn.textContent = '🔄 가져오는 중...'; }
   try {
-    const qs = `?cano=${encodeURIComponent(cfg.cano)}&prdt=${encodeURIComponent(cfg.prdt)}`;
-    const res = await apiFetch('/api/kis-transactions' + qs, {method:'GET'});
+    const res = await apiFetch('/api/kis-transactions', {method:'GET'});
     if (res.status === 403) {
       showToast('관리자 본인 계정만 사용 가능합니다.', 'err');
       return;
@@ -5897,17 +5888,18 @@ async function importKisTransactions(){
       if (!yr || !code) return;
       if (!mpData.transactions[yr]) mpData.transactions[yr] = [];
       const isBuy = t.action === '매수';
+      const acctType = t.acctType || '위탁';
       mpData.transactions[yr].push({
         date: t.date,
         brokerage: '한국투자증권',
-        acctType: '위탁',
+        acctType,
         code,
         name: t.stockName || resolveStockName(code, ''),
         qty: t.qty || 0,
         avgBuy: isBuy ? (t.price || 0) : 0,
         price: isBuy ? 0 : (t.price || 0),
         fee: t.fee || 0,
-        note: isBuy ? '매수 (KIS자동)' : '매도 (KIS자동)',
+        note: `${isBuy ? '매수' : '매도'} (KIS:${acctType})`,
         _kisOrderNo: orderNo,
         _autoName: true,
       });
@@ -5919,7 +5911,8 @@ async function importKisTransactions(){
     syncSheetRowsToMpData();
     await persistMpData(true);
     setMyAssetSection('tx');
-    showToast(`✅ 거래내역 가져오기 완료 — 신규 ${added}건 (총 ${fetched.length}건 조회)`, 'ok');
+    const errMsg = (data.errors || []).length ? ` (실패: ${data.errors.map(e=>e.acctType).join(', ')})` : '';
+    showToast(`✅ 거래내역 가져오기 완료 — 신규 ${added}건 (총 ${fetched.length}건 조회)${errMsg}`, 'ok');
   } catch (e) {
     console.error('[importKisTransactions] failed', e);
     showToast('연동 실패: ' + (e.message || e), 'err');
