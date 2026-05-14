@@ -1,16 +1,15 @@
 import { corsHeaders, rejectUntrustedOrigin, requireFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
 
 /**
- * Cloudflare Pages Function — KIS 주식잔고조회 (관리자 본인 계정 전용)
- * GET /api/kis-balance
+ * Cloudflare Pages Function — KIS 일별 주문체결조회 (관리자 본인 계정 전용)
+ * GET /api/kis-transactions?from=YYYYMMDD&to=YYYYMMDD
  *
  * Cloudflare Pages → Settings → Environment variables (필수):
- *   KIS_APP_KEY           : 한국투자증권 App Key
- *   KIS_APP_SECRET        : 한국투자증권 App Secret
- *   KIS_ACCOUNT_NUMBER    : 종합계좌번호 앞 8자리 (예: 12345678)
- *   KIS_ACCOUNT_PRODUCT   : 계좌상품코드 뒤 2자리 (예: 01)
- *   ADMIN_EMAIL           : 본 엔드포인트 호출 허용 이메일 (단일 또는 콤마구분)
- *   KIS_MOCK              : "true" 면 모의투자 서버 사용
+ *   KIS_APP_KEY, KIS_APP_SECRET, KIS_ACCOUNT_NUMBER, KIS_ACCOUNT_PRODUCT
+ *   ADMIN_EMAIL (선택)
+ *
+ * TR_ID: TTTC8001R (실전, 일별주문체결조회 - 90일 이내)
+ *        VTTC8001R (모의)
  */
 
 const METHODS = 'GET, OPTIONS';
@@ -24,22 +23,19 @@ function getKisCreds(env) {
     appSecret: env.KIS_APP_SECRET || env.KIS_APPSECRET || env.KIS_SECRET || '',
   };
 }
-
 function getBaseUrl(env) {
   return env.KIS_MOCK === 'true'
     ? 'https://openapivts.koreainvestment.com:29443'
     : 'https://openapi.koreainvestment.com:9443';
 }
-
 function getTokenStore(env) {
   return env.KIS_TOKEN_KV || env.WHALE_TOKEN_KV || env.WHALE_KV || null;
 }
-
 function parseKisTokenExpiry(data) {
   const expiries = [];
-  const sec = Number(data.expires_in || data.expires_in_sec || data.expires_in_second || 0);
+  const sec = Number(data.expires_in || 0);
   if (sec > 0) expiries.push(Date.now() + sec * 1000);
-  const raw = data.access_token_token_expired || data.token_expired || data.expired_at || '';
+  const raw = data.access_token_token_expired || '';
   if (raw) {
     const parsed = Date.parse(String(raw).replace(' ', 'T'));
     if (Number.isFinite(parsed)) expiries.push(parsed);
@@ -47,7 +43,6 @@ function parseKisTokenExpiry(data) {
   expiries.push(Date.now() + 23 * 60 * 60 * 1000 + 50 * 60 * 1000);
   return Math.min(...expiries) - TOKEN_EXPIRY_BUFFER_MS;
 }
-
 async function readStoredToken(env) {
   if (_cachedToken && Date.now() < _tokenExpiry) return _cachedToken;
   const store = getTokenStore(env);
@@ -62,7 +57,6 @@ async function readStoredToken(env) {
   } catch (e) {}
   return null;
 }
-
 async function writeStoredToken(env, accessToken, expiresAt) {
   _cachedToken = accessToken;
   _tokenExpiry = expiresAt;
@@ -73,7 +67,6 @@ async function writeStoredToken(env, accessToken, expiresAt) {
     await store.put(TOKEN_KEY, JSON.stringify({ accessToken, expiresAt }), { expirationTtl: ttl });
   } catch (e) {}
 }
-
 async function getKisToken(env) {
   const stored = await readStoredToken(env);
   if (stored) return stored;
@@ -88,76 +81,99 @@ async function getKisToken(env) {
   await writeStoredToken(env, data.access_token, parseKisTokenExpiry(data));
   return _cachedToken;
 }
-
 function getAdminEmails(env) {
   const raw = env.ADMIN_EMAIL || env.ADMIN_EMAILS || 'smmoon2030@gmail.com';
   return new Set(String(raw).split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
 }
-
 function requireAdmin(user, env) {
   const email = String(user?.email || '').toLowerCase();
-  const admins = getAdminEmails(env);
-  return email && admins.has(email);
+  return email && getAdminEmails(env).has(email);
 }
 
-async function fetchBalance(env) {
+function ymd(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}${m}${day}`;
+}
+
+function isoFromKisDate(s) {
+  const t = String(s || '').replace(/[^0-9]/g, '');
+  if (t.length < 8) return '';
+  return `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`;
+}
+
+async function fetchTransactions(env, fromYmd, toYmd) {
   const { appKey, appSecret } = getKisCreds(env);
   const cano = env.KIS_ACCOUNT_NUMBER || env.KIS_CANO || '';
   const prdt = env.KIS_ACCOUNT_PRODUCT || env.KIS_ACNT_PRDT_CD || '01';
-  if (!cano) throw new Error('KIS_ACCOUNT_NUMBER 환경변수가 설정되지 않았습니다.');
-
+  if (!cano) throw new Error('KIS_ACCOUNT_NUMBER 환경변수 누락');
   const token = await getKisToken(env);
-  const trId = env.KIS_MOCK === 'true' ? 'VTTC8434R' : 'TTTC8434R';
-  const params = new URLSearchParams({
-    CANO: cano,
-    ACNT_PRDT_CD: prdt,
-    AFHR_FLPR_YN: 'N',
-    OFL_YN: '',
-    INQR_DVSN: '02',
-    UNPR_DVSN: '01',
-    FUND_STTL_ICLD_YN: 'N',
-    FNCG_AMT_AUTO_RDPT_YN: 'N',
-    PRCS_DVSN: '01',
-    CTX_AREA_FK100: '',
-    CTX_AREA_NK100: '',
-  });
-  const res = await fetch(
-    `${getBaseUrl(env)}/uapi/domestic-stock/v1/trading/inquire-balance?${params}`,
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        authorization: `Bearer ${token}`,
-        appkey: appKey,
-        appsecret: appSecret,
-        tr_id: trId,
-        custtype: 'P',
-      },
+  const trId = env.KIS_MOCK === 'true' ? 'VTTC8001R' : 'TTTC8001R';
+  const results = [];
+  let ctxFk = '';
+  let ctxNk = '';
+  const baseUrl = getBaseUrl(env);
+  // 연속조회 처리 (최대 10페이지)
+  for (let page = 0; page < 10; page++) {
+    const params = new URLSearchParams({
+      CANO: cano,
+      ACNT_PRDT_CD: prdt,
+      INQR_STRT_DT: fromYmd,
+      INQR_END_DT: toYmd,
+      SLL_BUY_DVSN_CD: '00',  // 00: 전체, 01: 매도, 02: 매수
+      INQR_DVSN: '00',         // 00: 역순, 01: 정순
+      PDNO: '',
+      CCLD_DVSN: '01',         // 00: 전체, 01: 체결, 02: 미체결
+      ORD_GNO_BRNO: '',
+      ODNO: '',
+      INQR_DVSN_3: '00',
+      INQR_DVSN_1: '',
+      CTX_AREA_FK100: ctxFk,
+      CTX_AREA_NK100: ctxNk,
+    });
+    const trIdFinal = page === 0 ? trId : trId;
+    const res = await fetch(
+      `${baseUrl}/uapi/domestic-stock/v1/trading/inquire-daily-ccld?${params}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          authorization: `Bearer ${token}`,
+          appkey: appKey,
+          appsecret: appSecret,
+          tr_id: trIdFinal,
+          tr_cont: page === 0 ? '' : 'N',
+          custtype: 'P',
+        },
+      }
+    );
+    const data = await res.json();
+    if (data.rt_cd && data.rt_cd !== '0') {
+      throw new Error(`KIS 거래내역 조회 오류: ${data.msg1 || 'rt_cd=' + data.rt_cd}`);
     }
-  );
-  const data = await res.json();
-  if (data.rt_cd && data.rt_cd !== '0') {
-    throw new Error(`KIS API 오류: ${data.msg1 || 'rt_cd=' + data.rt_cd}`);
+    const rows = Array.isArray(data.output1) ? data.output1 : [];
+    rows.forEach(r => {
+      const code = String(r.pdno || '').padStart(6, '0');
+      const isBuy = String(r.sll_buy_dvsn_cd || '').trim() === '02';
+      const qty = Number(r.tot_ccld_qty || r.ord_qty || 0);
+      const price = Number(r.avg_prvs || r.ord_unpr || 0);
+      const fee = Number(r.tlex_smtl || 0);
+      results.push({
+        date: isoFromKisDate(r.ord_dt || r.exec_dt),
+        code,
+        stockName: r.prdt_name || '',
+        action: isBuy ? '매수' : '매도',
+        qty,
+        price,
+        fee,
+        orderNo: r.odno || '',
+      });
+    });
+    ctxFk = (data.ctx_area_fk100 || '').trim();
+    ctxNk = (data.ctx_area_nk100 || '').trim();
+    if (!ctxNk) break;
   }
-  const rows = Array.isArray(data.output1) ? data.output1 : [];
-  const holdings = rows
-    .filter(r => Number(r.hldg_qty) > 0)
-    .map(r => ({
-      code: String(r.pdno || '').padStart(6, '0'),
-      stockName: r.prdt_name || '',
-      qty: Number(r.hldg_qty) || 0,
-      avgBuy: Number(r.pchs_avg_pric) || 0,
-      price: Number(r.prpr) || 0,
-      eval: Number(r.evlu_amt) || 0,
-      purchase: Number(r.pchs_amt) || 0,
-      pnl: Number(r.evlu_pfls_amt) || 0,
-    }));
-  const summary = Array.isArray(data.output2) && data.output2[0] ? {
-    totalEval: Number(data.output2[0].tot_evlu_amt) || 0,
-    totalPurchase: Number(data.output2[0].pchs_amt_smtl_amt) || 0,
-    totalPnl: Number(data.output2[0].evlu_pfls_smtl_amt) || 0,
-    cash: Number(data.output2[0].dnca_tot_amt) || 0,
-  } : null;
-  return { holdings, summary, source: 'KIS', fetchedAt: new Date().toISOString() };
+  return results;
 }
 
 function adminError(request, env, message, status = 400) {
@@ -177,23 +193,25 @@ export async function onRequestGet(context) {
     if (!requireAdmin(auth.user, env)) {
       return adminError(request, env, '관리자 본인 계정만 사용 가능합니다.', 403);
     }
-    // 관리자는 구체 에러 노출 (디버깅용)
     const { appKey, appSecret } = getKisCreds(env);
     const missing = [];
     if (!appKey) missing.push('KIS_APP_KEY');
     if (!appSecret) missing.push('KIS_APP_SECRET');
     if (!(env.KIS_ACCOUNT_NUMBER || env.KIS_CANO)) missing.push('KIS_ACCOUNT_NUMBER');
-    if (missing.length) {
-      return adminError(request, env, '환경변수 누락: ' + missing.join(', '), 500);
-    }
+    if (missing.length) return adminError(request, env, '환경변수 누락: ' + missing.join(', '), 500);
+    const url = new URL(request.url);
+    const today = new Date();
+    const defFrom = new Date(today);
+    defFrom.setDate(defFrom.getDate() - 89);  // KIS는 90일 이내만 허용
+    const fromYmd = (url.searchParams.get('from') || ymd(defFrom)).replace(/-/g, '');
+    const toYmd = (url.searchParams.get('to') || ymd(today)).replace(/-/g, '');
     try {
-      const data = await fetchBalance(env);
-      return new Response(JSON.stringify(data), {
+      const items = await fetchTransactions(env, fromYmd, toYmd);
+      return new Response(JSON.stringify({ items, from: fromYmd, to: toYmd }), {
         headers: { ...corsHeaders(request, env, METHODS), 'Content-Type': 'application/json' },
       });
     } catch (apiErr) {
-      // KIS API/네트워크 에러 — admin에게 구체 메시지 노출
-      console.error('KIS balance fetch failed', apiErr);
+      console.error('KIS transactions fetch failed', apiErr);
       return adminError(request, env, 'KIS 호출 실패: ' + (apiErr.message || String(apiErr)), 502);
     }
   } catch (e) {
