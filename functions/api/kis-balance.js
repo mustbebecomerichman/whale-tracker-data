@@ -100,11 +100,11 @@ function requireAdmin(user, env) {
   return email && admins.has(email);
 }
 
-async function fetchBalance(env) {
+async function fetchBalance(env, override = {}) {
   const { appKey, appSecret } = getKisCreds(env);
-  const cano = env.KIS_ACCOUNT_NUMBER || env.KIS_CANO || '';
-  const prdt = env.KIS_ACCOUNT_PRODUCT || env.KIS_ACNT_PRDT_CD || '01';
-  if (!cano) throw new Error('KIS_ACCOUNT_NUMBER 환경변수가 설정되지 않았습니다.');
+  const cano = (override.cano || env.KIS_ACCOUNT_NUMBER || env.KIS_CANO || '').toString().trim();
+  const prdt = (override.prdt || env.KIS_ACCOUNT_PRODUCT || env.KIS_ACNT_PRDT_CD || '01').toString().trim();
+  if (!cano) throw new Error('계좌번호가 설정되지 않았습니다.');
 
   const token = await getKisToken(env);
   const trId = env.KIS_MOCK === 'true' ? 'VTTC8434R' : 'TTTC8434R';
@@ -177,17 +177,21 @@ export async function onRequestGet(context) {
     if (!requireAdmin(auth.user, env)) {
       return adminError(request, env, '관리자 본인 계정만 사용 가능합니다.', 403);
     }
+    // 쿼리 파라미터: cano (8자리 계좌번호), prdt (2자리 상품코드)
+    const url = new URL(request.url);
+    const qCano = (url.searchParams.get('cano') || '').trim();
+    const qPrdt = (url.searchParams.get('prdt') || '').trim();
     // 관리자는 구체 에러 노출 (디버깅용)
     const { appKey, appSecret } = getKisCreds(env);
     const missing = [];
-    if (!appKey) missing.push('KIS_APP_KEY');
-    if (!appSecret) missing.push('KIS_APP_SECRET');
-    if (!(env.KIS_ACCOUNT_NUMBER || env.KIS_CANO)) missing.push('KIS_ACCOUNT_NUMBER');
+    if (!appKey) missing.push('KIS_APP_KEY (env)');
+    if (!appSecret) missing.push('KIS_APP_SECRET (env)');
+    if (!qCano && !(env.KIS_ACCOUNT_NUMBER || env.KIS_CANO)) missing.push('계좌번호 (cano)');
     if (missing.length) {
-      return adminError(request, env, '환경변수 누락: ' + missing.join(', '), 500);
+      return adminError(request, env, '설정 누락: ' + missing.join(', '), 500);
     }
     try {
-      const data = await fetchBalance(env);
+      const data = await fetchBalance(env, { cano: qCano, prdt: qPrdt });
       return new Response(JSON.stringify(data), {
         headers: { ...corsHeaders(request, env, METHODS), 'Content-Type': 'application/json' },
       });
