@@ -351,13 +351,16 @@ td.name{font-weight:600;color:var(--text);}
 .sheet-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);}
 #acct-table.sheet-table,
 #sheet-table.sheet-table,
-#div-table.sheet-table{font-size:.78rem;table-layout:fixed;}
+#div-table.sheet-table{font-size:.76rem;}
 #acct-table.sheet-table .sheet-input,
 #sheet-table.sheet-table .sheet-input,
-#div-table.sheet-table .sheet-input{font-size:.76rem;padding:4px 5px;}
+#div-table.sheet-table .sheet-input{font-size:.74rem;padding:4px 5px;}
 #acct-table.sheet-table tbody td,
 #sheet-table.sheet-table tbody td,
 #div-table.sheet-table tbody td{min-width:0;padding:1px 2px;}
+#acct-table.sheet-table thead th,
+#sheet-table.sheet-table thead th,
+#div-table.sheet-table thead th{font-size:.68rem;padding:6px 7px;}
 .sheet-table{width:100%;border-collapse:collapse;font-size:.83rem;background:#fff;}
 .sheet-table thead th{
   background:#F0F2F5;padding:8px 10px;font-size:.73rem;font-weight:700;
@@ -5798,14 +5801,16 @@ async function importKisBalance(){
       return;
     }
     if (!Array.isArray(_acctRows)) _acctRows = [];
-    // (code + acctType) 기준 dedup — 같은 종목이 ISA/위탁 모두 있을 수 있음
-    const dedupKey = (code, acctType) => `${normalizeStockCode(code||'')}|${acctType||'위탁'}`;
-    const idxMap = new Map();
-    _acctRows.forEach((a, i) => {
-      if (a.code && a.brokerage === '한국투자증권') {
-        idxMap.set(dedupKey(a.code, a.acctType), i);
-      }
+    // 강한 dedup: KIS가 가져오는 모든 종목 코드에 대해 기존 _acctRows의 동일 코드 행을 삭제
+    // (brokerage/acctType 무관 — KIS 데이터가 우선)
+    const kisCodes = new Set(fetched.map(h => normalizeStockCode(h.code || '')).filter(Boolean));
+    const beforeLen = _acctRows.length;
+    _acctRows = _acctRows.filter(a => {
+      const c = normalizeStockCode(a.code || '');
+      // 코드가 비어있는 draft 행은 유지, KIS가 안 가져온 종목도 유지
+      return !c || !kisCodes.has(c);
     });
+    const removed = beforeLen - _acctRows.length;
     let updated = 0, added = 0;
     fetched.forEach(h => {
       const code = normalizeStockCode(h.code || '');
@@ -5825,15 +5830,8 @@ async function importKisBalance(){
         _autoPrice: true,
         _kisSync: true,
       };
-      const key = dedupKey(code, acctType);
-      if (idxMap.has(key)) {
-        const i = idxMap.get(key);
-        _acctRows[i] = { ..._acctRows[i], ...row };
-        updated++;
-      } else {
-        _acctRows.unshift(row);
-        added++;
-      }
+      _acctRows.unshift(row);
+      added++;
     });
     drawAcctRows(_acctRows);
     syncAcctRowsToMpData();
@@ -5841,7 +5839,7 @@ async function importKisBalance(){
     setMyAssetSection('accounts');
     const acctSummary = (data.accounts || []).map(a => `${a.acctType}:${a.holdings}건`).join(', ');
     const errMsg = (data.errors || []).length ? ` (실패: ${data.errors.map(e=>e.acctType).join(', ')})` : '';
-    showToast(`✅ 한국투자 연동 완료 — 추가 ${added}, 갱신 ${updated} · ${acctSummary}${errMsg}`, 'ok');
+    showToast(`✅ 한국투자 연동 완료 — 추가 ${added}, 기존 중복 ${removed}건 삭제 · ${acctSummary}${errMsg}`, 'ok');
   } catch (e) {
     console.error('[importKisBalance] failed', e);
     showToast('연동 실패: ' + (e.message || e), 'err');
@@ -5854,9 +5852,17 @@ window.importKisBalance = importKisBalance;
 // ═══ 한국투자 거래내역 자동 가져오기 ════════════════════════════
 async function importKisTransactions(){
   const btn = document.getElementById('btn-kis-tx-sync');
-  if (btn) { btn.disabled = true; btn.textContent = '🔄 가져오는 중...'; }
+  // 연도 선택 (취소하면 기본 90일)
+  const curYear = new Date().getFullYear();
+  const yr = window.prompt(`가져올 연도 입력 (예: ${curYear}, ${curYear-1}).\nEnter만 누르면 최근 90일.`, String(curYear));
+  if (yr === null) return;  // 사용자가 취소
+  let qs = '';
+  if (yr && /^\d{4}$/.test(yr.trim())) {
+    qs = `?year=${yr.trim()}`;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = '🔄 가져오는 중... (수초 소요)'; }
   try {
-    const res = await apiFetch('/api/kis-transactions', {method:'GET'});
+    const res = await apiFetch('/api/kis-transactions' + qs, {method:'GET'});
     if (res.status === 403) {
       showToast('관리자 본인 계정만 사용 가능합니다.', 'err');
       return;
