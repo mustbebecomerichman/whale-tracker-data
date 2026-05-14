@@ -243,12 +243,12 @@ td.name{font-weight:600;color:var(--text);}
 .myasset-pill.primary{background:#edfff5;color:#16794b;}
 .myasset-total{text-align:center;padding:10px 0 6px;}
 .myasset-total-label{font-size:.8rem;color:var(--text2);font-weight:800;margin-bottom:10px;letter-spacing:.08em;text-transform:uppercase;}
-.myasset-total #mp-total{font-size:clamp(2.1rem,6.2vw,3.4rem);letter-spacing:-0.022em;line-height:1.0;font-weight:900;}
+.myasset-total #mp-total{font-size:clamp(2.4rem,7.4vw,4rem);letter-spacing:-0.025em;line-height:1.0;font-weight:900;}
 .myasset-total #mp-total .split-money{flex-direction:column;align-items:center;justify-content:center;gap:6px;flex-wrap:nowrap;white-space:nowrap;}
 .myasset-total #mp-total .split-money .krw{font-size:1em;line-height:1;}
 .myasset-total #mp-total .split-money .usd{font-size:.32em;color:var(--text2);font-weight:800;letter-spacing:0;}
 .myasset-total #mp-total .split-money .usd::before{content:'≈ ';color:var(--text2);}
-.myasset-profit-line{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:14px 22px;margin:16px auto 0;max-width:540px;background:var(--bg3);border-radius:16px;border:1px solid var(--border);}
+.myasset-profit-line{display:flex;align-items:center;justify-content:center;gap:18px;flex-wrap:wrap;padding:16px 26px;margin:18px 0 0;background:var(--bg3);border-radius:16px;border:1px solid var(--border);}
 .myasset-profit-line > span{font-size:.78rem;font-weight:900;color:var(--text2);letter-spacing:.04em;text-transform:uppercase;}
 .myasset-profit-line .mp-val{font-size:1.32rem;line-height:1.15;font-weight:900;}
 .myasset-profit-line .mp-val.split-money{flex-direction:column;gap:2px;align-items:center;}
@@ -1230,6 +1230,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <label class="fx-control">TTS <input type="number" id="fx-tts-input" min="1" step="0.01" onchange="setFxTtsRate(this.value)" /></label>
         <span class="badge" id="fx-tts-status">자동 조회</span>
         <button class="btn btn-outline btn-sm" onclick="fetchAndUpdateAcctPrices()">📈 현재가 일괄 조회</button>
+        <button class="btn btn-outline btn-sm" id="btn-kis-sync" onclick="importKisBalance()" style="border-color:#16794b;color:#16794b;font-weight:900;">🔗 한국투자 자동 연동</button>
         <button class="btn btn-primary btn-sm" onclick="addAcctRow()">＋ 종목 추가</button>
       </div>
     </div>
@@ -5721,6 +5722,78 @@ async function fetchAndUpdateAcctPrices(options={}) {
   }
 }
 
+// ═══ 한국투자증권 자동 연동 (관리자 본인 계정 전용) ════════════════
+async function importKisBalance(){
+  const btn = document.getElementById('btn-kis-sync');
+  if (btn) { btn.disabled = true; btn.textContent = '🔄 연동 중...'; }
+  try {
+    const res = await apiFetch('/api/kis-balance', {method:'GET'});
+    if (res.status === 403) {
+      showToast('관리자 본인 계정만 사용 가능합니다.', 'err');
+      return;
+    }
+    if (!res.ok) {
+      let msg = 'HTTP ' + res.status;
+      try { const j = await res.json(); msg = j.error || msg; } catch(_){}
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    const fetched = data.holdings || [];
+    if (!fetched.length) {
+      showToast('한국투자증권 계좌에 보유 종목이 없습니다.', 'err');
+      return;
+    }
+    if (!Array.isArray(_acctRows)) _acctRows = [];
+    // 기존 행 중 동일 종목코드를 갖는 항목 인덱스 캐시
+    const codeIdx = new Map();
+    _acctRows.forEach((a, i) => {
+      const c = normalizeStockCode(a.code || '');
+      if (c) codeIdx.set(c, i);
+    });
+    let updated = 0, added = 0;
+    fetched.forEach(h => {
+      const code = normalizeStockCode(h.code || '');
+      if (!code) return;
+      const row = {
+        brokerage: '한국투자증권',
+        acctType: '위탁',
+        code,
+        stockName: h.stockName || resolveStockName(code, ''),
+        qty: h.qty || 0,
+        avgBuy: h.avgBuy || 0,
+        price: h.price || 0,
+        eval: h.eval || (h.qty * h.price) || 0,
+        purchase: h.purchase || (h.qty * h.avgBuy) || 0,
+        _autoName: true,
+        _autoPrice: true,
+        _kisSync: true,
+      };
+      if (codeIdx.has(code)) {
+        const i = codeIdx.get(code);
+        // 한국투자증권 행이거나 비어있는 행만 덮어쓰기 (다른 증권사 보유분은 유지)
+        const existing = _acctRows[i];
+        if (!existing.brokerage || existing.brokerage === '한국투자증권' || existing._kisSync) {
+          _acctRows[i] = { ...existing, ...row };
+          updated++;
+        }
+      } else {
+        _acctRows.unshift(row);
+        added++;
+      }
+    });
+    drawAcctRows(_acctRows);
+    syncAcctRowsToMpData();
+    await persistMpData(true);
+    setMyAssetSection('accounts');
+    showToast(`✅ 한국투자증권 연동 완료 — 추가 ${added}건, 갱신 ${updated}건`, 'ok');
+  } catch (e) {
+    console.error('[importKisBalance] failed', e);
+    showToast('연동 실패: ' + (e.message || e), 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔗 한국투자 자동 연동'; }
+  }
+}
+window.importKisBalance = importKisBalance;
 
 // ═══ 배당 수익 스프레드시트 ══════════════════════════════════
 const DIV_TAX = 0.154;
