@@ -784,28 +784,24 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .toast{left:12px;right:12px;bottom:18px;transform:translateY(20px);white-space:normal;text-align:center;}
   .toast.show{transform:translateY(0);}
 
-  .tbl-wrap,.sheet-wrap{overflow-x:visible;border:none;box-shadow:none;}
-  .tbl-wrap table:not(.sheet-table),.sheet-table{display:block;width:100%;font-size:.82rem;}
-  .tbl-wrap table:not(.sheet-table) thead,.sheet-table thead,.sheet-table tfoot{display:none;}
-  .tbl-wrap table:not(.sheet-table) tbody,.sheet-table tbody{display:grid;gap:7px;width:100%;}
-  .tbl-wrap table:not(.sheet-table) tbody tr,.sheet-table tbody tr{
+  /* .sheet-table은 모바일에서도 일반 테이블 + 가로 스크롤 유지 (카드 변환 X) */
+  .tbl-wrap{overflow-x:visible;border:none;box-shadow:none;}
+  .sheet-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .tbl-wrap table:not(.sheet-table){display:block;width:100%;font-size:.82rem;}
+  .tbl-wrap table:not(.sheet-table) thead{display:none;}
+  .tbl-wrap table:not(.sheet-table) tbody{display:grid;gap:7px;width:100%;}
+  .tbl-wrap table:not(.sheet-table) tbody tr{
     display:block;width:100%;background:#fff;border:1px solid var(--border);
     border-radius:10px;box-shadow:0 1px 5px rgba(15,23,42,.06);padding:5px 9px;margin:0;
   }
-  .tbl-wrap table:not(.sheet-table) tbody td,.sheet-table tbody td{
+  .tbl-wrap table:not(.sheet-table) tbody td{
     display:grid;grid-template-columns:minmax(64px,30%) minmax(0,1fr);
     align-items:center;gap:7px;width:100%;min-width:0;border:none;
     border-bottom:1px solid #eef0f3;padding:5px 3px;white-space:normal;line-height:1.22;
   }
-  .tbl-wrap table:not(.sheet-table) tbody td:last-child,.sheet-table tbody td:last-child{border-bottom:none;}
-  .tbl-wrap table:not(.sheet-table) tbody td::before,.sheet-table tbody td::before{
+  .tbl-wrap table:not(.sheet-table) tbody td:last-child{border-bottom:none;}
+  .tbl-wrap table:not(.sheet-table) tbody td::before{
     font-size:.68rem;font-weight:900;color:var(--text2);line-height:1.15;
-  }
-  .sheet-table tbody td.row-num{display:flex;justify-content:flex-end;width:100%;padding:3px 3px;background:#fff;}
-  .sheet-table tbody td.row-num::before{content:"삭제";margin-right:auto;}
-  .sheet-input,select.sheet-input{
-    width:100%!important;min-width:0!important;max-width:100%!important;
-    white-space:normal;font-size:.8rem;padding:5px 4px;line-height:1.2;
   }
 
   #quant-tbody td:nth-child(1)::before{content:"순위";}
@@ -5825,20 +5821,25 @@ async function importKisBalance(){
     }
     if (!Array.isArray(_acctRows)) _acctRows = [];
     // KIS 원본 데이터를 콘솔에 dump (사용자가 한투 앱과 비교할 수 있도록)
-    console.group('[KIS Balance] 원본 응답 데이터');
-    console.log('Accounts:', data.accounts);
-    console.log('Errors:', data.errors);
-    console.table(fetched.map(h => ({
-      acctType: h.acctType,
-      code: h.code,
-      name: h.stockName,
-      qty: h.qty,
-      avgBuy: h.avgBuy,
-      price: h.price,
-      eval: h.eval,
-      purchase: h.purchase,
-      pnl: h.pnl,
-    })));
+    console.group('[KIS Balance] 응답 데이터');
+    console.log('계좌별 요약:', data.accounts);
+    if ((data.errors || []).length) console.warn('계좌별 에러:', data.errors);
+    // 계좌별로 분리해서 출력
+    const byAcct = {};
+    fetched.forEach(h => {
+      const key = h.acctType || '?';
+      if (!byAcct[key]) byAcct[key] = [];
+      byAcct[key].push(h);
+    });
+    Object.keys(byAcct).forEach(at => {
+      console.group(`📂 ${at} (${byAcct[at].length}건)`);
+      console.table(byAcct[at].map(h => ({
+        code: h.code, name: h.stockName, qty: h.qty,
+        avgBuy: h.avgBuy, price: h.price, eval: h.eval,
+        purchase: h.purchase, pnl: h.pnl,
+      })));
+      console.groupEnd();
+    });
     console.groupEnd();
     // 강한 dedup
     const kisCodes = new Set(fetched.map(h => normalizeStockCode(h.code || '')).filter(Boolean));
@@ -5879,8 +5880,11 @@ async function importKisBalance(){
     await persistMpData(true);
     setMyAssetSection('accounts');
     const acctSummary = (data.accounts || []).map(a => `${a.acctType}:${a.holdings}건`).join(', ');
-    const errMsg = (data.errors || []).length ? ` (실패: ${data.errors.map(e=>e.acctType).join(', ')})` : '';
-    showToast(`✅ 한국투자 연동 완료 — 추가 ${added}, 기존 중복 ${removed}건 삭제 · ${acctSummary}${errMsg}`, 'ok');
+    const errs = data.errors || [];
+    const errMsg = errs.length ? ` ⚠️ 실패계좌: ${errs.map(e=>`${e.acctType}(${e.error})`).join(', ')}` : '';
+    const zeroAccts = (data.accounts || []).filter(a => a.holdings === 0).map(a => a.acctType);
+    const zeroMsg = zeroAccts.length ? ` ⚠️ ${zeroAccts.join('/')} 계좌 보유 0건 — KIS 앱 확인 필요` : '';
+    showToast(`✅ 한국투자 연동 — 추가 ${added}, 중복 삭제 ${removed} · ${acctSummary}${errMsg}${zeroMsg}`, errs.length || zeroAccts.length ? 'err' : 'ok');
   } catch (e) {
     console.error('[importKisBalance] failed', e);
     showToast('연동 실패: ' + (e.message || e), 'err');
