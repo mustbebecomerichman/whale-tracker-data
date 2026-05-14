@@ -100,6 +100,35 @@ function requireAdmin(user, env) {
   return email && admins.has(email);
 }
 
+// 관리자 본인 KIS 계좌 목록 (env KIS_ACCOUNTS JSON으로 override 가능)
+function getKisAccounts(env) {
+  if (env.KIS_ACCOUNTS) {
+    try { return JSON.parse(env.KIS_ACCOUNTS); } catch (_) {}
+  }
+  return [
+    { cano: '64635355', prdt: '01', acctType: 'ISA' },
+    { cano: '74118276', prdt: '01', acctType: '위탁' },
+  ];
+}
+
+async function fetchAllBalances(env) {
+  const accounts = getKisAccounts(env);
+  const allHoldings = [];
+  const perAccount = [];
+  const errors = [];
+  for (const acct of accounts) {
+    try {
+      const r = await fetchBalance(env, { cano: acct.cano, prdt: acct.prdt });
+      const tagged = (r.holdings || []).map(h => ({ ...h, acctType: acct.acctType, _cano: acct.cano }));
+      allHoldings.push(...tagged);
+      perAccount.push({ cano: acct.cano, acctType: acct.acctType, holdings: tagged.length, summary: r.summary });
+    } catch (e) {
+      errors.push({ cano: acct.cano, acctType: acct.acctType, error: e.message || String(e) });
+    }
+  }
+  return { holdings: allHoldings, accounts: perAccount, errors, source: 'KIS', fetchedAt: new Date().toISOString() };
+}
+
 async function fetchBalance(env, override = {}) {
   const { appKey, appSecret } = getKisCreds(env);
   const cano = (override.cano || env.KIS_ACCOUNT_NUMBER || env.KIS_CANO || '').toString().trim();
@@ -177,26 +206,30 @@ export async function onRequestGet(context) {
     if (!requireAdmin(auth.user, env)) {
       return adminError(request, env, '관리자 본인 계정만 사용 가능합니다.', 403);
     }
-    // 쿼리 파라미터: cano (8자리 계좌번호), prdt (2자리 상품코드)
+    // 단일 계좌 override: ?cano=&prdt= 지정 시 그 계좌만 조회, 미지정 시 고정된 2개 계좌 모두 조회
     const url = new URL(request.url);
     const qCano = (url.searchParams.get('cano') || '').trim();
     const qPrdt = (url.searchParams.get('prdt') || '').trim();
-    // 관리자는 구체 에러 노출 (디버깅용)
     const { appKey, appSecret } = getKisCreds(env);
     const missing = [];
     if (!appKey) missing.push('KIS_APP_KEY (env)');
     if (!appSecret) missing.push('KIS_APP_SECRET (env)');
-    if (!qCano && !(env.KIS_ACCOUNT_NUMBER || env.KIS_CANO)) missing.push('계좌번호 (cano)');
     if (missing.length) {
       return adminError(request, env, '설정 누락: ' + missing.join(', '), 500);
     }
     try {
-      const data = await fetchBalance(env, { cano: qCano, prdt: qPrdt });
+      let data;
+      if (qCano) {
+        // 단일 계좌 override
+        data = await fetchBalance(env, { cano: qCano, prdt: qPrdt });
+      } else {
+        // 고정된 2개 계좌 모두 조회
+        data = await fetchAllBalances(env);
+      }
       return new Response(JSON.stringify(data), {
         headers: { ...corsHeaders(request, env, METHODS), 'Content-Type': 'application/json' },
       });
     } catch (apiErr) {
-      // KIS API/네트워크 에러 — admin에게 구체 메시지 노출
       console.error('KIS balance fetch failed', apiErr);
       return adminError(request, env, 'KIS 호출 실패: ' + (apiErr.message || String(apiErr)), 502);
     }
