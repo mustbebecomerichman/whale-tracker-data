@@ -1430,6 +1430,42 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     <div class="hero-stat"><div class="num" id="wilder-watch-count">0개</div><div class="lbl">관찰 대상</div></div>
   </div>
 
+  <!-- 매매 후보 시트 (목표가/RSI 임계 도달 시 카카오톡 알림 — 알림 기능은 추후) -->
+  <div class="section">
+    <div class="section-title">
+      <div class="section-title-left">🎯 매매 후보
+        <span class="badge" id="watch-count">0건</span>
+        <span class="badge" style="background:#fff7e0;color:#b07900;border-color:#f4d685;">📲 카톡 알림 준비중</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="fetchAndUpdateWatchPrices()">📈 현재가 갱신</button>
+        <button class="btn btn-primary btn-sm" onclick="addWatchRow()">＋ 후보 추가</button>
+      </div>
+    </div>
+    <p style="font-size:.78rem;color:var(--text2);line-height:1.55;margin:0 0 10px;">
+      관심 종목과 목표가/매매 시그널 임계치를 등록해두면, 추후 카카오톡 "나에게 보내기"로 자동 알림이 전송됩니다.
+      현재는 시트 저장과 시그널/현재가 표시만 동작하며, 백엔드 연동 후 알림이 활성화됩니다.
+    </p>
+    <div class="sheet-wrap">
+      <table class="sheet-table" id="watch-table">
+        <thead><tr>
+          <th style="width:34px">#</th>
+          <th>종목코드</th>
+          <th>종목명</th>
+          <th class="calc-col">현재가</th>
+          <th>목표가</th>
+          <th class="calc-col">갭(%)</th>
+          <th style="width:88px">RSI 임계</th>
+          <th style="width:96px">시그널 종류</th>
+          <th class="calc-col" style="width:80px">Wilder</th>
+          <th style="width:64px;text-align:center">알림</th>
+          <th>메모</th>
+        </tr></thead>
+        <tbody id="watch-body"></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- 보유 종목 현재가 (MY자산에서 머지) — 보유종목 탭에서만 표시 -->
   <div class="section wilder-my-only" id="wilder-price-section">
     <div class="section-title">
@@ -2778,6 +2814,7 @@ function emptyPortfolio(){
     accounts:[],
     transactions:{[yr]:[]},
     dividends:{[yr]:[]},
+    watchlist:[],
     history:[]
   };
 }
@@ -2842,6 +2879,7 @@ function renderMp(data){
   renderSheet(mpYear, data.transactions||{});
   renderDivYearChips(data.dividends||{});
   renderDivSheet(_divYear, data.dividends||{});
+  initWatchSheet(data.watchlist||[]);
   renderBrokerPnlChart();
   renderTotalHistoryChart(data.history||[]);
   renderDailyChangeTable(data.history||[]);
@@ -3141,6 +3179,195 @@ function syncDivRowsToMpData(){
     .map(d=>({...d,code:normalizeStockCode(d.code||''),name:resolveStockName(d.code,d.name||'')}));
   renderDivYearChips(mpData.dividends);
 }
+
+// ═══ 매매 후보 (Watchlist) ═══════════════════════════════
+let _watchRows = [];
+
+function initWatchSheet(list){
+  _watchRows = (list || []).map(w => ({
+    code: normalizeStockCode(w.code || ''),
+    name: w.name || '',
+    targetPrice: parseFloat(w.targetPrice) || 0,
+    rsiThreshold: parseFloat(w.rsiThreshold) || 30,
+    signalType: w.signalType || 'ALL',
+    notifyOn: w.notifyOn !== false,
+    note: w.note || '',
+    _currentPrice: 0
+  })).filter(w => w.code || w.name || w.targetPrice);
+  drawWatchRows(_watchRows);
+}
+
+function drawWatchRows(rows){
+  const tbody = document.getElementById('watch-body');
+  if (!tbody) return;
+  const cnt = document.getElementById('watch-count');
+  if (cnt) cnt.textContent = rows.length + '건';
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:18px;color:var(--text2);font-size:.82rem;">＋ 후보 추가 버튼으로 관심 종목을 등록하세요.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((w, i) => {
+    const codeClean = normalizeStockCode(w.code || '');
+    const cur = w._currentPrice || 0;
+    const tgt = w.targetPrice || 0;
+    const gap = (cur && tgt) ? ((tgt - cur) / cur * 100) : null;
+    const gapCls = gap === null ? 'money-neutral' : (gap > 0 ? 'up' : gap < 0 ? 'down' : 'money-neutral');
+    const gapTxt = gap === null ? '-' : (gap >= 0 ? '+' : '') + gap.toFixed(2) + '%';
+    const sigOpts = ['ALL','RSI','RTS','ASI'].map(s => `<option${s===w.signalType?' selected':''}>${s}</option>`).join('');
+    return `<tr data-widx="${i}">
+      <td class="row-num" title="Delete row">${rowDeleteButton(`deleteWatchRow(${i})`)}</td>
+      <td><input class="sheet-input" type="text" value="${escapeAttr(w.code||'')}" data-field="code" placeholder="005930"
+          oninput="watchCellChange(${i},this)" onblur="handleWatchCodeInput(${i},this)" style="width:78px"/></td>
+      <td><input class="sheet-input" type="text" value="${escapeAttr(w.name||'')}" data-field="name" placeholder="종목명"
+          onchange="watchCellChange(${i},this)" style="min-width:110px"/></td>
+      <td><input class="sheet-input calc-input" value="${cur ? formatMoneyByCode(cur, w.code) : ''}" readonly style="width:96px"/></td>
+      <td><input class="sheet-input" type="number" value="${w.targetPrice||''}" data-field="targetPrice" placeholder="100000"
+          oninput="watchCellChange(${i},this)" style="width:96px"/></td>
+      <td><input class="sheet-input calc-input ${gapCls}" value="${gapTxt}" readonly style="width:72px"/></td>
+      <td><input class="sheet-input" type="number" value="${w.rsiThreshold||30}" data-field="rsiThreshold" min="0" max="100" step="1"
+          oninput="watchCellChange(${i},this)" style="width:64px"/></td>
+      <td><select class="sheet-input" data-field="signalType" onchange="watchCellChange(${i},this)" style="min-width:88px">${sigOpts}</select></td>
+      <td class="wilder-cell" style="text-align:center;cursor:pointer;" data-wilder-badge="${escapeAttr(codeClean)}" onclick="event.stopPropagation();openWilderDetail('${escapeJsAttr(w.code||'')}')">${codeClean ? '<span class="wilder-loading" style="color:var(--text2);font-size:.7rem;">…</span>' : '<span style="color:var(--text2);font-size:.7rem;">-</span>'}</td>
+      <td style="text-align:center;padding:4px;">
+        <input type="checkbox" style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent)"
+          ${w.notifyOn?'checked':''} data-field="notifyOn" onchange="watchCellChange(${i},this)"/>
+      </td>
+      <td><input class="sheet-input" type="text" value="${escapeAttr(w.note||'')}" data-field="note"
+          placeholder="메모" onchange="watchCellChange(${i},this)" style="min-width:90px"/></td>
+    </tr>`;
+  }).join('');
+  // 비동기 Wilder 배지 + 현재가 로드
+  clearTimeout(window._watchBadgeTimer);
+  window._watchBadgeTimer = setTimeout(() => { try { refreshWilderBadgesForWatchlist(); } catch(e){} }, 400);
+}
+
+function watchCellChange(idx, input){
+  if (!_watchRows[idx]) return;
+  const field = input.dataset.field;
+  if (field === 'notifyOn') _watchRows[idx].notifyOn = input.checked;
+  else if (['targetPrice','rsiThreshold'].includes(field)) _watchRows[idx][field] = parseFloat(input.value) || 0;
+  else _watchRows[idx][field] = input.value;
+  // 갭(%) 라이브 업데이트
+  if (field === 'targetPrice') {
+    const w = _watchRows[idx];
+    const cur = w._currentPrice || 0;
+    const tgt = w.targetPrice || 0;
+    const row = input.closest('tr');
+    if (row && cur && tgt) {
+      const gap = (tgt - cur) / cur * 100;
+      const gapInput = row.querySelectorAll('.calc-input')[1];
+      if (gapInput) {
+        gapInput.value = (gap >= 0 ? '+' : '') + gap.toFixed(2) + '%';
+        gapInput.className = 'sheet-input calc-input ' + (gap > 0 ? 'up' : gap < 0 ? 'down' : 'money-neutral');
+      }
+    }
+  }
+  syncWatchRowsToMpData();
+  schedulePortfolioAutosave(false);
+}
+
+function addWatchRow(){
+  if (!Array.isArray(_watchRows)) _watchRows = [];
+  _watchRows.unshift({code:'',name:'',targetPrice:0,rsiThreshold:30,signalType:'ALL',notifyOn:true,note:'',_draftId:String(Date.now()),_currentPrice:0});
+  drawWatchRows(_watchRows);
+  syncWatchRowsToMpData();
+  schedulePortfolioAutosave(true, 120);
+  setTimeout(() => {
+    const fi = document.querySelector('#watch-body tr:first-child input[data-field="code"]');
+    if (fi) { fi.scrollIntoView({behavior:'smooth',block:'center'}); fi.focus(); }
+  }, 80);
+}
+
+function deleteWatchRow(idx){
+  if (!confirm('이 후보를 삭제하시겠습니까?')) return;
+  _watchRows.splice(idx, 1);
+  drawWatchRows(_watchRows);
+  syncWatchRowsToMpData();
+  schedulePortfolioAutosave(true, 120);
+}
+
+function syncWatchRowsToMpData(){
+  if (!mpData) mpData = emptyPortfolio();
+  mpData.watchlist = _watchRows
+    .filter(w => w.code || w.name || w.targetPrice)
+    .map(w => ({
+      code: normalizeStockCode(w.code || ''),
+      name: resolveStockName(w.code, w.name || ''),
+      targetPrice: w.targetPrice || 0,
+      rsiThreshold: w.rsiThreshold || 30,
+      signalType: w.signalType || 'ALL',
+      notifyOn: w.notifyOn !== false,
+      note: w.note || ''
+    }));
+}
+
+async function handleWatchCodeInput(idx, codeInput){
+  const code = normalizeStockCode(codeInput.value);
+  if (!code || !_watchRows[idx]) return;
+  codeInput.value = code;
+  _watchRows[idx].code = code;
+  // 로컬 종목명 자동완성
+  const localName = lookupCode(code);
+  const row = codeInput.closest('tr');
+  const nameInput = row?.querySelector('input[data-field="name"]');
+  if (localName && nameInput && !nameInput.value) {
+    nameInput.value = localName;
+    _watchRows[idx].name = localName;
+  }
+  // 현재가 비동기 조회
+  try {
+    const q = await fetchQuoteForCode(code);
+    if (normalizeStockCode(codeInput.value) !== code) return;
+    if (q && q.price) {
+      _watchRows[idx]._currentPrice = q.price;
+      const apiName = bestStockName(code, q.name, localName);
+      if (apiName && _watchRows[idx]) _watchRows[idx].name = apiName;
+    }
+    drawWatchRows(_watchRows);
+    syncWatchRowsToMpData();
+    schedulePortfolioAutosave(false);
+  } catch(e) {
+    showToast('현재가 조회 실패: ' + explainPriceError(e), 'err');
+  }
+}
+
+async function fetchAndUpdateWatchPrices(){
+  const targets = _watchRows.filter(w => stockRegionForCode(w.code));
+  if (!targets.length) { showToast('종목 코드를 먼저 입력하세요', 'err'); return; }
+  showToast('현재가 조회 중...', 'ok');
+  for (const w of targets) {
+    try {
+      const q = await fetchQuoteForCode(w.code);
+      if (q && q.price) w._currentPrice = q.price;
+    } catch(_) {}
+  }
+  drawWatchRows(_watchRows);
+  showToast('✅ 현재가 갱신 완료', 'ok');
+}
+
+async function refreshWilderBadgesForWatchlist(){
+  const seen = new Set();
+  for (const w of (_watchRows || [])) {
+    const code = normalizeStockCode(w.code);
+    if (!code || seen.has(code) || !stockRegionForCode(code)) continue;
+    seen.add(code);
+    const result = await fetchWilderForCode(code);
+    const targets = document.querySelectorAll(`#watch-body [data-wilder-badge="${CSS.escape(code)}"]`);
+    if (result && !result.error) {
+      targets.forEach(el => {
+        el.innerHTML = wilderSignalChip(result.final);
+        el.title = 'RSI/RTS/ASI 상세 보기\n\n' + (result.reasons || []).join('\n');
+      });
+    } else {
+      targets.forEach(el => { el.innerHTML = '<span style="color:var(--text2);font-size:.65rem;">-</span>'; });
+    }
+    await new Promise(r => setTimeout(r, 80));
+  }
+}
+
+window.addWatchRow = addWatchRow;
+window.deleteWatchRow = deleteWatchRow;
+window.fetchAndUpdateWatchPrices = fetchAndUpdateWatchPrices;
 
 function renderSheet(year, allTxs){
   const txs=(allTxs[year]||[]);
