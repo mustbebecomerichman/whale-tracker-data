@@ -1272,7 +1272,6 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <button class="btn btn-primary btn-sm" onclick="addAcctRow()">＋ 종목 추가</button>
       </div>
     </div>
-    <div id="kis-status-banner" style="display:none;margin-bottom:10px;padding:10px 14px;border-radius:10px;font-size:.86rem;line-height:1.5;"></div>
     <div class="sheet-wrap mobile-collapsible" data-mobile-group="acct-detail">
       <table class="sheet-table" id="acct-table">
         <thead><tr>
@@ -1306,6 +1305,8 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <div id="acct-usd-wrap"><div class="mp-empty"><div class="ei">$</div><p>미국 종목을 입력하면 표시됩니다.</p></div></div>
       </div>
     </div>
+    <!-- KIS 연동 결과 배너 (계좌별 현황 페이지 하단) -->
+    <div id="kis-status-banner" style="display:none;margin-top:16px;padding:10px 14px;border-radius:10px;font-size:.86rem;line-height:1.5;"></div>
   </div>
 
   <!-- 증권사별 손익 그래프 -->
@@ -5821,13 +5822,27 @@ async function importKisBalance(){
       return;
     }
     if (!Array.isArray(_acctRows)) _acctRows = [];
+    // 백엔드가 중복 반환하는 경우 대비한 안전망: (acctType + code) 기준 dedup
+    const _seenKeys = new Set();
+    const fetchedUnique = fetched.filter(h => {
+      const k = `${h.acctType || ''}|${normalizeStockCode(h.code || '')}`;
+      if (!k.endsWith('|')) {  // code 존재 시만 dedup
+        if (_seenKeys.has(k)) return false;
+        _seenKeys.add(k);
+      }
+      return true;
+    });
+    // 원본 길이와 다르면 console 경고
+    if (fetchedUnique.length !== fetched.length) {
+      console.warn(`[KIS Balance] 중복 ${fetched.length - fetchedUnique.length}건 제거됨`);
+    }
     // KIS 원본 데이터를 콘솔에 dump (사용자가 한투 앱과 비교할 수 있도록)
     console.group('[KIS Balance] 응답 데이터');
     console.log('계좌별 요약:', data.accounts);
     if ((data.errors || []).length) console.warn('계좌별 에러:', data.errors);
     // 계좌별로 분리해서 출력
     const byAcct = {};
-    fetched.forEach(h => {
+    fetchedUnique.forEach(h => {
       const key = h.acctType || '?';
       if (!byAcct[key]) byAcct[key] = [];
       byAcct[key].push(h);
@@ -5842,8 +5857,8 @@ async function importKisBalance(){
       console.groupEnd();
     });
     console.groupEnd();
-    // 강한 dedup
-    const kisCodes = new Set(fetched.map(h => normalizeStockCode(h.code || '')).filter(Boolean));
+    // 강한 dedup — 기존 _acctRows 중 KIS 코드와 일치하는 것 모두 삭제
+    const kisCodes = new Set(fetchedUnique.map(h => normalizeStockCode(h.code || '')).filter(Boolean));
     const beforeLen = _acctRows.length;
     _acctRows = _acctRows.filter(a => {
       const c = normalizeStockCode(a.code || '');
@@ -5851,7 +5866,7 @@ async function importKisBalance(){
     });
     const removed = beforeLen - _acctRows.length;
     let updated = 0, added = 0;
-    fetched.forEach(h => {
+    fetchedUnique.forEach(h => {
       const code = normalizeStockCode(h.code || '');
       if (!code) return;
       const acctType = h.acctType || '위탁';
@@ -5941,7 +5956,9 @@ async function importKisBalance(){
         html += `<div style="margin-top:8px;font-size:.78rem;color:#b07900;">⚠️ 보유 0건 계좌: ${zeroAccts.join(', ')}</div>`;
       }
       banner.innerHTML = html;
-      banner.style.cssText = `display:block;margin-bottom:10px;padding:12px 14px;border-radius:10px;font-size:.86rem;line-height:1.5;background:${bg};border:1px solid ${border};`;
+      banner.style.cssText = `display:block;margin-top:16px;padding:12px 14px;border-radius:10px;font-size:.86rem;line-height:1.5;background:${bg};border:1px solid ${border};`;
+      // 배너 위치로 스크롤 (사용자가 결과를 바로 보도록)
+      try { banner.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(_) {}
     }
     const toastMsg = `✅ 한국투자 연동 — 추가 ${added}, 중복 삭제 ${removed}` + (errs.length ? ` ⚠️ 실패: ${errs.map(e=>`${e.acctType}/${e.scope||''}`).join(', ')}` : '');
     showToast(toastMsg, errs.length || zeroAccts.length ? 'err' : 'ok');

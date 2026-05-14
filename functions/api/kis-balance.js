@@ -255,6 +255,7 @@ async function fetchOverseasBalance(env, account) {
     { code: 'NYSE', currency: 'USD', market: 'NYS' },
     { code: 'AMEX', currency: 'USD', market: 'AMS' },
   ];
+  const seenCodes = new Set();  // 거래소별 중복 방지
   const all = [];
   const errors = [];
   for (const exch of exchanges) {
@@ -287,7 +288,6 @@ async function fetchOverseasBalance(env, account) {
         break;
       }
       if (data.rt_cd && data.rt_cd !== '0') {
-        // 거래소별 조회권한 없음 등은 silently skip (다른 거래소는 시도)
         if (data.msg_cd && data.msg_cd !== 'KIOK0570') {
           errors.push({ exchange: exch.code, error: data.msg1 || `rt_cd=${data.rt_cd}` });
         }
@@ -297,8 +297,10 @@ async function fetchOverseasBalance(env, account) {
       rows.forEach(r => {
         const code = String(r.ovrs_pdno || r.pdno || '').trim().toUpperCase();
         if (!code) return;
+        if (seenCodes.has(code)) return;  // KIS가 거래소별 호출에 같은 종목을 중복 반환하는 경우 방지
         const qty = Number(r.ovrs_cblc_qty || r.hldg_qty || 0);
         if (qty <= 0) return;
+        seenCodes.add(code);
         all.push({
           code,
           stockName: r.ovrs_item_name || r.prdt_name || code,
