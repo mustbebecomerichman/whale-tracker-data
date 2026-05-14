@@ -103,7 +103,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
 
 /* HEADER */
 header{background:#fff;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;box-shadow:var(--shadow);}
-.header-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;
+.header-inner{max-width:1400px;margin:0 auto;display:flex;align-items:center;
   justify-content:space-between;padding:0 20px;height:54px;}
 .logo{display:flex;align-items:center;gap:8px;font-size:1.1rem;font-weight:900;color:var(--text);cursor:pointer;}
 .logo span{color:var(--accent);}
@@ -123,7 +123,7 @@ nav button.active{background:#edfff5;color:var(--accent);font-weight:700;}
   font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:4px;}
 
 /* LAYOUT */
-main{max-width:1200px;margin:0 auto;padding:24px 20px;}
+main{max-width:1400px;margin:0 auto;padding:24px 20px;}
 .page{display:none;} .page.active{display:block;}
 
 /* HERO */
@@ -344,6 +344,9 @@ td.name{font-weight:600;color:var(--text);}
 
 /* ══ SPREADSHEET TABLE ═══════════════════════════════ */
 .sheet-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);}
+#acct-table.sheet-table{font-size:.78rem;table-layout:fixed;}
+#acct-table.sheet-table .sheet-input{font-size:.76rem;padding:4px 5px;}
+#acct-table.sheet-table tbody td{min-width:0;padding:1px 2px;}
 .sheet-table{width:100%;border-collapse:collapse;font-size:.83rem;background:#fff;}
 .sheet-table thead th{
   background:#F0F2F5;padding:8px 10px;font-size:.73rem;font-weight:700;
@@ -1234,6 +1237,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <span class="badge" id="fx-tts-status">자동 조회</span>
         <button class="btn btn-outline btn-sm" onclick="fetchAndUpdateAcctPrices()">📈 현재가 일괄 조회</button>
         <button class="btn btn-outline btn-sm" id="btn-kis-sync" onclick="importKisBalance()" style="border-color:#16794b;color:#16794b;font-weight:900;">🔗 한국투자 자동 연동</button>
+        <button class="btn btn-outline btn-sm" onclick="editKisAccountConfig()" title="저장된 KIS 계좌번호 변경" style="padding:6px 10px;">⚙</button>
         <button class="btn btn-primary btn-sm" onclick="addAcctRow()">＋ 종목 추가</button>
       </div>
     </div>
@@ -5524,22 +5528,22 @@ function drawAcctRows(rows) {
     const isDraft = !codeClean && !!a._draftId;
     return `<tr class="${[(region||isDraft)?'stock-asset':'',region==='overseas'?'usd-asset':''].filter(Boolean).join(' ')}" data-aidx="${i}" onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))showHoldingDetail('${escapeJsAttr(a.code||'')}')">
       <td class="row-num" title="Delete row">${rowDeleteButton(`deleteAcctRow(${i})`)}</td>
-      <td><select class="sheet-input" data-field="brokerage" onchange="acctCellChange(${i},this)" style="min-width:100px"><option value="">선택</option>${bOpts}</select></td>
-      <td><select class="sheet-input" data-field="acctType" onchange="acctCellChange(${i},this)" style="min-width:72px"><option value="">선택</option>${aOpts}</select></td>
+      <td><select class="sheet-input" data-field="brokerage" onchange="acctCellChange(${i},this)" style="width:92px"><option value="">선택</option>${bOpts}</select></td>
+      <td><select class="sheet-input" data-field="acctType" onchange="acctCellChange(${i},this)" style="width:64px"><option value="">선택</option>${aOpts}</select></td>
       <td><input class="sheet-input" type="text" value="${escapeAttr(a.code||'')}" data-field="code" placeholder="005930"
-          oninput="acctCellChange(${i},this);queueAcctCodeLookup(${i},this)" onchange="acctCellChange(${i},this)" onblur="handleAcctCodeInput(${i},this)" style="width:78px"/></td>
+          oninput="acctCellChange(${i},this);queueAcctCodeLookup(${i},this)" onchange="acctCellChange(${i},this)" onblur="handleAcctCodeInput(${i},this)" style="width:72px"/></td>
       <td><input class="sheet-input${a._autoName?' auto-filled':''}" type="text" value="${escapeAttr(a.stockName||'')}" data-field="stockName" placeholder="종목명"
-          onchange="acctCellChange(${i},this)" style="min-width:110px"/></td>
-      <td class="wilder-cell" style="text-align:center;cursor:pointer;" data-wilder-badge="${escapeAttr(normalizeStockCode(a.code||''))}" onclick="event.stopPropagation();openWilderDetail('${escapeJsAttr(a.code||'')}')">${normalizeStockCode(a.code||'') ? '<span class="wilder-loading" style="color:var(--text2);font-size:.7rem;">…</span>' : '<span style="color:var(--text2);font-size:.7rem;">-</span>'}</td>
+          onchange="acctCellChange(${i},this)" style="width:120px"/></td>
+      <td class="wilder-cell" style="text-align:center;cursor:pointer;width:72px;" data-wilder-badge="${escapeAttr(normalizeStockCode(a.code||''))}" onclick="event.stopPropagation();openWilderDetail('${escapeJsAttr(a.code||'')}')">${normalizeStockCode(a.code||'') ? '<span class="wilder-loading" style="color:var(--text2);font-size:.7rem;">…</span>' : '<span style="color:var(--text2);font-size:.7rem;">-</span>'}</td>
       <td><input class="sheet-input" type="number" value="${a.qty||''}" data-field="qty" placeholder="100"
-          oninput="acctCellChange(${i},this)" style="width:65px"/></td>
+          oninput="acctCellChange(${i},this)" style="width:58px"/></td>
       <td><input class="sheet-input" type="number" value="${a.avgBuy||''}" data-field="avgBuy" placeholder="70000"
-          oninput="acctCellChange(${i},this)" style="width:88px"/></td>
-      <td><input class="sheet-input calc-input${a._autoPrice?' auto-price':''} ${valueCls}" id="ap-price-${i}" value="${a.price ? formatMoneyByCode(a.price,a.code) : ''}" readonly style="width:90px"/></td>
-      <td><input class="sheet-input calc-input ${valueCls}" value="${ev ? formatMoneyByCode(ev,a.code) : ''}" readonly style="width:95px"/></td>
-      <td><input class="sheet-input calc-input money-neutral" value="${pur ? formatMoneyByCode(pur,a.code) : ''}" readonly style="width:95px"/></td>
-      <td><input class="sheet-input calc-input ${rc}" value="${pur||ev ? (rate>=0?'+':'')+rate.toFixed(2)+'%' : ''}" readonly style="width:68px"/></td>
-      <td><input class="sheet-input calc-input ${pc}" value="${pur||ev ? (pnl>=0?'+':'-')+formatMoneyByCode(Math.abs(pnl),a.code) : ''}" readonly style="width:95px"/></td>
+          oninput="acctCellChange(${i},this)" style="width:80px"/></td>
+      <td><input class="sheet-input calc-input${a._autoPrice?' auto-price':''} ${valueCls}" id="ap-price-${i}" value="${a.price ? formatMoneyByCode(a.price,a.code) : ''}" readonly style="width:84px"/></td>
+      <td><input class="sheet-input calc-input ${valueCls}" value="${ev ? formatMoneyByCode(ev,a.code) : ''}" readonly style="width:100px"/></td>
+      <td><input class="sheet-input calc-input money-neutral" value="${pur ? formatMoneyByCode(pur,a.code) : ''}" readonly style="width:100px"/></td>
+      <td><input class="sheet-input calc-input ${rc}" value="${pur||ev ? (rate>=0?'+':'')+rate.toFixed(2)+'%' : ''}" readonly style="width:62px"/></td>
+      <td><input class="sheet-input calc-input ${pc}" value="${pur||ev ? (pnl>=0?'+':'-')+formatMoneyByCode(Math.abs(pnl),a.code) : ''}" readonly style="width:100px"/></td>
     </tr>`;
   }).join('');
   updateAcctFooter(rows);
@@ -5756,11 +5760,36 @@ async function fetchAndUpdateAcctPrices(options={}) {
 }
 
 // ═══ 한국투자증권 자동 연동 (관리자 본인 계정 전용) ════════════════
+const KIS_LS_KEY = 'kis-account-config-v1';
+function getKisAccountConfig(promptIfMissing = true){
+  let cfg = null;
+  try { cfg = JSON.parse(localStorage.getItem(KIS_LS_KEY) || 'null'); } catch(_){}
+  if (cfg && cfg.cano) return cfg;
+  if (!promptIfMissing) return null;
+  const cano = (window.prompt('한국투자증권 종합계좌번호 앞 8자리를 입력하세요 (예: 12345678)') || '').replace(/[^0-9]/g, '').slice(0, 8);
+  if (!cano || cano.length !== 8) { showToast('계좌번호 8자리를 정확히 입력해주세요.', 'err'); return null; }
+  const prdt = ((window.prompt('계좌상품코드 뒤 2자리 (위탁계좌는 보통 01)', '01') || '01').replace(/[^0-9]/g, '').slice(0, 2) || '01').padStart(2, '0');
+  cfg = { cano, prdt, savedAt: new Date().toISOString() };
+  try { localStorage.setItem(KIS_LS_KEY, JSON.stringify(cfg)); } catch(_){}
+  showToast('✅ KIS 계좌번호 저장됨 (브라우저 localStorage)', 'ok');
+  return cfg;
+}
+function clearKisAccountConfig(){
+  if (!confirm('저장된 KIS 계좌번호를 삭제할까요? 다음 연동 시 다시 입력해야 합니다.')) return;
+  try { localStorage.removeItem(KIS_LS_KEY); } catch(_){}
+  showToast('삭제되었습니다.', 'ok');
+}
+window.editKisAccountConfig = () => { try { localStorage.removeItem(KIS_LS_KEY); } catch(_){} getKisAccountConfig(true); };
+window.clearKisAccountConfig = clearKisAccountConfig;
+
 async function importKisBalance(){
   const btn = document.getElementById('btn-kis-sync');
+  const cfg = getKisAccountConfig(true);
+  if (!cfg) return;
   if (btn) { btn.disabled = true; btn.textContent = '🔄 연동 중...'; }
   try {
-    const res = await apiFetch('/api/kis-balance', {method:'GET'});
+    const qs = `?cano=${encodeURIComponent(cfg.cano)}&prdt=${encodeURIComponent(cfg.prdt)}`;
+    const res = await apiFetch('/api/kis-balance' + qs, {method:'GET'});
     if (res.status === 403) {
       showToast('관리자 본인 계정만 사용 가능합니다.', 'err');
       return;
@@ -5831,9 +5860,12 @@ window.importKisBalance = importKisBalance;
 // ═══ 한국투자 거래내역 자동 가져오기 ════════════════════════════
 async function importKisTransactions(){
   const btn = document.getElementById('btn-kis-tx-sync');
+  const cfg = getKisAccountConfig(true);
+  if (!cfg) return;
   if (btn) { btn.disabled = true; btn.textContent = '🔄 가져오는 중...'; }
   try {
-    const res = await apiFetch('/api/kis-transactions', {method:'GET'});
+    const qs = `?cano=${encodeURIComponent(cfg.cano)}&prdt=${encodeURIComponent(cfg.prdt)}`;
+    const res = await apiFetch('/api/kis-transactions' + qs, {method:'GET'});
     if (res.status === 403) {
       showToast('관리자 본인 계정만 사용 가능합니다.', 'err');
       return;
