@@ -134,13 +134,39 @@ async function fetchAllBalances(env) {
   const perAccount = [];
   const errors = [];
   for (const acct of accounts) {
+    let domesticOk = false;
+    let domesticResult = null;
+    // 국내주식 잔고
     try {
-      const r = await fetchBalance(env, acct);
-      const tagged = (r.holdings || []).map(h => ({ ...h, acctType: acct.acctType, _cano: acct.cano }));
+      domesticResult = await fetchBalance(env, acct);
+      const tagged = (domesticResult.holdings || []).map(h => ({ ...h, acctType: acct.acctType, _cano: acct.cano, _market: 'domestic' }));
       allHoldings.push(...tagged);
-      perAccount.push({ cano: acct.cano, acctType: acct.acctType, holdings: tagged.length, summary: r.summary });
+      domesticOk = true;
     } catch (e) {
-      errors.push({ cano: acct.cano, acctType: acct.acctType, error: e.message || String(e) });
+      errors.push({ cano: acct.cano, acctType: acct.acctType, scope: '국내', error: e.message || String(e) });
+    }
+    // 해외주식 잔고 (silently skip if 권한 없음)
+    let overseasCount = 0;
+    let overseasErrs = [];
+    try {
+      const overseas = await fetchOverseasBalance(env, acct);
+      const taggedOverseas = (overseas.holdings || []).map(h => ({ ...h, acctType: acct.acctType, _cano: acct.cano, _market: 'overseas' }));
+      allHoldings.push(...taggedOverseas);
+      overseasCount = taggedOverseas.length;
+      overseasErrs = overseas.errors || [];
+    } catch (e) {
+      errors.push({ cano: acct.cano, acctType: acct.acctType, scope: '해외', error: e.message || String(e) });
+    }
+    if (domesticOk || overseasCount > 0) {
+      perAccount.push({
+        cano: acct.cano,
+        acctType: acct.acctType,
+        holdings: (domesticResult?.holdings?.length || 0) + overseasCount,
+        domestic: domesticResult?.holdings?.length || 0,
+        overseas: overseasCount,
+        summary: domesticResult?.summary || null,
+        overseasErrors: overseasErrs,
+      });
     }
   }
   return { holdings: allHoldings, accounts: perAccount, errors, source: 'KIS', fetchedAt: new Date().toISOString() };
@@ -211,6 +237,86 @@ async function fetchBalance(env, account = {}) {
     cash: Number(data.output2[0].dnca_tot_amt) || 0,
   } : null;
   return { holdings, summary, rawCount: rows.length, source: 'KIS', fetchedAt: new Date().toISOString() };
+}
+
+// 해외주식 잔고 조회 (NASD/NYSE/AMEX — 미국 시장 위주)
+async function fetchOverseasBalance(env, account) {
+  const { appKey, appSecret } = getKisCreds(env, account);
+  if (!appKey || !appSecret) return { holdings: [], errors: [] };
+  const cano = (account.cano || env.KIS_ACCOUNT_NUMBER || env.KIS_CANO || '').toString().trim();
+  const prdt = (account.prdt || env.KIS_ACCOUNT_PRODUCT || env.KIS_ACNT_PRDT_CD || '01').toString().trim();
+  if (!cano) return { holdings: [], errors: [] };
+  const token = await getKisToken(env, account);
+  const trId = env.KIS_MOCK === 'true' ? 'VTTS3012R' : 'TTTS3012R';
+  const baseUrl = getBaseUrl(env);
+  // 미국 3개 거래소 + 홍콩(필요시 확장)
+  const exchanges = [
+    { code: 'NASD', currency: 'USD', market: 'NAS' },
+    { code: 'NYSE', currency: 'USD', market: 'NYS' },
+    { code: 'AMEX', currency: 'USD', market: 'AMS' },
+  ];
+  const all = [];
+  const errors = [];
+  for (const exch of exchanges) {
+    let ctxFk = '', ctxNk = '';
+    for (let page = 0; page < 5; page++) {
+      const params = new URLSearchParams({
+        CANO: cano,
+        ACNT_PRDT_CD: prdt,
+        OVRS_EXCG_CD: exch.code,
+        TR_CRCY_CD: exch.currency,
+        CTX_AREA_FK200: ctxFk,
+        CTX_AREA_NK200: ctxNk,
+      });
+      let data;
+      try {
+        const res = await fetch(`${baseUrl}/uapi/overseas-stock/v1/trading/inquire-balance?${params}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            authorization: `Bearer ${token}`,
+            appkey: appKey,
+            appsecret: appSecret,
+            tr_id: trId,
+            tr_cont: page === 0 ? '' : 'N',
+            custtype: 'P',
+          },
+        });
+        data = await res.json();
+      } catch (e) {
+        errors.push({ exchange: exch.code, error: e.message || String(e) });
+        break;
+      }
+      if (data.rt_cd && data.rt_cd !== '0') {
+        // 거래소별 조회권한 없음 등은 silently skip (다른 거래소는 시도)
+        if (data.msg_cd && data.msg_cd !== 'KIOK0570') {
+          errors.push({ exchange: exch.code, error: data.msg1 || `rt_cd=${data.rt_cd}` });
+        }
+        break;
+      }
+      const rows = Array.isArray(data.output1) ? data.output1 : [];
+      rows.forEach(r => {
+        const code = String(r.ovrs_pdno || r.pdno || '').trim().toUpperCase();
+        if (!code) return;
+        const qty = Number(r.ovrs_cblc_qty || r.hldg_qty || 0);
+        if (qty <= 0) return;
+        all.push({
+          code,
+          stockName: r.ovrs_item_name || r.prdt_name || code,
+          qty,
+          avgBuy: Number(r.pchs_avg_pric) || 0,
+          price: Number(r.now_pric2 || r.last_pric) || 0,
+          eval: Number(r.frcr_evlu_amt2 || r.ovrs_stck_evlu_amt) || 0,
+          purchase: Number(r.frcr_pchs_amt1) || 0,
+          pnl: Number(r.frcr_evlu_pfls_amt) || 0,
+          _exchange: exch.code,
+        });
+      });
+      ctxFk = (data.ctx_area_fk200 || '').trim();
+      ctxNk = (data.ctx_area_nk200 || '').trim();
+      if (!ctxNk) break;
+    }
+  }
+  return { holdings: all, errors };
 }
 
 function adminError(request, env, message, status = 400) {

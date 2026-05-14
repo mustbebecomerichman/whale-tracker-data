@@ -5880,9 +5880,18 @@ async function importKisBalance(){
     syncAcctRowsToMpData();
     await persistMpData(true);
     setMyAssetSection('accounts');
-    const acctSummary = (data.accounts || []).map(a => `${a.acctType}:${a.holdings}건`).join(', ');
+    const acctSummary = (data.accounts || []).map(a => `${a.acctType}: 국내 ${a.domestic||0} + 해외 ${a.overseas||0} = ${a.holdings}건`).join(' / ');
     const errs = data.errors || [];
     const zeroAccts = (data.accounts || []).filter(a => a.holdings === 0).map(a => a.acctType);
+    // KIS가 알려준 계좌별 평가금액 + 예수금 (앱 화면과 대조용)
+    const kisTotals = (data.accounts || []).map(a => {
+      const s = a.summary || {};
+      const evalAmt = s.totalEval || 0;
+      const cash = s.cash || 0;
+      const acctTotal = evalAmt + cash;  // KIS 앱의 "계좌 자산" 근사값
+      return { acctType: a.acctType, evalAmt, cash, acctTotal };
+    });
+    const grandTotal = kisTotals.reduce((s,t) => s + t.acctTotal, 0);
     // 영구 배너에 결과 표시
     const banner = document.getElementById('kis-status-banner');
     if (banner) {
@@ -5897,25 +5906,44 @@ async function importKisBalance(){
         <strong style="color:${fg};">🔗 한국투자 연동 결과</strong>
         <span style="font-size:.74rem;color:var(--text2);">${fetchTime}</span>
       </div>
-      <div style="margin-top:6px;color:${fg};">계좌별 보유: ${acctSummary || '(없음)'}</div>`;
-      if (hasErr) {
-        html += `<div style="margin-top:8px;padding:8px 10px;background:#fff;border:1px solid #f4d685;border-radius:6px;">
-          <strong style="color:#b07900;">⚠️ 조회 실패한 계좌:</strong><br>` +
-          errs.map(e => `<div style="margin-top:4px;font-family:'Courier New',monospace;font-size:.78rem;"><b>${escapeHtml(e.acctType)} (${escapeHtml(e.cano)})</b>: ${escapeHtml(String(e.error||''))}</div>`).join('') +
-          `<div style="margin-top:8px;font-size:.78rem;color:var(--text2);line-height:1.5;">
-            💡 가장 흔한 원인: KIS Open API 앱에 해당 계좌가 등록되지 않음.<br>
-            <a href="https://apiportal.koreainvestment.com" target="_blank" style="color:#16794b;font-weight:700;">apiportal.koreainvestment.com</a> → 마이페이지 → 앱 관리 → 해당 앱에 누락된 계좌 추가
-          </div>
+      <div style="margin-top:6px;color:${fg};font-size:.82rem;">${acctSummary || '(없음)'}</div>`;
+      if (kisTotals.length) {
+        html += `<div style="margin-top:8px;padding:8px 10px;background:#fff;border:1px solid ${border};border-radius:6px;font-size:.8rem;">
+          <strong style="color:${fg};">📊 KIS 앱 기준 계좌 자산 (대조용)</strong>
+          <table style="width:100%;margin-top:6px;border-collapse:collapse;">
+            <thead><tr style="font-size:.72rem;color:var(--text2);">
+              <th style="text-align:left;padding:3px 4px;">계좌</th>
+              <th style="text-align:right;padding:3px 4px;">주식 평가</th>
+              <th style="text-align:right;padding:3px 4px;">예수금</th>
+              <th style="text-align:right;padding:3px 4px;">합계</th>
+            </tr></thead><tbody>` +
+            kisTotals.map(t => `<tr>
+              <td style="padding:3px 4px;">${escapeHtml(t.acctType)}</td>
+              <td style="text-align:right;padding:3px 4px;font-family:'Courier New',monospace;">₩${Math.round(t.evalAmt).toLocaleString('ko-KR')}</td>
+              <td style="text-align:right;padding:3px 4px;font-family:'Courier New',monospace;color:var(--text2);">₩${Math.round(t.cash).toLocaleString('ko-KR')}</td>
+              <td style="text-align:right;padding:3px 4px;font-family:'Courier New',monospace;font-weight:900;">₩${Math.round(t.acctTotal).toLocaleString('ko-KR')}</td>
+            </tr>`).join('') +
+            `<tr style="border-top:2px solid ${border};">
+              <td colspan="3" style="text-align:right;padding:5px 4px;font-weight:900;">전체 합계</td>
+              <td style="text-align:right;padding:5px 4px;font-weight:900;color:${fg};font-family:'Courier New',monospace;">₩${Math.round(grandTotal).toLocaleString('ko-KR')}</td>
+            </tr>
+          </tbody></table>
+          <div style="margin-top:6px;font-size:.72rem;color:var(--text2);">💡 위 합계는 KIS 응답 기준. WhaleTracker "총 평가금액"은 예수금 제외 + 해외주식은 종목 단위 환산이라 약간 차이가 날 수 있습니다.</div>
         </div>`;
       }
+      if (hasErr) {
+        html += `<div style="margin-top:8px;padding:8px 10px;background:#fff;border:1px solid #f4d685;border-radius:6px;">
+          <strong style="color:#b07900;">⚠️ 조회 실패:</strong><br>` +
+          errs.map(e => `<div style="margin-top:4px;font-family:'Courier New',monospace;font-size:.78rem;"><b>${escapeHtml(e.acctType)} ${escapeHtml(e.scope||'')}</b>: ${escapeHtml(String(e.error||''))}</div>`).join('') +
+        `</div>`;
+      }
       if (hasZero) {
-        html += `<div style="margin-top:8px;font-size:.78rem;color:#b07900;">⚠️ 보유 0건 계좌: ${zeroAccts.join(', ')} — KIS 앱에서 실제 보유 여부 재확인 필요</div>`;
+        html += `<div style="margin-top:8px;font-size:.78rem;color:#b07900;">⚠️ 보유 0건 계좌: ${zeroAccts.join(', ')}</div>`;
       }
       banner.innerHTML = html;
       banner.style.cssText = `display:block;margin-bottom:10px;padding:12px 14px;border-radius:10px;font-size:.86rem;line-height:1.5;background:${bg};border:1px solid ${border};`;
     }
-    const toastMsg = `✅ 한국투자 연동 — 추가 ${added}, 중복 삭제 ${removed} · ${acctSummary}` +
-      (errs.length ? ` ⚠️ 실패: ${errs.map(e=>e.acctType).join('/')}` : '');
+    const toastMsg = `✅ 한국투자 연동 — 추가 ${added}, 중복 삭제 ${removed}` + (errs.length ? ` ⚠️ 실패: ${errs.map(e=>`${e.acctType}/${e.scope||''}`).join(', ')}` : '');
     showToast(toastMsg, errs.length || zeroAccts.length ? 'err' : 'ok');
   } catch (e) {
     console.error('[importKisBalance] failed', e);
