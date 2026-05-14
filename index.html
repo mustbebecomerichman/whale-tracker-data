@@ -621,21 +621,24 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .myasset-actions{margin-bottom:18px;}
   .myasset-pill{padding:11px 15px;background:#fff;border:1px solid var(--border);box-shadow:var(--shadow);}
   .myasset-pill.primary{background:#edfff5;border-color:#abe5c3;color:#16794b;}
-  .myasset-total{padding:6px 0 4px;}
-  .myasset-total-label{display:block;font-size:.74rem;margin-bottom:8px;}
-  .myasset-total #mp-total{font-size:clamp(1.9rem,8vw,2.6rem);font-weight:950;line-height:1.0;letter-spacing:-0.022em;}
+  /* 모바일에서도 데스크톱과 동일한 시각 구성 유지 (사이즈만 살짝 축소) */
+  .myasset-total{padding:8px 0 4px;}
+  .myasset-total-label{display:block;font-size:.78rem;margin-bottom:9px;letter-spacing:.08em;text-transform:uppercase;}
+  .myasset-total #mp-total{font-size:clamp(2.2rem,9vw,3.2rem);font-weight:950;line-height:1.0;letter-spacing:-0.025em;}
   .myasset-total #mp-total .split-money{flex-direction:column;align-items:center;justify-content:center;gap:5px;flex-wrap:nowrap;white-space:nowrap;}
   .myasset-total #mp-total .split-money .krw{font-size:1em;line-height:1;}
-  .myasset-total #mp-total .split-money .usd{font-size:.34em;color:var(--text2);font-weight:800;}
-  .myasset-profit-line{font-size:1rem;margin:14px auto 0;padding:13px 16px;max-width:none;gap:10px;}
-  .myasset-profit-line .mp-val{font-size:1.18rem;}
-  .myasset-profit-line #mp-rate{font-size:.9rem;padding:4px 10px;}
-  .myasset-submetrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px;}
-  .myasset-submetric{background:#fff;padding:11px 12px;box-shadow:0 1px 2px rgba(0,0,0,.02);border-radius:12px;}
-  .myasset-submetric span{font-size:.66rem;margin-bottom:5px;}
-  .myasset-submetric .mp-val,.myasset-submetric strong{font-size:.92rem;}
-  #mp-stock-stats{justify-content:center;margin-top:13px!important;gap:8px!important;}
-  #mp-stock-stats .status-chip{font-size:.82rem;padding:6px 12px;}
+  .myasset-total #mp-total .split-money .usd{font-size:.32em;color:var(--text2);font-weight:800;}
+  .myasset-total #mp-total .split-money .usd::before{content:'≈ ';color:var(--text2);}
+  .myasset-profit-line{font-size:1rem;margin:16px 0 0;padding:14px 18px;max-width:none;gap:14px;border-radius:16px;}
+  .myasset-profit-line > span{font-size:.72rem;font-weight:900;letter-spacing:.04em;text-transform:uppercase;}
+  .myasset-profit-line .mp-val{font-size:1.25rem;font-weight:900;}
+  .myasset-profit-line #mp-rate{font-size:.95rem;padding:5px 12px;}
+  .myasset-submetrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px;}
+  .myasset-submetric{background:#fff;padding:13px 14px;box-shadow:0 1px 2px rgba(0,0,0,.02);border-radius:14px;}
+  .myasset-submetric span{font-size:.7rem;margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase;}
+  .myasset-submetric .mp-val,.myasset-submetric strong{font-size:.98rem;}
+  #mp-stock-stats{justify-content:center;margin-top:16px!important;gap:10px!important;}
+  #mp-stock-stats .status-chip{font-size:.86rem;padding:6px 13px;border-radius:999px;background:#fff;}
   .mp-period-grid{display:none;}
   .mp-card{padding:10px 11px;border-radius:9px;}
   .mp-period-grid .mp-card{padding:10px 8px;}
@@ -1288,6 +1291,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <div class="year-chips" id="year-chips" style="margin-bottom:0"></div>
         <button class="btn btn-outline btn-sm mobile-toggle" onclick="toggleMobileSection('tx-detail',this)">숨기기</button>
+        <button class="btn btn-outline btn-sm" id="btn-kis-tx-sync" onclick="importKisTransactions()" style="border-color:#16794b;color:#16794b;font-weight:900;">🔗 한국투자 거래내역</button>
         <button class="btn btn-primary btn-sm" onclick="addSheetRow()">＋ 행 추가</button>
       </div>
     </div>
@@ -1337,6 +1341,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         💰 배당 수익
         <span class="badge" id="div-count">0건</span>
         <span class="badge" id="div-year-badge">2026년</span>
+        <span class="badge" style="background:#fff7e0;color:#b07900;border-color:#f4d685;" title="KIS Open API는 배당금 수령 내역을 제공하지 않아 수동 입력만 가능합니다.">⚠️ KIS 자동연동 불가</span>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <button class="btn btn-outline btn-sm mobile-toggle" onclick="toggleMobileSection('div-detail',this)">숨기기</button>
@@ -5583,28 +5588,56 @@ function acctCellChange(idx, input) {
 }
 
 function updateAcctFooter(rows) {
-  const sumEv  = rows.reduce((s,a) => s+displayCurrencyValue(a.price&&a.qty?a.qty*a.price:(a.eval||0),a.code), 0);
-  const sumPur = rows.reduce((s,a) => s+displayCurrencyValue(a.avgBuy&&a.qty?a.qty*a.avgBuy:(a.purchase||0),a.code), 0);
-  const sumPnl = sumEv - sumPur;
-  const sumRate = sumPur>0 ? Math.round(sumPnl/sumPur*10000)/100 : 0;
   const set = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
-  const hasUsd=rows.some(a=>currencyForCode(a.code)==='USD');
-  const hasKrw=rows.some(a=>currencyForCode(a.code)==='KRW');
-  if(hasUsd&&hasKrw&&!_showKrwConverted){
-    set('af-eval','원화/달러 분리');
-    set('af-purchase','원화/달러 분리');
-    set('af-rate','-');
-    set('af-pnl','원화/달러 분리');
-    return;
-  }
-  const currency=hasUsd&&!hasKrw&&!_showKrwConverted?'USD':'KRW';
-  const suffix=hasUsd&&_showKrwConverted?` (TTS ${_fxTtsRate.toLocaleString('ko-KR')})`:'';
-  set('af-eval',    sumEv  ? formatAccountAmount(sumEv,currency)+suffix : '-');
-  set('af-purchase',sumPur ? formatAccountAmount(sumPur,currency)+suffix : '-');
+  // 통화별로 계산
+  const krwSum = {eval:0,purchase:0};
+  const usdSum = {eval:0,purchase:0};
+  rows.forEach(a => {
+    const cur = currencyForCode(a.code);
+    const ev  = a.price && a.qty ? a.qty * a.price : (a.eval || 0);
+    const pur = a.avgBuy && a.qty ? a.qty * a.avgBuy : (a.purchase || 0);
+    if (cur === 'USD') { usdSum.eval += ev; usdSum.purchase += pur; }
+    else if (cur === 'KRW') { krwSum.eval += ev; krwSum.purchase += pur; }
+  });
+  const hasUsd = usdSum.eval > 0 || usdSum.purchase > 0;
+  const hasKrw = krwSum.eval > 0 || krwSum.purchase > 0;
+  // 통화별 합계가 두 개일 때: KRW로 환산한 통합 합계를 표시 (TTS 기준)
+  const fmtMixed = (krw, usd) => {
+    if (hasUsd && hasKrw) {
+      const conv = krw + (usd * _fxTtsRate);
+      return `₩${Math.round(conv).toLocaleString('ko-KR')} (₩${Math.round(krw).toLocaleString('ko-KR')} + $${usd.toLocaleString('ko-KR',{maximumFractionDigits:2})}×${_fxTtsRate})`;
+    }
+    if (hasUsd) return formatAccountAmount(usd, 'USD');
+    return formatAccountAmount(krw, 'KRW');
+  };
+  const totalEv  = fmtMixed(krwSum.eval, usdSum.eval);
+  const totalPur = fmtMixed(krwSum.purchase, usdSum.purchase);
+  // 손익 계산용 (KRW로 환산)
+  const convEv  = krwSum.eval + (usdSum.eval * _fxTtsRate);
+  const convPur = krwSum.purchase + (usdSum.purchase * _fxTtsRate);
+  const convPnl = convEv - convPur;
+  const sumRate = convPur > 0 ? Math.round(convPnl / convPur * 10000) / 100 : 0;
+  set('af-eval', (krwSum.eval||usdSum.eval) ? totalEv : '-');
+  set('af-purchase', (krwSum.purchase||usdSum.purchase) ? totalPur : '-');
   const rEl = document.getElementById('af-rate');
-  if(rEl) { rEl.textContent=(sumPur||sumEv?(sumRate>=0?'+':'')+sumRate.toFixed(2)+'%':'-'); rEl.style.color=sumRate>=0?'var(--up)':'var(--down)'; }
+  if (rEl) {
+    rEl.textContent = (convPur || convEv) ? (sumRate >= 0 ? '+' : '') + sumRate.toFixed(2) + '%' : '-';
+    rEl.style.color = sumRate >= 0 ? 'var(--up)' : 'var(--down)';
+  }
   const pEl = document.getElementById('af-pnl');
-  if(pEl) { pEl.textContent=(sumPur||sumEv?(sumPnl>=0?'+':'-')+formatAccountAmount(Math.abs(sumPnl),currency)+suffix:'-'); pEl.style.color=sumPnl>=0?'var(--up)':'var(--down)'; }
+  if (pEl) {
+    if (hasUsd && hasKrw) {
+      const krwPnl = krwSum.eval - krwSum.purchase;
+      const usdPnl = usdSum.eval - usdSum.purchase;
+      const sign = convPnl >= 0 ? '+' : '-';
+      pEl.textContent = (convPur||convEv) ? `${sign}₩${Math.round(Math.abs(convPnl)).toLocaleString('ko-KR')} (₩${Math.round(krwPnl).toLocaleString('ko-KR')} + $${usdPnl.toFixed(2)})` : '-';
+    } else {
+      const currency = hasUsd ? 'USD' : 'KRW';
+      const pnl = hasUsd ? (usdSum.eval - usdSum.purchase) : (krwSum.eval - krwSum.purchase);
+      pEl.textContent = (convPur||convEv) ? (pnl >= 0 ? '+' : '-') + formatAccountAmount(Math.abs(pnl), currency) : '-';
+    }
+    pEl.style.color = convPnl >= 0 ? 'var(--up)' : 'var(--down)';
+  }
 }
 
 function updateAcctSummaryBar() {
@@ -5794,6 +5827,75 @@ async function importKisBalance(){
   }
 }
 window.importKisBalance = importKisBalance;
+
+// ═══ 한국투자 거래내역 자동 가져오기 ════════════════════════════
+async function importKisTransactions(){
+  const btn = document.getElementById('btn-kis-tx-sync');
+  if (btn) { btn.disabled = true; btn.textContent = '🔄 가져오는 중...'; }
+  try {
+    const res = await apiFetch('/api/kis-transactions', {method:'GET'});
+    if (res.status === 403) {
+      showToast('관리자 본인 계정만 사용 가능합니다.', 'err');
+      return;
+    }
+    if (!res.ok) {
+      let msg = 'HTTP ' + res.status;
+      try { const j = await res.json(); msg = j.error || msg; } catch(_){}
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    const fetched = data.items || [];
+    if (!fetched.length) {
+      showToast('최근 90일간 한국투자증권 거래내역이 없습니다.', 'err');
+      return;
+    }
+    if (!mpData) mpData = emptyPortfolio();
+    if (!mpData.transactions) mpData.transactions = {};
+    // 기존 KIS 주문번호 dedupe set
+    const existingOrders = new Set();
+    Object.values(mpData.transactions).forEach(yearRows => {
+      (yearRows || []).forEach(t => { if (t._kisOrderNo) existingOrders.add(String(t._kisOrderNo)); });
+    });
+    let added = 0;
+    fetched.forEach(t => {
+      const orderNo = String(t.orderNo || '');
+      if (!orderNo || existingOrders.has(orderNo)) return;
+      const code = normalizeStockCode(t.code || '');
+      const yr = (t.date || '').slice(0, 4);
+      if (!yr || !code) return;
+      if (!mpData.transactions[yr]) mpData.transactions[yr] = [];
+      const isBuy = t.action === '매수';
+      mpData.transactions[yr].push({
+        date: t.date,
+        brokerage: '한국투자증권',
+        acctType: '위탁',
+        code,
+        name: t.stockName || resolveStockName(code, ''),
+        qty: t.qty || 0,
+        avgBuy: isBuy ? (t.price || 0) : 0,
+        price: isBuy ? 0 : (t.price || 0),
+        fee: t.fee || 0,
+        note: isBuy ? '매수 (KIS자동)' : '매도 (KIS자동)',
+        _kisOrderNo: orderNo,
+        _autoName: true,
+      });
+      existingOrders.add(orderNo);
+      added++;
+    });
+    renderYearChips(mpData.transactions);
+    renderSheet(mpYear, mpData.transactions || {});
+    syncSheetRowsToMpData();
+    await persistMpData(true);
+    setMyAssetSection('tx');
+    showToast(`✅ 거래내역 가져오기 완료 — 신규 ${added}건 (총 ${fetched.length}건 조회)`, 'ok');
+  } catch (e) {
+    console.error('[importKisTransactions] failed', e);
+    showToast('연동 실패: ' + (e.message || e), 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔗 한국투자 거래내역'; }
+  }
+}
+window.importKisTransactions = importKisTransactions;
 
 // ═══ 배당 수익 스프레드시트 ══════════════════════════════════
 const DIV_TAX = 0.154;
