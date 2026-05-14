@@ -168,8 +168,12 @@ async function fetchBalance(env, override = {}) {
     throw new Error(`KIS API 오류: ${data.msg1 || 'rt_cd=' + data.rt_cd}`);
   }
   const rows = Array.isArray(data.output1) ? data.output1 : [];
+  // qty=0 행도 포함 (미체결/대출 등 누락 방지). 단, code가 빈 행은 제외
   const holdings = rows
-    .filter(r => Number(r.hldg_qty) > 0)
+    .filter(r => {
+      const code = String(r.pdno || '').trim();
+      return code && code !== '000000';
+    })
     .map(r => ({
       code: String(r.pdno || '').padStart(6, '0'),
       stockName: r.prdt_name || '',
@@ -186,7 +190,7 @@ async function fetchBalance(env, override = {}) {
     totalPnl: Number(data.output2[0].evlu_pfls_smtl_amt) || 0,
     cash: Number(data.output2[0].dnca_tot_amt) || 0,
   } : null;
-  return { holdings, summary, source: 'KIS', fetchedAt: new Date().toISOString() };
+  return { holdings, summary, rawCount: rows.length, source: 'KIS', fetchedAt: new Date().toISOString() };
 }
 
 function adminError(request, env, message, status = 400) {
