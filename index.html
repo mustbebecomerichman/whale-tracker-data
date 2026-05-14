@@ -1272,6 +1272,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <button class="btn btn-primary btn-sm" onclick="addAcctRow()">＋ 종목 추가</button>
       </div>
     </div>
+    <div id="kis-status-banner" style="display:none;margin-bottom:10px;padding:10px 14px;border-radius:10px;font-size:.86rem;line-height:1.5;"></div>
     <div class="sheet-wrap mobile-collapsible" data-mobile-group="acct-detail">
       <table class="sheet-table" id="acct-table">
         <thead><tr>
@@ -5881,10 +5882,41 @@ async function importKisBalance(){
     setMyAssetSection('accounts');
     const acctSummary = (data.accounts || []).map(a => `${a.acctType}:${a.holdings}건`).join(', ');
     const errs = data.errors || [];
-    const errMsg = errs.length ? ` ⚠️ 실패계좌: ${errs.map(e=>`${e.acctType}(${e.error})`).join(', ')}` : '';
     const zeroAccts = (data.accounts || []).filter(a => a.holdings === 0).map(a => a.acctType);
-    const zeroMsg = zeroAccts.length ? ` ⚠️ ${zeroAccts.join('/')} 계좌 보유 0건 — KIS 앱 확인 필요` : '';
-    showToast(`✅ 한국투자 연동 — 추가 ${added}, 중복 삭제 ${removed} · ${acctSummary}${errMsg}${zeroMsg}`, errs.length || zeroAccts.length ? 'err' : 'ok');
+    // 영구 배너에 결과 표시
+    const banner = document.getElementById('kis-status-banner');
+    if (banner) {
+      const hasErr = errs.length > 0;
+      const hasZero = zeroAccts.length > 0;
+      const ok = !hasErr && !hasZero;
+      const bg = ok ? '#edfff5' : '#fff7e0';
+      const border = ok ? '#abe5c3' : '#f4d685';
+      const fg = ok ? '#16794b' : '#7a5a00';
+      const fetchTime = new Date().toLocaleTimeString('ko-KR');
+      let html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <strong style="color:${fg};">🔗 한국투자 연동 결과</strong>
+        <span style="font-size:.74rem;color:var(--text2);">${fetchTime}</span>
+      </div>
+      <div style="margin-top:6px;color:${fg};">계좌별 보유: ${acctSummary || '(없음)'}</div>`;
+      if (hasErr) {
+        html += `<div style="margin-top:8px;padding:8px 10px;background:#fff;border:1px solid #f4d685;border-radius:6px;">
+          <strong style="color:#b07900;">⚠️ 조회 실패한 계좌:</strong><br>` +
+          errs.map(e => `<div style="margin-top:4px;font-family:'Courier New',monospace;font-size:.78rem;"><b>${escapeHtml(e.acctType)} (${escapeHtml(e.cano)})</b>: ${escapeHtml(String(e.error||''))}</div>`).join('') +
+          `<div style="margin-top:8px;font-size:.78rem;color:var(--text2);line-height:1.5;">
+            💡 가장 흔한 원인: KIS Open API 앱에 해당 계좌가 등록되지 않음.<br>
+            <a href="https://apiportal.koreainvestment.com" target="_blank" style="color:#16794b;font-weight:700;">apiportal.koreainvestment.com</a> → 마이페이지 → 앱 관리 → 해당 앱에 누락된 계좌 추가
+          </div>
+        </div>`;
+      }
+      if (hasZero) {
+        html += `<div style="margin-top:8px;font-size:.78rem;color:#b07900;">⚠️ 보유 0건 계좌: ${zeroAccts.join(', ')} — KIS 앱에서 실제 보유 여부 재확인 필요</div>`;
+      }
+      banner.innerHTML = html;
+      banner.style.cssText = `display:block;margin-bottom:10px;padding:12px 14px;border-radius:10px;font-size:.86rem;line-height:1.5;background:${bg};border:1px solid ${border};`;
+    }
+    const toastMsg = `✅ 한국투자 연동 — 추가 ${added}, 중복 삭제 ${removed} · ${acctSummary}` +
+      (errs.length ? ` ⚠️ 실패: ${errs.map(e=>e.acctType).join('/')}` : '');
+    showToast(toastMsg, errs.length || zeroAccts.length ? 'err' : 'ok');
   } catch (e) {
     console.error('[importKisBalance] failed', e);
     showToast('연동 실패: ' + (e.message || e), 'err');
