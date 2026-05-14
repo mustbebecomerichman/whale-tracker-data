@@ -15,14 +15,25 @@ import { corsHeaders, rejectUntrustedOrigin, requireFirebaseUser, safeErrorRespo
 
 const METHODS = 'GET, OPTIONS';
 const TOKEN_EXPIRY_BUFFER_MS = 10 * 60 * 1000;
-const TOKEN_KEY = 'kis-access-token-v1';
-let _cachedToken = null, _tokenExpiry = 0;
+const TOKEN_KEY_PREFIX = 'kis-access-token-v2:';  // appKey 끝 8자 suffix
+// 메모리 토큰 캐시 — appKey 별로 분리
+const _tokenMem = new Map();
 
-function getKisCreds(env) {
+function getKisCreds(env, account = {}) {
+  // 계좌별로 별도 app key/secret 환경변수 사용 가능
+  // account.appKeyEnv / account.appSecretEnv 지정 시 해당 env var 우선
+  const keyOverride = account.appKeyEnv ? env[account.appKeyEnv] : null;
+  const secretOverride = account.appSecretEnv ? env[account.appSecretEnv] : null;
   return {
-    appKey: env.KIS_APP_KEY || env.KIS_APPKEY || env.KIS_KEY || '',
-    appSecret: env.KIS_APP_SECRET || env.KIS_APPSECRET || env.KIS_SECRET || '',
+    appKey: keyOverride || env.KIS_APP_KEY || env.KIS_APPKEY || env.KIS_KEY || '',
+    appSecret: secretOverride || env.KIS_APP_SECRET || env.KIS_APPSECRET || env.KIS_SECRET || '',
+    keyEnvName: account.appKeyEnv || 'KIS_APP_KEY',
+    secretEnvName: account.appSecretEnv || 'KIS_APP_SECRET',
   };
+}
+
+function tokenCacheKey(appKey) {
+  return TOKEN_KEY_PREFIX + String(appKey || '').slice(-8);
 }
 
 function getBaseUrl(env) {
@@ -48,45 +59,49 @@ function parseKisTokenExpiry(data) {
   return Math.min(...expiries) - TOKEN_EXPIRY_BUFFER_MS;
 }
 
-async function readStoredToken(env) {
-  if (_cachedToken && Date.now() < _tokenExpiry) return _cachedToken;
+async function readStoredToken(env, appKey) {
+  const mem = _tokenMem.get(appKey);
+  if (mem && Date.now() < mem.expiry) return mem.token;
   const store = getTokenStore(env);
   if (!store || typeof store.get !== 'function') return null;
   try {
-    const saved = await store.get(TOKEN_KEY, 'json');
+    const saved = await store.get(tokenCacheKey(appKey), 'json');
     if (saved?.accessToken && saved?.expiresAt && Date.now() < saved.expiresAt) {
-      _cachedToken = saved.accessToken;
-      _tokenExpiry = saved.expiresAt;
-      return _cachedToken;
+      _tokenMem.set(appKey, { token: saved.accessToken, expiry: saved.expiresAt });
+      return saved.accessToken;
     }
   } catch (e) {}
   return null;
 }
 
-async function writeStoredToken(env, accessToken, expiresAt) {
-  _cachedToken = accessToken;
-  _tokenExpiry = expiresAt;
+async function writeStoredToken(env, appKey, accessToken, expiresAt) {
+  _tokenMem.set(appKey, { token: accessToken, expiry: expiresAt });
   const store = getTokenStore(env);
   if (!store || typeof store.put !== 'function') return;
   try {
     const ttl = Math.max(60, Math.floor((expiresAt - Date.now()) / 1000));
-    await store.put(TOKEN_KEY, JSON.stringify({ accessToken, expiresAt }), { expirationTtl: ttl });
+    await store.put(tokenCacheKey(appKey), JSON.stringify({ accessToken, expiresAt }), { expirationTtl: ttl });
   } catch (e) {}
 }
 
-async function getKisToken(env) {
-  const stored = await readStoredToken(env);
+async function getKisToken(env, account = {}) {
+  const { appKey, appSecret, keyEnvName, secretEnvName } = getKisCreds(env, account);
+  if (!appKey || !appSecret) {
+    throw new Error(`${keyEnvName}/${secretEnvName} 환경변수가 설정되지 않았습니다.`);
+  }
+  const stored = await readStoredToken(env, appKey);
   if (stored) return stored;
-  const { appKey, appSecret } = getKisCreds(env);
   const res = await fetch(`${getBaseUrl(env)}/oauth2/tokenP`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ grant_type: 'client_credentials', appkey: appKey, appsecret: appSecret }),
   });
   const data = await res.json();
-  if (!data.access_token) throw new Error('KIS 토큰 발급 실패');
-  await writeStoredToken(env, data.access_token, parseKisTokenExpiry(data));
-  return _cachedToken;
+  if (!data.access_token) {
+    throw new Error('KIS 토큰 발급 실패: ' + (data.error_description || data.error || JSON.stringify(data)));
+  }
+  await writeStoredToken(env, appKey, data.access_token, parseKisTokenExpiry(data));
+  return data.access_token;
 }
 
 function getAdminEmails(env) {
@@ -101,13 +116,15 @@ function requireAdmin(user, env) {
 }
 
 // 관리자 본인 KIS 계좌 목록 (env KIS_ACCOUNTS JSON으로 override 가능)
+// appKeyEnv/appSecretEnv: 해당 계좌가 별도 KIS 앱을 사용할 때 환경변수 이름 지정
+// 미지정 시 기본 KIS_APP_KEY/KIS_APP_SECRET 사용
 function getKisAccounts(env) {
   if (env.KIS_ACCOUNTS) {
     try { return JSON.parse(env.KIS_ACCOUNTS); } catch (_) {}
   }
   return [
     { cano: '64635355', prdt: '01', acctType: 'ISA' },
-    { cano: '74118276', prdt: '01', acctType: '위탁' },
+    { cano: '74118276', prdt: '01', acctType: '위탁', appKeyEnv: 'KIS_APP_KEY_2', appSecretEnv: 'KIS_APP_SECRET_2' },
   ];
 }
 
@@ -118,7 +135,7 @@ async function fetchAllBalances(env) {
   const errors = [];
   for (const acct of accounts) {
     try {
-      const r = await fetchBalance(env, { cano: acct.cano, prdt: acct.prdt });
+      const r = await fetchBalance(env, acct);
       const tagged = (r.holdings || []).map(h => ({ ...h, acctType: acct.acctType, _cano: acct.cano }));
       allHoldings.push(...tagged);
       perAccount.push({ cano: acct.cano, acctType: acct.acctType, holdings: tagged.length, summary: r.summary });
@@ -129,13 +146,16 @@ async function fetchAllBalances(env) {
   return { holdings: allHoldings, accounts: perAccount, errors, source: 'KIS', fetchedAt: new Date().toISOString() };
 }
 
-async function fetchBalance(env, override = {}) {
-  const { appKey, appSecret } = getKisCreds(env);
-  const cano = (override.cano || env.KIS_ACCOUNT_NUMBER || env.KIS_CANO || '').toString().trim();
-  const prdt = (override.prdt || env.KIS_ACCOUNT_PRODUCT || env.KIS_ACNT_PRDT_CD || '01').toString().trim();
+async function fetchBalance(env, account = {}) {
+  const { appKey, appSecret, keyEnvName, secretEnvName } = getKisCreds(env, account);
+  if (!appKey || !appSecret) {
+    throw new Error(`${keyEnvName}/${secretEnvName} 환경변수 누락 (${account.acctType || '계좌'})`);
+  }
+  const cano = (account.cano || env.KIS_ACCOUNT_NUMBER || env.KIS_CANO || '').toString().trim();
+  const prdt = (account.prdt || env.KIS_ACCOUNT_PRODUCT || env.KIS_ACNT_PRDT_CD || '01').toString().trim();
   if (!cano) throw new Error('계좌번호가 설정되지 않았습니다.');
 
-  const token = await getKisToken(env);
+  const token = await getKisToken(env, account);
   const trId = env.KIS_MOCK === 'true' ? 'VTTC8434R' : 'TTTC8434R';
   const params = new URLSearchParams({
     CANO: cano,
@@ -214,20 +234,13 @@ export async function onRequestGet(context) {
     const url = new URL(request.url);
     const qCano = (url.searchParams.get('cano') || '').trim();
     const qPrdt = (url.searchParams.get('prdt') || '').trim();
-    const { appKey, appSecret } = getKisCreds(env);
-    const missing = [];
-    if (!appKey) missing.push('KIS_APP_KEY (env)');
-    if (!appSecret) missing.push('KIS_APP_SECRET (env)');
-    if (missing.length) {
-      return adminError(request, env, '설정 누락: ' + missing.join(', '), 500);
-    }
     try {
       let data;
       if (qCano) {
-        // 단일 계좌 override
+        // 단일 계좌 override (기본 env 키 사용)
         data = await fetchBalance(env, { cano: qCano, prdt: qPrdt });
       } else {
-        // 고정된 2개 계좌 모두 조회
+        // 고정된 2개 계좌 모두 조회 (계좌별 credentials은 fetchAllBalances 내부에서 처리)
         data = await fetchAllBalances(env);
       }
       return new Response(JSON.stringify(data), {
