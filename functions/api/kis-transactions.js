@@ -101,13 +101,38 @@ function getKisAccounts(env) {
   ];
 }
 
+function ymdToDate(ymd) {
+  const s = String(ymd).replace(/-/g, '');
+  return new Date(`${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}T00:00:00`);
+}
+
+// fromYmd~toYmd 범위를 90일 청크로 나눠 모두 조회
+async function fetchTransactionsChunked(env, fromYmd, toYmd, override = {}) {
+  const start = ymdToDate(fromYmd);
+  const end = ymdToDate(toYmd);
+  const all = [];
+  let chunkEnd = new Date(end);
+  while (chunkEnd >= start) {
+    const chunkStart = new Date(chunkEnd);
+    chunkStart.setDate(chunkStart.getDate() - 89);
+    const effectiveStart = chunkStart < start ? new Date(start) : chunkStart;
+    const items = await fetchTransactions(env, ymd(effectiveStart), ymd(chunkEnd), override);
+    all.push(...items);
+    // 다음 청크: effectiveStart의 하루 전
+    chunkEnd = new Date(effectiveStart);
+    chunkEnd.setDate(chunkEnd.getDate() - 1);
+    if (all.length > 20000) break;  // sanity guard
+  }
+  return all;
+}
+
 async function fetchAllTransactions(env, fromYmd, toYmd) {
   const accounts = getKisAccounts(env);
   const allItems = [];
   const errors = [];
   for (const acct of accounts) {
     try {
-      const items = await fetchTransactions(env, fromYmd, toYmd, { cano: acct.cano, prdt: acct.prdt });
+      const items = await fetchTransactionsChunked(env, fromYmd, toYmd, { cano: acct.cano, prdt: acct.prdt });
       const tagged = items.map(t => ({ ...t, acctType: acct.acctType, _cano: acct.cano }));
       allItems.push(...tagged);
     } catch (e) {
@@ -180,19 +205,26 @@ async function fetchTransactions(env, fromYmd, toYmd, override = {}) {
     }
     const rows = Array.isArray(data.output1) ? data.output1 : [];
     rows.forEach(r => {
+      // 취소 주문 제외
+      if (String(r.cncl_yn || '').trim().toUpperCase() === 'Y') return;
+      const qty = Number(r.tot_ccld_qty || 0);
+      // 체결되지 않은 주문 제외 (qty=0)
+      if (qty <= 0) return;
       const code = String(r.pdno || '').padStart(6, '0');
+      if (!code || code === '000000') return;
       const isBuy = String(r.sll_buy_dvsn_cd || '').trim() === '02';
-      const qty = Number(r.tot_ccld_qty || r.ord_qty || 0);
-      const price = Number(r.avg_prvs || r.ord_unpr || 0);
+      const price = Number(r.avg_prvs || 0) || Number(r.ord_unpr || 0);
       const fee = Number(r.tlex_smtl || 0);
+      const amount = Number(r.tot_ccld_amt || 0);
       results.push({
-        date: isoFromKisDate(r.ord_dt || r.exec_dt),
+        date: isoFromKisDate(r.ord_dt),
         code,
         stockName: r.prdt_name || '',
         action: isBuy ? '매수' : '매도',
         qty,
         price,
         fee,
+        amount,
         orderNo: r.odno || '',
       });
     });
@@ -228,19 +260,29 @@ export async function onRequestGet(context) {
     if (!appKey) missing.push('KIS_APP_KEY (env)');
     if (!appSecret) missing.push('KIS_APP_SECRET (env)');
     if (missing.length) return adminError(request, env, '설정 누락: ' + missing.join(', '), 500);
-    const today = new Date();
-    const defFrom = new Date(today);
-    defFrom.setDate(defFrom.getDate() - 89);
-    const fromYmd = (url.searchParams.get('from') || ymd(defFrom)).replace(/-/g, '');
-    const toYmd = (url.searchParams.get('to') || ymd(today)).replace(/-/g, '');
+    // ?year=YYYY 가 있으면 해당 연도 전체, 없으면 from/to 또는 기본 90일
+    const yearParam = (url.searchParams.get('year') || '').trim();
+    let fromYmd, toYmd;
+    if (/^\d{4}$/.test(yearParam)) {
+      fromYmd = yearParam + '0101';
+      const today = new Date();
+      const yearEnd = parseInt(yearParam, 10) === today.getFullYear() ? ymd(today) : (yearParam + '1231');
+      toYmd = yearEnd;
+    } else {
+      const today = new Date();
+      const defFrom = new Date(today);
+      defFrom.setDate(defFrom.getDate() - 89);
+      fromYmd = (url.searchParams.get('from') || ymd(defFrom)).replace(/-/g, '');
+      toYmd = (url.searchParams.get('to') || ymd(today)).replace(/-/g, '');
+    }
     try {
       let payload;
       if (qCano) {
-        // 단일 계좌 override
-        const items = await fetchTransactions(env, fromYmd, toYmd, { cano: qCano, prdt: qPrdt });
+        // 단일 계좌 override (청크 분할)
+        const items = await fetchTransactionsChunked(env, fromYmd, toYmd, { cano: qCano, prdt: qPrdt });
         payload = { items, errors: [] };
       } else {
-        // 고정된 2개 계좌 모두 조회
+        // 고정된 2개 계좌 모두 조회 (각 계좌 청크 분할)
         payload = await fetchAllTransactions(env, fromYmd, toYmd);
       }
       return new Response(JSON.stringify({ ...payload, from: fromYmd, to: toYmd }), {
