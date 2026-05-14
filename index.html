@@ -237,22 +237,30 @@ td.name{font-weight:600;color:var(--text);}
 .myasset-tab{border:none;background:transparent;color:var(--text2);font-family:inherit;padding:13px 4px 12px;font-size:.95rem;font-weight:900;position:relative;cursor:pointer;}
 .myasset-tab.active{color:var(--text);}
 .myasset-tab.active::after{content:'';position:absolute;left:18%;right:18%;bottom:0;height:3px;border-radius:999px;background:var(--accent);}
-.myasset-summary-panel{background:#fff;border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin-bottom:18px;box-shadow:var(--shadow);}
+.myasset-summary-panel{background:linear-gradient(180deg,#fff 0%,#f8fbff 100%);border:1px solid var(--border);border-radius:20px;padding:22px 22px 20px;margin-bottom:18px;box-shadow:0 4px 18px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.03);}
 .myasset-actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
 .myasset-pill{border:none;background:var(--bg3);color:var(--text3);border-radius:999px;padding:8px 14px;font-size:.8rem;font-weight:900;cursor:pointer;font-family:inherit;}
 .myasset-pill.primary{background:#edfff5;color:#16794b;}
-.myasset-total{text-align:center;padding:4px 0 14px;}
-.myasset-total-label{font-size:.76rem;color:var(--text2);font-weight:800;margin-bottom:5px;}
-.myasset-total #mp-total{font-size:clamp(1.4rem,4.5vw,2.4rem);letter-spacing:-0.01em;line-height:1.05;}
-.myasset-total #mp-total .split-money{flex-direction:row;align-items:baseline;justify-content:center;gap:10px;flex-wrap:nowrap;white-space:nowrap;}
-.myasset-total #mp-total .split-money .usd{font-size:.5em;}
-.myasset-profit-line{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;color:var(--text2);font-size:.9rem;margin-top:10px;}
-.myasset-profit-line .mp-val{font-size:.95rem;line-height:1.2;}
-.myasset-submetrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:12px;}
-.myasset-submetric{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 11px;min-width:0;}
-.myasset-submetric span{display:block;color:var(--text2);font-size:.68rem;font-weight:800;margin-bottom:4px;}
-.myasset-submetric .mp-val,.myasset-submetric strong{display:block;color:var(--text);font-size:.86rem;font-weight:900;line-height:1.25;word-break:keep-all;}
-.myasset-submetric small{display:block;margin-top:3px;color:var(--text2);font-size:.65rem;line-height:1.25;}
+.myasset-total{text-align:center;padding:10px 0 6px;}
+.myasset-total-label{font-size:.8rem;color:var(--text2);font-weight:800;margin-bottom:10px;letter-spacing:.08em;text-transform:uppercase;}
+.myasset-total #mp-total{font-size:clamp(2.1rem,6.2vw,3.4rem);letter-spacing:-0.022em;line-height:1.0;font-weight:900;}
+.myasset-total #mp-total .split-money{flex-direction:column;align-items:center;justify-content:center;gap:6px;flex-wrap:nowrap;white-space:nowrap;}
+.myasset-total #mp-total .split-money .krw{font-size:1em;line-height:1;}
+.myasset-total #mp-total .split-money .usd{font-size:.32em;color:var(--text2);font-weight:800;letter-spacing:0;}
+.myasset-total #mp-total .split-money .usd::before{content:'≈ ';color:var(--text2);}
+.myasset-profit-line{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:14px 22px;margin:16px auto 0;max-width:540px;background:var(--bg3);border-radius:16px;border:1px solid var(--border);}
+.myasset-profit-line > span{font-size:.78rem;font-weight:900;color:var(--text2);letter-spacing:.04em;text-transform:uppercase;}
+.myasset-profit-line .mp-val{font-size:1.32rem;line-height:1.15;font-weight:900;}
+.myasset-profit-line .mp-val.split-money{flex-direction:column;gap:2px;align-items:center;}
+.myasset-profit-line .mp-val.split-money .usd{font-size:.6em;color:var(--text2);}
+.myasset-profit-line #mp-rate{padding:5px 12px;border-radius:999px;font-size:1rem;background:#fff;border:1.5px solid currentColor;}
+#mp-stock-stats{margin-top:16px!important;gap:10px!important;}
+#mp-stock-stats .status-chip{font-size:.9rem;padding:7px 14px;border-radius:999px;font-weight:900;background:#fff;}
+.myasset-submetrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px;}
+.myasset-submetric{background:#fff;border:1px solid var(--border);border-radius:14px;padding:13px 15px;min-width:0;box-shadow:0 1px 2px rgba(0,0,0,.02);}
+.myasset-submetric span{display:block;color:var(--text2);font-size:.72rem;font-weight:800;margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase;}
+.myasset-submetric .mp-val,.myasset-submetric strong{display:block;color:var(--text);font-size:1.02rem;font-weight:900;line-height:1.25;word-break:keep-all;}
+.myasset-submetric small{display:block;margin-top:4px;color:var(--text2);font-size:.68rem;line-height:1.3;}
 #page-mypage.amounts-hidden #mp-total,
 #page-mypage.amounts-hidden #mp-pnl,
 #page-mypage.amounts-hidden #mp-rate,
@@ -609,20 +617,25 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   .kis-status.myasset-prompt p{display:block;font-size:.72rem;line-height:1.35;margin-top:2px;}
   .kis-status.myasset-prompt > div:last-child{margin-left:0;}
   .kis-status.myasset-prompt .btn{border-radius:999px;padding:7px 10px;}
-  .myasset-summary-panel{border:none;box-shadow:none;background:transparent;padding:0;margin:0 0 22px;}
+  .myasset-summary-panel{border:1px solid var(--border);box-shadow:0 4px 16px rgba(0,0,0,.04);background:linear-gradient(180deg,#fff 0%,#f8fbff 100%);padding:20px 16px 18px;margin:0 0 22px;border-radius:18px;}
   .myasset-actions{margin-bottom:18px;}
   .myasset-pill{padding:11px 15px;background:#fff;border:1px solid var(--border);box-shadow:var(--shadow);}
   .myasset-pill.primary{background:#edfff5;border-color:#abe5c3;color:#16794b;}
-  .myasset-total{padding:0 0 18px;}
-  .myasset-total-label{display:none;}
-  .myasset-total #mp-total{font-size:clamp(1.5rem,5.5vw,2.2rem);font-weight:950;}
-  .myasset-total #mp-total .split-money{flex-direction:row;align-items:baseline;justify-content:center;gap:8px;flex-wrap:nowrap;white-space:nowrap;}
-  .myasset-total #mp-total .split-money .usd{font-size:.5em;}
-  .myasset-profit-line{font-size:1rem;margin-top:12px;}
-  .myasset-submetrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
-  .myasset-submetric{background:#fff;padding:9px 10px;box-shadow:var(--shadow);}
-  .myasset-submetric .mp-val,.myasset-submetric strong{font-size:.78rem;}
-  #mp-stock-stats{justify-content:center;margin-top:10px!important;}
+  .myasset-total{padding:6px 0 4px;}
+  .myasset-total-label{display:block;font-size:.74rem;margin-bottom:8px;}
+  .myasset-total #mp-total{font-size:clamp(1.9rem,8vw,2.6rem);font-weight:950;line-height:1.0;letter-spacing:-0.022em;}
+  .myasset-total #mp-total .split-money{flex-direction:column;align-items:center;justify-content:center;gap:5px;flex-wrap:nowrap;white-space:nowrap;}
+  .myasset-total #mp-total .split-money .krw{font-size:1em;line-height:1;}
+  .myasset-total #mp-total .split-money .usd{font-size:.34em;color:var(--text2);font-weight:800;}
+  .myasset-profit-line{font-size:1rem;margin:14px auto 0;padding:13px 16px;max-width:none;gap:10px;}
+  .myasset-profit-line .mp-val{font-size:1.18rem;}
+  .myasset-profit-line #mp-rate{font-size:.9rem;padding:4px 10px;}
+  .myasset-submetrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px;}
+  .myasset-submetric{background:#fff;padding:11px 12px;box-shadow:0 1px 2px rgba(0,0,0,.02);border-radius:12px;}
+  .myasset-submetric span{font-size:.66rem;margin-bottom:5px;}
+  .myasset-submetric .mp-val,.myasset-submetric strong{font-size:.92rem;}
+  #mp-stock-stats{justify-content:center;margin-top:13px!important;gap:8px!important;}
+  #mp-stock-stats .status-chip{font-size:.82rem;padding:6px 12px;}
   .mp-period-grid{display:none;}
   .mp-card{padding:10px 11px;border-radius:9px;}
   .mp-period-grid .mp-card{padding:10px 8px;}
@@ -2961,7 +2974,9 @@ function renderMpSummary(data){
   const pEl=document.getElementById('mp-pnl');
   if(s.pnl!==undefined){pEl.innerHTML=splitMoneyHtml(convertedPnl,parts.USD.pnl,{signed:true,forceUsd:hasUsd});pEl.className='mp-val '+(convertedPnl>=0?'up':'down');}
   document.getElementById('mp-stock-stats').innerHTML=s.numStocks?
-    `<span class="status-chip">${s.numStocks}개</span><span class="status-chip" style="color:var(--up)">▲${s.profitCount||0}</span><span class="status-chip" style="color:var(--down)">▼${s.lossCount||0}</span>`:'';
+    `<span class="status-chip" title="보유 종목 수">📊 ${s.numStocks}개</span>`+
+    `<span class="status-chip" style="color:var(--up);border-color:#abe5c3" title="수익 종목">▲ 수익 ${s.profitCount||0}</span>`+
+    `<span class="status-chip" style="color:var(--down);border-color:#ffbfbf" title="손실 종목">▼ 손실 ${s.lossCount||0}</span>`:'';
 }
 function accountCurrencyRows(rows,currency='KRW'){
   const grouped={};
