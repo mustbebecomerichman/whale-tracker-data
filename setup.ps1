@@ -1,4 +1,4 @@
-# WhaleTracker Pro — Windows 개발 환경 세팅 스크립트
+﻿# WhaleTracker Pro — Windows 개발 환경 세팅 스크립트
 # 새 PC에서 git clone 후 이 스크립트를 실행하세요.
 # 사용법: .\setup.ps1
 
