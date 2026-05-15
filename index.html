@@ -855,21 +855,6 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   #acct-body td:nth-child(11)::before{content:"수익률";}
   #acct-body td:nth-child(12)::before{content:"평가손익";}
 
-  #sheet-body td:nth-child(2)::before{content:"날짜";}
-  #sheet-body td:nth-child(3)::before{content:"증권사";}
-  #sheet-body td:nth-child(4)::before{content:"계좌유형";}
-  #sheet-body td:nth-child(5)::before{content:"코드";}
-  #sheet-body td:nth-child(6)::before{content:"종목명";}
-  #sheet-body td:nth-child(7)::before{content:"수량";}
-  #sheet-body td:nth-child(8)::before{content:"평균매입가";}
-  #sheet-body td:nth-child(9)::before{content:"현재/매도가";}
-  #sheet-body td:nth-child(10)::before{content:"매입금액";}
-  #sheet-body td:nth-child(11)::before{content:"평가금액";}
-  #sheet-body td:nth-child(12)::before{content:"평가손익";}
-  #sheet-body td:nth-child(13)::before{content:"수익률";}
-  #sheet-body td:nth-child(14)::before{content:"수수료";}
-  #sheet-body td:nth-child(15)::before{content:"메모";}
-
   #div-body td:nth-child(2)::before{content:"날짜";}
   #div-body td:nth-child(3)::before{content:"증권사";}
   #div-body td:nth-child(4)::before{content:"종목코드";}
@@ -884,57 +869,13 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   #div-body td:nth-child(13)::before{content:"메모";}
 }
 
-/* 거래내역: 두 줄 compact layout */
-#sheet-table{display:block;width:100%;}
-#sheet-table thead,#sheet-table tfoot{display:none;}
-#sheet-table tbody{display:grid;gap:10px;width:100%;}
-#sheet-table tbody tr{
-  display:grid!important;
-  grid-template-columns:34px repeat(4,minmax(72px,1fr)) minmax(120px,1.4fr) repeat(3,minmax(72px,1fr));
-  grid-template-areas:
-    "del date broker acct code name name note note"
-    "del qty avg price purchase eval pnl rate fee";
-  gap:6px;background:#fff;border:1px solid var(--border);border-radius:10px;
-  box-shadow:var(--shadow);padding:8px;margin-bottom:0;
-}
-#sheet-table tbody td{
-  display:flex!important;flex-direction:column;justify-content:center;gap:3px;
-  min-width:0!important;border:1px solid #edf0f3!important;border-radius:7px;
-  padding:5px!important;background:#fff;white-space:normal!important;
-}
-#sheet-table tbody td::before{font-size:.64rem;font-weight:700;color:var(--text2);line-height:1;}
-#sheet-table tbody td.row-num{grid-area:del;align-items:center;background:#fff8f8!important;cursor:default;}
-#sheet-table tbody td:nth-child(2){grid-area:date;}
-#sheet-table tbody td:nth-child(3){grid-area:broker;}
-#sheet-table tbody td:nth-child(4){grid-area:acct;}
-#sheet-table tbody td:nth-child(5){grid-area:code;}
-#sheet-table tbody td:nth-child(6){grid-area:name;}
-#sheet-table tbody td:nth-child(7){grid-area:qty;}
-#sheet-table tbody td:nth-child(8){grid-area:avg;}
-#sheet-table tbody td:nth-child(9){grid-area:price;}
-#sheet-table tbody td:nth-child(10){grid-area:purchase;}
-#sheet-table tbody td:nth-child(11){grid-area:eval;}
-#sheet-table tbody td:nth-child(12){grid-area:pnl;}
-#sheet-table tbody td:nth-child(13){grid-area:rate;}
-#sheet-table tbody td:nth-child(14){grid-area:fee;}
-#sheet-table tbody td:nth-child(15){grid-area:note;}
-#sheet-table .sheet-input{width:100%!important;min-width:0!important;max-width:100%!important;padding:5px 6px;font-size:.78rem;}
+/* 거래내역: 1줄 테이블 layout */
+#sheet-table tbody tr{transition:background .15s;}
+#sheet-table tbody tr:hover{background:#fafbfc;}
+#sheet-table tbody td{padding:5px 6px;vertical-align:middle;}
+#sheet-table tbody td:nth-child(6) .sheet-input{background:#fffbeb;font-weight:700;}
 
 @media(max-width:720px){
-  #sheet-table tbody tr{
-    grid-template-columns:34px 1fr 1fr;
-    grid-template-areas:
-      "del date code"
-      "del broker acct"
-      "name name name"
-      "qty avg price"
-      "purchase eval pnl"
-      "rate fee note";
-    gap:4px;padding:6px;
-  }
-  #sheet-table tbody td{display:flex!important;}
-  #sheet-table tbody td.row-num{grid-row:1 / 3;}
-  #sheet-table .sheet-input{font-size:.76rem;padding:4px 4px;}
   #alert-nps-tbody tr,#nps-overseas-tbody tr,#alert10-tbody tr,#quant-tbody tr,#detail-tbody tr{
     display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:10px;row-gap:0;
   }

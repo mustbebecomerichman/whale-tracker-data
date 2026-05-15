@@ -183,39 +183,64 @@ async function fetchBalance(env, account = {}) {
 
   const token = await getKisToken(env, account);
   const trId = env.KIS_MOCK === 'true' ? 'VTTC8434R' : 'TTTC8434R';
-  const params = new URLSearchParams({
-    CANO: cano,
-    ACNT_PRDT_CD: prdt,
-    AFHR_FLPR_YN: 'N',
-    OFL_YN: '',
-    INQR_DVSN: '02',
-    UNPR_DVSN: '01',
-    FUND_STTL_ICLD_YN: 'N',
-    FNCG_AMT_AUTO_RDPT_YN: 'N',
-    PRCS_DVSN: '01',
-    CTX_AREA_FK100: '',
-    CTX_AREA_NK100: '',
-  });
-  const res = await fetch(
-    `${getBaseUrl(env)}/uapi/domestic-stock/v1/trading/inquire-balance?${params}`,
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        authorization: `Bearer ${token}`,
-        appkey: appKey,
-        appsecret: appSecret,
-        tr_id: trId,
-        custtype: 'P',
-      },
+  const baseUrl = getBaseUrl(env);
+  // 페이지네이션: tr_cont 헤더 + CTX_AREA_FK100/NK100 로 연속 조회 (KIS 페이지당 ~10건)
+  const allRows = [];
+  let summary = null;
+  let ctxFk = '', ctxNk = '', trCont = '';
+  for (let page = 0; page < 10; page++) {
+    const params = new URLSearchParams({
+      CANO: cano,
+      ACNT_PRDT_CD: prdt,
+      AFHR_FLPR_YN: 'N',
+      OFL_YN: '',
+      INQR_DVSN: '02',
+      UNPR_DVSN: '01',
+      FUND_STTL_ICLD_YN: 'N',
+      FNCG_AMT_AUTO_RDPT_YN: 'N',
+      PRCS_DVSN: '01',
+      CTX_AREA_FK100: ctxFk,
+      CTX_AREA_NK100: ctxNk,
+    });
+    const res = await fetch(
+      `${baseUrl}/uapi/domestic-stock/v1/trading/inquire-balance?${params}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          authorization: `Bearer ${token}`,
+          appkey: appKey,
+          appsecret: appSecret,
+          tr_id: trId,
+          custtype: 'P',
+          tr_cont: trCont,
+        },
+      }
+    );
+    const data = await res.json();
+    if (data.rt_cd && data.rt_cd !== '0') {
+      throw new Error(`KIS API 오류: ${data.msg1 || 'rt_cd=' + data.rt_cd}`);
     }
-  );
-  const data = await res.json();
-  if (data.rt_cd && data.rt_cd !== '0') {
-    throw new Error(`KIS API 오류: ${data.msg1 || 'rt_cd=' + data.rt_cd}`);
+    const rows = Array.isArray(data.output1) ? data.output1 : [];
+    allRows.push(...rows);
+    // 첫 페이지의 output2 (총합 요약) 만 사용
+    if (!summary && Array.isArray(data.output2) && data.output2[0]) {
+      summary = {
+        totalEval: Number(data.output2[0].tot_evlu_amt) || 0,
+        totalPurchase: Number(data.output2[0].pchs_amt_smtl_amt) || 0,
+        totalPnl: Number(data.output2[0].evlu_pfls_smtl_amt) || 0,
+        cash: Number(data.output2[0].dnca_tot_amt) || 0,
+      };
+    }
+    // 응답 tr_cont 헤더가 F/M 이면 다음 페이지 존재
+    const respTrCont = res.headers.get('tr_cont') || '';
+    if (respTrCont !== 'F' && respTrCont !== 'M') break;
+    ctxFk = data.ctx_area_fk100 || '';
+    ctxNk = data.ctx_area_nk100 || '';
+    if (!ctxFk && !ctxNk) break; // 컨텍스트 없으면 종료
+    trCont = 'N';
   }
-  const rows = Array.isArray(data.output1) ? data.output1 : [];
   // qty=0 행도 포함 (미체결/대출 등 누락 방지). 단, code가 빈 행은 제외
-  const holdings = rows
+  const holdings = allRows
     .filter(r => {
       const code = String(r.pdno || '').trim();
       return code && code !== '000000';
@@ -230,13 +255,7 @@ async function fetchBalance(env, account = {}) {
       purchase: Number(r.pchs_amt) || 0,
       pnl: Number(r.evlu_pfls_amt) || 0,
     }));
-  const summary = Array.isArray(data.output2) && data.output2[0] ? {
-    totalEval: Number(data.output2[0].tot_evlu_amt) || 0,
-    totalPurchase: Number(data.output2[0].pchs_amt_smtl_amt) || 0,
-    totalPnl: Number(data.output2[0].evlu_pfls_smtl_amt) || 0,
-    cash: Number(data.output2[0].dnca_tot_amt) || 0,
-  } : null;
-  return { holdings, summary, rawCount: rows.length, source: 'KIS', fetchedAt: new Date().toISOString() };
+  return { holdings, summary, rawCount: allRows.length, source: 'KIS', fetchedAt: new Date().toISOString() };
 }
 
 // 해외주식 잔고 조회 (NASD/NYSE/AMEX — 미국 시장 위주)
