@@ -6387,7 +6387,10 @@ function drawAcctRows(rows) {
     const bOpts = BROKERS.map(b => `<option${b===a.brokerage?' selected':''}>${escapeHtml(b)}</option>`).join('');
     const aOpts = ACCT_TYPES.map(t => `<option${t===a.acctType?' selected':''}>${escapeHtml(t)}</option>`).join('');
     const isDraft = !codeClean && !!a._draftId;
-    return `<tr class="${[(region||isDraft)?'stock-asset':'',region==='overseas'?'usd-asset':''].filter(Boolean).join(' ')}" data-aidx="${i}" onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))showHoldingDetail('${escapeJsAttr(a.code||'')}')">
+    // stock-asset 클래스: stock-only 모드에서 행이 보이도록 — 코드 있으면 무조건 부여
+    // (KIS 반환 종목 중 ETF/ELW/HK 등이 stockRegionForCode 정규식에 안 맞아도 노출)
+    const isStock = !!region || isDraft || !!codeClean;
+    return `<tr class="${[isStock?'stock-asset':'',region==='overseas'?'usd-asset':''].filter(Boolean).join(' ')}" data-aidx="${i}" onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))showHoldingDetail('${escapeJsAttr(a.code||'')}')">
       <td class="row-num" title="Delete row">${rowDeleteButton(`deleteAcctRow(${i})`)}</td>
       <td><select class="sheet-input" data-field="brokerage" onchange="acctCellChange(${i},this)" style="width:92px"><option value="">선택</option>${bOpts}</select></td>
       <td><select class="sheet-input" data-field="acctType" onchange="acctCellChange(${i},this)" style="width:64px"><option value="">선택</option>${aOpts}</select></td>
