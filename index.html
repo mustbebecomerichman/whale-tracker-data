@@ -3054,7 +3054,10 @@ function renderMpSummary(data){
 function accountCurrencyRows(rows,currency='KRW'){
   const grouped={};
   (rows||[]).forEach(a=>{
-    const region=stockRegionForCode(a.code);
+    let region=stockRegionForCode(a.code);
+    // 비표준 코드(예: KIS ISA 신탁 자산 0177A0)는 region='' 가 되어 합계에서 누락됨
+    // 코드가 있으면 KRW 도메스틱으로 간주 (KIS 신탁 자산 대부분이 한국 ETF)
+    if(!region && normalizeStockCode(a.code))region='domestic';
     if(!region)return;
     const isUsd=region==='overseas';
     if((currency==='USD')!==isUsd)return;
@@ -6580,10 +6583,11 @@ async function saveAcctSheet() {
 }
 
 // 계좌별현황에서 현재가 일괄 조회 후 반영
+// 비표준 코드(KIS ISA 신탁 자산 등)도 포함 — inquire-price 는 inquire-balance 와 달리 정상 가격 반환
 async function fetchAndUpdateAcctPrices(options={}) {
   const silent=!!options.silent;
   const holdings = _acctRows
-    .filter(a => stockRegionForCode(a.code))
+    .filter(a => normalizeStockCode(a.code))
     .map(a => ({code:normalizeStockCode(a.code), name:resolveStockName(a.code,a.stockName||''), market:marketForCode(a.code), qty:a.qty||0, avgBuy:a.avgBuy||0}));
   if (!holdings.length) { if(!silent)showToast("종목 코드를 먼저 입력하세요", "err"); return false; }
   if(!silent)showToast("현재가 조회 중...", "ok");
@@ -6738,6 +6742,14 @@ async function importKisBalance(){
     syncAcctRowsToMpData();
     await persistMpData(true);
     setMyAssetSection('accounts');
+    // KIS 응답에서 일부 종목(특히 ISA 신탁 자산)의 현재가가 잘못 들어오므로
+    // inquire-price 로 한 번 더 갱신 (사용자가 코드칸 Tab 누른 것과 동일 효과)
+    try {
+      await fetchAndUpdateAcctPrices({silent: true});
+      await persistMpData(false);
+    } catch (e) {
+      console.warn('[KIS] 자동 가격 갱신 실패:', e.message || e);
+    }
     const acctSummary = (data.accounts || []).map(a => {
       const pageInfo = a.domesticPages > 1 ? ` [${a.domesticPages}p]` : '';
       const rawHint = (a.domesticRawCount > a.domestic) ? ` (raw ${a.domesticRawCount})` : '';
