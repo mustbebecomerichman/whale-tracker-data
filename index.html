@@ -1527,8 +1527,33 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   </div>
 
   <div class="section">
-    <div class="section-title"><div class="section-title-left">💡 리밸런싱 추천 <span class="badge">RRG 분면 × 본인 보유 가중치</span></div></div>
-    <div class="grid-3" id="rb-recommendations"></div>
+    <div class="section-title">
+      <div class="section-title-left">🔬 내 보유 종목 종합 진단 <span class="badge">계좌별 현황 연동</span></div>
+      <button class="btn btn-outline btn-sm" onclick="refreshHoldingsAnalysis()">🔄 Wilder 재분석</button>
+    </div>
+    <div id="rb-holdings-status" style="font-size:.82rem;color:var(--text2);margin-bottom:8px;"></div>
+    <div id="rb-holdings-wrap">
+      <div class="mp-empty"><div class="ei">📋</div><p>계좌별 현황에 한국 종목을 입력하면 진단 표가 표시됩니다.</p></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><div class="section-title-left">💡 리밸런싱 추천 <span class="badge">섹터 × 종목 단위</span></div></div>
+    <div id="rb-recommendations"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
+      <div class="section-title-left">📄 분석 리포트</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline btn-sm" onclick="copyRebalanceReport()">📋 복사</button>
+        <button class="btn btn-outline btn-sm" onclick="printRebalanceReport()">🖨️ 인쇄/PDF</button>
+        <button class="btn btn-primary btn-sm" onclick="generateRebalanceReport()">📝 리포트 생성</button>
+      </div>
+    </div>
+    <div id="rb-report-wrap" style="background:var(--card2,#fafafa);border:1.5px solid var(--border);border-radius:12px;padding:16px;font-size:.86rem;line-height:1.7;">
+      <div class="mp-empty"><div class="ei">📝</div><p>“리포트 생성” 버튼을 누르면 분석 결과를 정리한 문서가 표시됩니다.</p></div>
+    </div>
   </div>
 </div>
 
@@ -4910,61 +4935,480 @@ function renderPortfolioSector(results) {
   </table></div>`;
 }
 
-// ── 추천 엔진 ────────────────────────────────────────
-function renderRecommendations(results) {
+// ── 추천 엔진 (섹터 + 종목 단위) ────────────────────────
+let _holdingsAnalysis = null;     // [{ code, name, sectorCode, action, ... }]
+let _stockRecsCache = null;       // { buySectors, trimSectors, holdSectors }
+let _currentReport = null;        // 최근 생성된 마크다운 리포트
+let _deepAnalysisLoading = false;
+
+const WILDER_SIGNAL_SCORE = { BUY: 4, HOLD: 3, REDUCE: 2, SELL: 1, EXIT: 0 };
+
+function lookupKoreanStockName(code) {
+  const clean = normalizeStockCode(code);
+  if (!clean) return code || '';
+  const row = (_acctRows || []).find(a => normalizeStockCode(a.code) === clean);
+  if (row?.stockName) return row.stockName;
+  try {
+    const w = WILDER_UNIVERSES?.kospi?.find(s => s.code === clean);
+    if (w?.name) return w.name;
+  } catch (e) {}
+  return clean;
+}
+
+function diagnoseHolding({ wilder, sector, rate }) {
+  const q = sector?.rrg?.quadrant;
+  const sig = wilder?.final;
+  if ((sig === 'SELL' || sig === 'EXIT') && (q === 'lagging' || q === 'weakening')) {
+    return { tag: '🔴 매도 강력', priority: 1, color: '#dc2626', reason: '섹터 약세 분면 + Wilder 매도 신호 — 동시 조건 충족' };
+  }
+  if ((sig === 'SELL' || sig === 'EXIT') && rate <= -8) {
+    return { tag: '🔴 손절검토', priority: 1, color: '#dc2626', reason: `Wilder 매도 신호 + 손실 ${rate.toFixed(1)}% — 추가 손실 방지` };
+  }
+  if (sig === 'REDUCE' && (q === 'lagging' || q === 'weakening')) {
+    return { tag: '🟠 비중축소', priority: 2, color: '#ea580c', reason: '섹터 약세 + Wilder 부분매도 신호' };
+  }
+  if ((sig === 'SELL' || sig === 'REDUCE') && rate >= 20) {
+    return { tag: '🟡 익절검토', priority: 2, color: '#d97706', reason: `Wilder 매도 신호 + 수익 ${rate.toFixed(1)}% — 부분 차익실현` };
+  }
+  if (sig === 'BUY' && (q === 'leading' || q === 'improving')) {
+    return { tag: '🟢 비중확대', priority: 3, color: '#16794b', reason: '섹터 강세 분면 + Wilder 매수 — 추세 동조 강화' };
+  }
+  if (sig === 'BUY') {
+    return { tag: '🔵 분할매수', priority: 4, color: '#2563eb', reason: 'Wilder 매수 신호 — 섹터 분면은 중립' };
+  }
+  if (q === 'lagging') return { tag: '⚪ 관찰', priority: 6, color: '#666', reason: '섹터 약세 — 명확한 매도 신호 대기' };
+  if (q === 'leading') return { tag: '⚪ 유지', priority: 5, color: '#666', reason: '섹터 주도 — 추세 동조 유지' };
+  if (q === 'improving') return { tag: '⚪ 관찰', priority: 6, color: '#666', reason: '섹터 회복 진행 — 진입 타이밍 주시' };
+  return { tag: '⚪ 유지', priority: 7, color: '#666', reason: '명확한 신호 없음' };
+}
+
+async function buildHoldingsAnalysis(results) {
+  const rows = (_acctRows || []).filter(a => normalizeStockCode(a.code) && stockRegionForCode(a.code) === 'korea');
+  const sectorMap = new Map(results.map(r => [r.code, r]));
+  const out = [];
+  const seen = new Set();
+  for (const a of rows) {
+    const code = normalizeStockCode(a.code);
+    if (seen.has(code)) continue;
+    seen.add(code);
+    const sectorCode = STOCK_TO_SECTOR[code];
+    const sector = sectorCode ? sectorMap.get(sectorCode) : null;
+    const ev = (a.price && a.qty) ? a.qty * a.price : (a.eval || 0);
+    const pur = (a.avgBuy && a.qty) ? a.qty * a.avgBuy : (a.purchase || 0);
+    const rate = pur > 0 ? (ev / pur - 1) * 100 : 0;
+    let wilder = null;
+    try { wilder = await fetchWilderForCode(code); } catch (e) { wilder = { error: e.message }; }
+    const action = diagnoseHolding({ wilder, sector, rate });
+    out.push({
+      code,
+      name: a.stockName || lookupKoreanStockName(code),
+      qty: a.qty || 0,
+      ev, pur, rate,
+      brokerage: a.brokerage || '',
+      sectorCode,
+      sectorName: sector?.name || '미매핑',
+      sectorEmoji: sector?.emoji || '❓',
+      quadrant: sector?.rrg?.quadrant || null,
+      wilderSignal: wilder?.final || null,
+      wilderError: wilder?.error || null,
+      action,
+    });
+    await new Promise(r => setTimeout(r, 60));
+  }
+  return out;
+}
+
+function renderMyHoldingsAnalysis(holdings) {
+  const wrap = document.getElementById('rb-holdings-wrap');
+  const statusEl = document.getElementById('rb-holdings-status');
+  if (!wrap) return;
+  if (!holdings || !holdings.length) {
+    wrap.innerHTML = '<div class="mp-empty"><div class="ei">📋</div><p>계좌별 현황에 한국 종목을 입력하면 진단 표가 표시됩니다.</p></div>';
+    if (statusEl) statusEl.textContent = '';
+    return;
+  }
+  const sorted = [...holdings].sort((a, b) => a.action.priority - b.action.priority || b.ev - a.ev);
+  const sellN = sorted.filter(h => h.action.priority === 1).length;
+  const trimN = sorted.filter(h => h.action.priority === 2).length;
+  const buyN = sorted.filter(h => h.action.priority <= 4 && h.action.priority >= 3).length;
+  const failedN = sorted.filter(h => h.wilderError).length;
+  if (statusEl) statusEl.textContent = `${sorted.length}개 종목 진단 완료 · 매도/손절 ${sellN}건 · 축소 ${trimN}건 · 매수 ${buyN}건${failedN ? ` · Wilder 미수신 ${failedN}건` : ''}`;
+  wrap.innerHTML = `<div class="sheet-wrap"><table class="sheet-table" style="font-size:.82rem;">
+    <thead><tr>
+      <th>종목</th>
+      <th style="text-align:center">섹터</th>
+      <th style="text-align:center">분면</th>
+      <th style="text-align:center">Wilder</th>
+      <th style="text-align:right">수익률</th>
+      <th style="text-align:right">평가금액</th>
+      <th style="text-align:center">제안 액션</th>
+    </tr></thead>
+    <tbody>
+      ${sorted.map(h => {
+        const q = h.quadrant ? QUADRANT_META[h.quadrant] : null;
+        const sig = h.wilderSignal;
+        const sigChip = sig ? wilderSignalChip(sig) : `<span style="color:var(--text2);font-size:.7rem;">${h.wilderError ? '데이터 부족' : '-'}</span>`;
+        const rateCls = h.rate > 0 ? 'up' : h.rate < 0 ? 'down' : 'money-neutral';
+        return `<tr style="cursor:pointer;" onclick="showHoldingDetail('${escapeJsAttr(h.code)}')">
+          <td style="font-weight:700;">${escapeHtml(h.name)}<div style="font-size:.7rem;color:var(--text2);font-weight:500;">${h.code} · ${escapeHtml(h.brokerage || '-')}</div></td>
+          <td style="text-align:center;font-size:.78rem;">${h.sectorEmoji} ${escapeHtml(h.sectorName)}</td>
+          <td style="text-align:center;">${q ? `<span class="${q.cls}" style="font-size:.7rem;font-weight:800;">${q.emoji} ${q.label}</span>` : '<span style="color:var(--text2);font-size:.7rem;">-</span>'}</td>
+          <td style="text-align:center;">${sigChip}</td>
+          <td style="text-align:right;" class="${rateCls}">${h.rate >= 0 ? '+' : ''}${h.rate.toFixed(2)}%</td>
+          <td style="text-align:right;font-weight:600;">${Math.round(h.ev).toLocaleString('ko-KR')}원</td>
+          <td style="text-align:center;"><span style="background:${h.action.color};color:white;padding:3px 8px;border-radius:6px;font-size:.72rem;font-weight:800;" title="${escapeAttr(h.action.reason)}">${h.action.tag}</span></td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table></div>
+  <div style="font-size:.74rem;color:var(--text2);margin-top:10px;">💡 행 클릭 시 종목 상세 모달 (Wilder 알고리즘 상세, OHLC 차트 등)이 열립니다. 액션 칩에 마우스 올리면 판정 근거가 표시됩니다.</div>`;
+}
+
+// 섹터별 후보 종목 풀에서 Wilder BUY/HOLD 신호 종목 추출
+async function pickBuyStocksInSector(sector, max = 3) {
+  const out = [];
+  for (const code of (sector.stocks || [])) {
+    let w = null;
+    try { w = await fetchWilderForCode(code); } catch (e) { continue; }
+    if (!w || w.error) { await new Promise(r => setTimeout(r, 30)); continue; }
+    if (w.final === 'BUY' || w.final === 'HOLD') {
+      out.push({ code, name: lookupKoreanStockName(code), wilder: w });
+    }
+    await new Promise(r => setTimeout(r, 30));
+    if (out.length >= max * 2) break;
+  }
+  out.sort((a, b) => (WILDER_SIGNAL_SCORE[b.wilder.final] || 0) - (WILDER_SIGNAL_SCORE[a.wilder.final] || 0));
+  return out.slice(0, max);
+}
+
+async function buildStockRecommendations(results, holdingsAnalysis) {
+  const pw = computePortfolioSectorWeights();
+  const myWeightOf = code => (pw && pw.totalEval > 0) ? ((pw.sectorEval[code] || 0) / pw.totalEval) * 100 : 0;
+  const buySectors = results
+    .filter(r => r.rrg && (r.rrg.quadrant === 'improving' || (r.rrg.quadrant === 'leading' && r.rrg.last.y > 102)))
+    .map(r => ({ ...r, myWeight: myWeightOf(r.code) }))
+    .sort((a, b) => b.rrg.last.y - a.rrg.last.y)
+    .slice(0, 4);
+  const buyOut = [];
+  for (const s of buySectors) {
+    const stocks = await pickBuyStocksInSector(s, 3);
+    if (stocks.length) buyOut.push({ sector: s, stocks });
+  }
+  // 감축: 본인 보유 + 섹터 약세
+  const trimOut = [];
+  if (holdingsAnalysis && holdingsAnalysis.length) {
+    const byPriority = [...holdingsAnalysis].sort((a, b) => a.action.priority - b.action.priority);
+    const trimStocks = byPriority.filter(h => h.action.priority <= 2).slice(0, 5);
+    if (trimStocks.length) trimOut.push({ stocks: trimStocks });
+  }
+  // 유지: 본인 보유 + 섹터 주도 + Wilder HOLD/BUY
+  const holdOut = [];
+  if (holdingsAnalysis && holdingsAnalysis.length) {
+    const keep = holdingsAnalysis
+      .filter(h => h.quadrant === 'leading' && (h.wilderSignal === 'BUY' || h.wilderSignal === 'HOLD'))
+      .sort((a, b) => b.ev - a.ev)
+      .slice(0, 4);
+    if (keep.length) holdOut.push({ stocks: keep });
+  }
+  return { buySectors: buyOut, trimStocks: trimOut, holdStocks: holdOut };
+}
+
+function renderRecommendations(results, stockRecs = null) {
   const wrap = document.getElementById('rb-recommendations');
   if (!wrap) return;
-  const pw = computePortfolioSectorWeights();
-  const myWeightOf = code => {
-    if (!pw || !pw.totalEval) return 0;
-    return ((pw.sectorEval[code] || 0) / pw.totalEval) * 100;
+
+  const buyCard = () => {
+    if (!stockRecs) return `<div style="font-size:.82rem;color:var(--text2);">⏳ 종목 단위 분석 중… (Wilder 신호 페치)</div>`;
+    if (!stockRecs.buySectors.length) return `<div style="font-size:.82rem;color:var(--text2);">조건에 맞는 섹터 없음. RRG 차트와 모멘텀 보드를 직접 검토하세요.</div>`;
+    return stockRecs.buySectors.map((item, idx, arr) => {
+      const q = QUADRANT_META[item.sector.rrg.quadrant];
+      const isLast = idx === arr.length - 1;
+      return `<div style="margin-bottom:14px;padding-bottom:14px;${isLast ? '' : 'border-bottom:1px dashed var(--border);'}">
+        <div style="font-weight:800;font-size:.95rem;">${item.sector.emoji} ${escapeHtml(item.sector.name)}
+          <span class="${q.cls}" style="font-size:.65rem;margin-left:6px;">${q.emoji} ${q.label}</span>
+        </div>
+        <div style="font-size:.72rem;color:var(--text2);margin:3px 0 8px;">RS-Ratio ${item.sector.rrg.last.x.toFixed(1)} · 모멘텀 ${item.sector.rrg.last.y.toFixed(1)} · 내 비중 ${item.sector.myWeight.toFixed(1)}%</div>
+        <div style="display:flex;flex-direction:column;gap:5px;">
+          ${item.stocks.map(s => `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:#f0fdf4;border-radius:6px;cursor:pointer;" onclick="showHoldingDetail('${escapeJsAttr(s.code)}')">
+            <span style="font-weight:700;font-size:.82rem;">${escapeHtml(s.name)} <span style="color:var(--text2);font-weight:500;font-size:.7rem;">${s.code}</span></span>
+            <span>${wilderSignalChip(s.wilder.final)}</span>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('');
   };
 
-  const scored = results.filter(r => r.rrg).map(r => ({
-    ...r,
-    myWeight: myWeightOf(r.code),
-  }));
+  const trimCard = () => {
+    if (!stockRecs) return `<div style="font-size:.82rem;color:var(--text2);">⏳ 본인 보유 종목 분석 중…</div>`;
+    if (!stockRecs.trimStocks.length || !stockRecs.trimStocks[0].stocks.length) return `<div style="font-size:.82rem;color:var(--text2);">즉시 매도/축소 신호가 발생한 보유 종목 없음. 보유 진단 표를 참고하세요.</div>`;
+    const items = stockRecs.trimStocks[0].stocks;
+    return items.map((h, idx, arr) => {
+      const isLast = idx === arr.length - 1;
+      return `<div style="margin-bottom:10px;padding-bottom:10px;${isLast ? '' : 'border-bottom:1px dashed var(--border);'};cursor:pointer;" onclick="showHoldingDetail('${escapeJsAttr(h.code)}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-weight:800;font-size:.92rem;">${escapeHtml(h.name)}</span>
+          <span style="background:${h.action.color};color:white;padding:2px 7px;border-radius:5px;font-size:.7rem;font-weight:800;">${h.action.tag}</span>
+        </div>
+        <div style="font-size:.72rem;color:var(--text2);margin-top:4px;">${h.sectorEmoji}${escapeHtml(h.sectorName)} · ${h.wilderSignal || '-'} · 수익률 ${h.rate >= 0 ? '+' : ''}${h.rate.toFixed(1)}%</div>
+        <div style="font-size:.7rem;color:var(--text2);margin-top:3px;font-style:italic;">${escapeHtml(h.action.reason)}</div>
+      </div>`;
+    }).join('');
+  };
 
-  // 매수 후보: improving 또는 leading + 본인 비중 5% 미만
-  const buyCandidates = scored
-    .filter(r => (r.rrg.quadrant === 'improving' || (r.rrg.quadrant === 'leading' && r.rrg.last.y > 102)) && r.myWeight < 5)
-    .sort((a, b) => b.rrg.last.y - a.rrg.last.y)
-    .slice(0, 3);
+  const holdCard = () => {
+    if (!stockRecs) return `<div style="font-size:.82rem;color:var(--text2);">⏳ 분석 중…</div>`;
+    if (!stockRecs.holdStocks.length || !stockRecs.holdStocks[0].stocks.length) return `<div style="font-size:.82rem;color:var(--text2);">주도 분면 + Wilder 매수/홀드 본인 보유 종목 없음.</div>`;
+    const items = stockRecs.holdStocks[0].stocks;
+    return items.map((h, idx, arr) => {
+      const isLast = idx === arr.length - 1;
+      return `<div style="margin-bottom:10px;padding-bottom:10px;${isLast ? '' : 'border-bottom:1px dashed var(--border);'};cursor:pointer;" onclick="showHoldingDetail('${escapeJsAttr(h.code)}')">
+        <div style="font-weight:800;font-size:.92rem;">${escapeHtml(h.name)} ${wilderSignalChip(h.wilderSignal)}</div>
+        <div style="font-size:.72rem;color:var(--text2);margin-top:4px;">${h.sectorEmoji}${escapeHtml(h.sectorName)} · 수익률 ${h.rate >= 0 ? '+' : ''}${h.rate.toFixed(1)}% · 평가 ${Math.round(h.ev).toLocaleString('ko-KR')}원</div>
+      </div>`;
+    }).join('');
+  };
 
-  // 감축 후보: weakening 또는 lagging + 본인 비중 10% 이상
-  const trimCandidates = scored
-    .filter(r => (r.rrg.quadrant === 'weakening' || r.rrg.quadrant === 'lagging') && r.myWeight > 10)
-    .sort((a, b) => b.myWeight - a.myWeight)
-    .slice(0, 3);
-
-  // 유지: leading + 적정 비중
-  const holdCandidates = scored
-    .filter(r => r.rrg.quadrant === 'leading' && r.myWeight >= 5 && r.myWeight <= 25)
-    .sort((a, b) => b.rrg.last.x - a.rrg.last.x)
-    .slice(0, 3);
-
-  const card = (title, color, items, emptyMsg) => `
+  const cardWrap = (title, color, content) => `
     <div class="card" style="border-left:4px solid ${color};padding:14px;background:var(--card);border:1.5px solid var(--border);border-radius:12px;">
       <div style="font-weight:900;font-size:1rem;margin-bottom:10px;color:${color};">${title}</div>
-      ${items.length === 0 ? `<div style="font-size:.82rem;color:var(--text2);">${emptyMsg}</div>` : items.map((r, idx, arr) => {
-        const q = QUADRANT_META[r.rrg.quadrant];
-        const isLast = idx === arr.length - 1;
-        const borderStyle = isLast ? '' : 'border-bottom:1px dashed var(--border);';
-        return `<div style="margin-bottom:10px;padding-bottom:10px;${borderStyle}">
-          <div style="font-weight:800;font-size:.95rem;">${r.emoji} ${escapeHtml(r.name)}</div>
-          <div style="font-size:.74rem;color:var(--text2);margin-top:3px;">
-            <span class="${q.cls}" style="font-size:.7rem;">${q.emoji} ${q.label}</span> ·
-            RS-Ratio ${r.rrg.last.x.toFixed(1)} · 모멘텀 ${r.rrg.last.y.toFixed(1)}
-          </div>
-          <div style="font-size:.74rem;color:var(--text2);margin-top:3px;">내 비중 <b>${r.myWeight.toFixed(1)}%</b> · 3개월 ${r.returns?.d63 != null ? (r.returns.d63 >= 0 ? '+' : '') + r.returns.d63.toFixed(1) + '%' : '-'}</div>
-        </div>`;
-      }).join('')}
+      ${content}
     </div>`;
 
-  wrap.innerHTML =
-    card('🟢 매수 후보 (저보유 + 모멘텀↑)', '#16794b', buyCandidates, '조건에 맞는 섹터 없음. RRG 차트와 모멘텀 보드를 직접 검토하세요.') +
-    card('🔴 감축 후보 (고보유 + 약세)', '#dc2626', trimCandidates, '본인 고비중 섹터가 모두 강세 분면. 현재 포지션 유지 권장.') +
-    card('🟡 유지 후보 (주도 + 적정 비중)', '#d97706', holdCandidates, '주도 분면의 적정비중 보유 섹터 없음.');
+  wrap.innerHTML = `<div class="grid-3">
+    ${cardWrap('🟢 매수 후보 (섹터 강세 + Wilder BUY)', '#16794b', buyCard())}
+    ${cardWrap('🔴 즉시 검토 (본인 보유 + 약세)', '#dc2626', trimCard())}
+    ${cardWrap('🟡 유지 후보 (주도 + Wilder HOLD/BUY)', '#d97706', holdCard())}
+  </div>`;
+}
+
+// ── 심층 분석 오케스트레이터 ──────────────────────────
+async function runDeepAnalysis(results, force = false) {
+  if (_deepAnalysisLoading) return;
+  _deepAnalysisLoading = true;
+  const statusEl = document.getElementById('rb-holdings-status');
+  try {
+    // 1. 본인 보유 종목 Wilder 페치
+    if (statusEl) statusEl.textContent = '본인 보유 종목 Wilder 분석 중…';
+    if (force) {
+      for (const a of (_acctRows || [])) {
+        const c = normalizeStockCode(a.code);
+        if (c) delete _wilderCache[`J:${c}`];
+      }
+    }
+    _holdingsAnalysis = await buildHoldingsAnalysis(results);
+    renderMyHoldingsAnalysis(_holdingsAnalysis);
+    // 2. 섹터별 매수 후보 종목 Wilder 페치
+    if (statusEl) statusEl.textContent += ' · 매수 후보 섹터 종목 분석 중…';
+    _stockRecsCache = await buildStockRecommendations(results, _holdingsAnalysis);
+    renderRecommendations(results, _stockRecsCache);
+    if (statusEl) {
+      const sellN = _holdingsAnalysis.filter(h => h.action.priority === 1).length;
+      const buyN = _holdingsAnalysis.filter(h => h.action.priority <= 4 && h.action.priority >= 3).length;
+      statusEl.textContent = `심층 분석 완료 · 매도/손절 ${sellN}건 · 매수확대 ${buyN}건 · 리포트 생성 가능`;
+    }
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `심층 분석 실패: ${e.message || e}`;
+  } finally {
+    _deepAnalysisLoading = false;
+  }
+}
+
+async function refreshHoldingsAnalysis() {
+  if (!_rebalanceCache.results) {
+    await initRebalancePage();
+    return;
+  }
+  await runDeepAnalysis(_rebalanceCache.results, true);
+}
+
+// ── 분석 리포트 ────────────────────────────────────
+function markdownLite(md) {
+  return md
+    .split('\n')
+    .map(line => {
+      if (/^# /.test(line))   return `<h2 style="margin:18px 0 10px;font-size:1.25rem;color:#16794b;border-bottom:2px solid #16794b;padding-bottom:6px;">${escapeHtml(line.slice(2))}</h2>`;
+      if (/^## /.test(line))  return `<h3 style="margin:16px 0 8px;font-size:1.05rem;color:#1e40af;">${escapeHtml(line.slice(3))}</h3>`;
+      if (/^### /.test(line)) return `<h4 style="margin:12px 0 5px;font-size:.95rem;color:#555;">${escapeHtml(line.slice(4))}</h4>`;
+      if (/^- /.test(line)) {
+        const inner = escapeHtml(line.slice(2)).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+        return `<li style="margin:3px 0 3px 22px;list-style:disc;">${inner}</li>`;
+      }
+      if (!line.trim()) return '<br>';
+      return `<p style="margin:6px 0;">${escapeHtml(line).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')}</p>`;
+    }).join('');
+}
+
+function generateRebalanceReport() {
+  const cache = _rebalanceCache;
+  if (!cache.results) {
+    showToast('먼저 페이지 데이터가 로드되어야 합니다.', 'err');
+    return;
+  }
+  const results = cache.results;
+  const holdings = _holdingsAnalysis || [];
+  const stockRecs = _stockRecsCache;
+  const date = cache.bench?.lastBar?.date || new Date().toISOString().slice(0, 10);
+  const lines = [];
+
+  lines.push(`# WhaleTracker Pro 리밸런싱 분석 리포트`);
+  lines.push(``);
+  lines.push(`**기준일**: ${date}  ·  **벤치마크**: ${cache.bench.name} (${cache.bench.code})`);
+  lines.push(``);
+  lines.push(`---`);
+  lines.push(``);
+
+  const valid = results.filter(r => r.rrg);
+  const byQ = {
+    leading: valid.filter(r => r.rrg.quadrant === 'leading'),
+    improving: valid.filter(r => r.rrg.quadrant === 'improving'),
+    weakening: valid.filter(r => r.rrg.quadrant === 'weakening'),
+    lagging: valid.filter(r => r.rrg.quadrant === 'lagging'),
+  };
+  lines.push(`## 시장 진단 (RRG 4분면)`);
+  lines.push(`- 🟢 **주도 (Leading)**: ${byQ.leading.map(r => `${r.emoji}${r.name}`).join(', ') || '-'}`);
+  lines.push(`- 🔵 **개선 (Improving)**: ${byQ.improving.map(r => `${r.emoji}${r.name}`).join(', ') || '-'}`);
+  lines.push(`- 🟡 **약화 (Weakening)**: ${byQ.weakening.map(r => `${r.emoji}${r.name}`).join(', ') || '-'}`);
+  lines.push(`- 🔴 **후행 (Lagging)**: ${byQ.lagging.map(r => `${r.emoji}${r.name}`).join(', ') || '-'}`);
+  lines.push(``);
+
+  // 모멘텀 상위 5
+  const top5 = [...valid].sort((a, b) => (b.returns?.d63 ?? -999) - (a.returns?.d63 ?? -999)).slice(0, 5);
+  lines.push(`### 3개월 수익률 상위 5개 섹터`);
+  for (const r of top5) {
+    lines.push(`- ${r.emoji} **${r.name}**: 3M ${r.returns.d63?.toFixed(1) ?? '-'}% · 1M ${r.returns.d21?.toFixed(1) ?? '-'}% · 1Y ${r.returns.d252?.toFixed(1) ?? '-'}%`);
+  }
+  lines.push(``);
+
+  if (holdings.length) {
+    const totalEval = holdings.reduce((s, h) => s + h.ev, 0);
+    lines.push(`## 내 포트폴리오 진단`);
+    lines.push(`- 총 평가금액 (한국 종목): **${Math.round(totalEval).toLocaleString('ko-KR')}원** (${holdings.length}종목)`);
+    const totalPur = holdings.reduce((s, h) => s + h.pur, 0);
+    if (totalPur > 0) {
+      const totalRate = (totalEval / totalPur - 1) * 100;
+      lines.push(`- 매입대비 수익률: **${totalRate >= 0 ? '+' : ''}${totalRate.toFixed(2)}%**`);
+    }
+    // 섹터 분포
+    const byS = {};
+    for (const h of holdings) {
+      if (!byS[h.sectorName]) byS[h.sectorName] = { eval: 0, count: 0, emoji: h.sectorEmoji, quadrant: h.quadrant };
+      byS[h.sectorName].eval += h.ev;
+      byS[h.sectorName].count += 1;
+    }
+    lines.push(``);
+    lines.push(`### 섹터 분포`);
+    const sectorRows = Object.entries(byS).sort((a, b) => b[1].eval - a[1].eval);
+    for (const [name, v] of sectorRows) {
+      const pct = totalEval > 0 ? (v.eval / totalEval) * 100 : 0;
+      const qLabel = v.quadrant ? QUADRANT_META[v.quadrant].label : '미매핑';
+      lines.push(`- ${v.emoji} **${name}** (${qLabel}): ${pct.toFixed(1)}% · ${v.count}종목 · ${Math.round(v.eval).toLocaleString('ko-KR')}원`);
+    }
+    // 집중도 경고
+    const top1 = sectorRows[0];
+    if (top1 && totalEval > 0) {
+      const top1Pct = (top1[1].eval / totalEval) * 100;
+      if (top1Pct > 40) {
+        lines.push(``);
+        lines.push(`⚠️ **집중도 경고**: ${top1[0]} 섹터가 ${top1Pct.toFixed(1)}% — 단일 섹터 비중이 40%를 초과합니다.`);
+      }
+    }
+    lines.push(``);
+
+    // 종목별 액션
+    lines.push(`## 종목별 액션 진단`);
+    const sorted = [...holdings].sort((a, b) => a.action.priority - b.action.priority);
+    for (const h of sorted) {
+      const sig = h.wilderSignal || (h.wilderError ? '데이터부족' : '-');
+      const qLabel = h.quadrant ? QUADRANT_META[h.quadrant].label : '-';
+      lines.push(`- ${h.action.tag} **${h.name}** (${h.code}) — ${h.sectorEmoji}${h.sectorName} · 분면 ${qLabel} · Wilder ${sig} · 수익률 ${h.rate >= 0 ? '+' : ''}${h.rate.toFixed(2)}% — ${h.action.reason}`);
+    }
+    lines.push(``);
+  }
+
+  if (stockRecs && stockRecs.buySectors.length) {
+    lines.push(`## 매수 후보 종목 (섹터 강세 + Wilder BUY)`);
+    for (const item of stockRecs.buySectors) {
+      const qLabel = QUADRANT_META[item.sector.rrg.quadrant].label;
+      lines.push(`### ${item.sector.emoji} ${item.sector.name} (${qLabel}, 내 비중 ${item.sector.myWeight.toFixed(1)}%)`);
+      for (const s of item.stocks) {
+        lines.push(`- **${s.name}** (${s.code}) — Wilder ${s.wilder.final}`);
+      }
+      lines.push(``);
+    }
+  }
+
+  // 결론
+  lines.push(`## 결론 및 액션 플랜`);
+  const sellNow = holdings.filter(h => h.action.priority === 1);
+  const trimNow = holdings.filter(h => h.action.priority === 2);
+  const buyNow = holdings.filter(h => h.action.priority === 3);
+  if (sellNow.length) {
+    lines.push(`1. **즉시 매도 검토**: ${sellNow.map(h => h.name).join(', ')} — 섹터 약세와 Wilder 매도 신호가 동시 발생`);
+  }
+  if (trimNow.length) {
+    lines.push(`2. **부분 축소**: ${trimNow.map(h => h.name).join(', ')} — 신호 강도 약, 비중 점진 감축 권장`);
+  }
+  if (stockRecs && stockRecs.buySectors.length) {
+    const topPicks = stockRecs.buySectors.flatMap(s => s.stocks.slice(0, 1));
+    lines.push(`3. **분할 매수 후보**: ${topPicks.map(s => s.name).join(', ')} — 매도/축소로 확보한 현금을 단계적으로 배분`);
+  }
+  if (buyNow.length) {
+    lines.push(`4. **기존 보유 추가매수**: ${buyNow.map(h => h.name).join(', ')} — 추세 동조 강화`);
+  }
+  if (!sellNow.length && !trimNow.length && !buyNow.length) {
+    lines.push(`현재 명확한 액션 신호 없음. 모멘텀 보드 + RRG 차트를 직접 모니터링하며 다음 신호 대기 권장.`);
+  }
+  lines.push(``);
+  lines.push(`---`);
+  lines.push(`*생성: ${new Date().toLocaleString('ko-KR')} · WhaleTracker Pro 리밸런싱 분석*`);
+
+  const markdown = lines.join('\n');
+  _currentReport = markdown;
+  const wrap = document.getElementById('rb-report-wrap');
+  if (wrap) wrap.innerHTML = markdownLite(markdown);
+  showToast('리포트 생성 완료', 'ok');
+}
+
+function copyRebalanceReport() {
+  if (!_currentReport) {
+    showToast('먼저 리포트를 생성하세요.', 'err');
+    return;
+  }
+  navigator.clipboard.writeText(_currentReport).then(
+    () => showToast('리포트를 클립보드에 복사했습니다.', 'ok'),
+    () => showToast('복사 실패. 텍스트를 직접 선택해서 복사하세요.', 'err'),
+  );
+}
+
+function printRebalanceReport() {
+  if (!_currentReport) {
+    showToast('먼저 리포트를 생성하세요.', 'err');
+    return;
+  }
+  const win = window.open('', '_blank');
+  if (!win) {
+    showToast('팝업이 차단되었습니다. 브라우저 설정을 확인하세요.', 'err');
+    return;
+  }
+  win.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>리밸런싱 분석 리포트</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;max-width:820px;margin:30px auto;padding:30px;line-height:1.7;color:#222;}
+    h2{color:#16794b;border-bottom:2px solid #16794b;padding-bottom:8px;margin-top:30px;}
+    h3{color:#1e40af;margin-top:24px;}
+    h4{color:#555;}
+    li{margin:5px 0;}
+    .toolbar{position:fixed;top:20px;right:20px;background:white;padding:10px;box-shadow:0 4px 12px rgba(0,0,0,.15);border-radius:8px;}
+    .toolbar button{padding:8px 16px;background:#16794b;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:700;margin-left:6px;}
+    @media print{.toolbar{display:none;}}
+  </style>
+  </head><body>
+    <div class="toolbar">
+      <button onclick="window.print()">🖨️ 인쇄/PDF 저장</button>
+      <button onclick="window.close()" style="background:#666;">닫기</button>
+    </div>
+    ${markdownLite(_currentReport)}
+  </body></html>`);
+  win.document.close();
 }
 
 // ── 페이지 진입점 ────────────────────────────────────
@@ -4988,11 +5432,13 @@ async function initRebalancePage(force = false) {
     renderRRGChart(results);
     renderMomentumBoard(results);
     renderPortfolioSector(results);
-    renderRecommendations(results);
+    renderRecommendations(results, null);
     if (statusEl) {
       const skipped = results.length - valid.length;
       statusEl.textContent = `기준일 ${cache.bench?.lastBar?.date || '-'} · 벤치마크 ${cache.bench.name} (${cache.bench.code})${skipped ? ` · ${skipped}개 섹터 데이터 부족으로 제외` : ''}`;
     }
+    // 심층 분석 백그라운드 시작 (Wilder 페치 → 종목 단위 추천 + 보유 진단)
+    runDeepAnalysis(results, false);
   } catch (e) {
     if (chartWrap) chartWrap.innerHTML = `<div class="mp-empty"><div class="ei">⚠️</div><p>데이터 로드 실패: ${escapeHtml(e.message || String(e))}</p></div>`;
     if (statusEl) statusEl.textContent = '로드 실패. 재계산 버튼으로 재시도하세요.';
