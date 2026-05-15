@@ -847,14 +847,13 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   #acct-body td:nth-child(3)::before{content:"계좌유형";}
   #acct-body td:nth-child(4)::before{content:"종목코드";}
   #acct-body td:nth-child(5)::before{content:"종목명";}
-  #acct-body td:nth-child(6)::before{content:"Wilder";}
-  #acct-body td:nth-child(7)::before{content:"수량";}
-  #acct-body td:nth-child(8)::before{content:"평균매입가";}
-  #acct-body td:nth-child(9)::before{content:"현재가";}
-  #acct-body td:nth-child(10)::before{content:"평가금액";}
-  #acct-body td:nth-child(11)::before{content:"매입금액";}
-  #acct-body td:nth-child(12)::before{content:"수익률";}
-  #acct-body td:nth-child(13)::before{content:"평가손익";}
+  #acct-body td:nth-child(6)::before{content:"수량";}
+  #acct-body td:nth-child(7)::before{content:"평균매입가";}
+  #acct-body td:nth-child(8)::before{content:"현재가";}
+  #acct-body td:nth-child(9)::before{content:"평가금액";}
+  #acct-body td:nth-child(10)::before{content:"매입금액";}
+  #acct-body td:nth-child(11)::before{content:"수익률";}
+  #acct-body td:nth-child(12)::before{content:"평가손익";}
 
   #sheet-body td:nth-child(2)::before{content:"날짜";}
   #sheet-body td:nth-child(3)::before{content:"증권사";}
@@ -1277,7 +1276,6 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <thead><tr>
           <th style="width:34px">#</th>
           <th>증권사</th><th>계좌유형</th><th>종목코드</th><th>종목명</th>
-          <th style="width:90px">Wilder</th>
           <th>수량</th><th>평균매입가</th>
           <th class="calc-col">현재가</th>
           <th class="calc-col">평가금액</th>
@@ -1287,7 +1285,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         </tr></thead>
         <tbody id="acct-body"></tbody>
         <tfoot><tr>
-          <td colspan="9" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
+          <td colspan="8" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
           <td id="af-eval" style="padding:8px 10px;font-weight:700;"></td>
           <td id="af-purchase" style="padding:8px 10px;font-weight:700;"></td>
           <td id="af-rate" style="padding:8px 10px;font-weight:700;"></td>
@@ -4333,34 +4331,6 @@ function renderWilderSection(result) {
 }
 
 // MY자산 행 옆에 시그널 배지를 비동기로 채워준다
-async function refreshWilderBadgesForHoldings() {
-  // 먼저 region 없는(빈/불완전) 행의 슬롯은 즉시 "-"로 마무리
-  document.querySelectorAll('.wilder-cell[data-wilder-badge=""]').forEach(el => {
-    el.innerHTML = '<span style="color:var(--text2);font-size:.7rem;">-</span>';
-  });
-  const rows = (_acctRows || []).filter(a => stockRegionForCode(a.code));
-  const seen = new Set();
-  for (const a of rows) {
-    const code = normalizeStockCode(a.code);
-    if (!code || seen.has(code)) continue;
-    seen.add(code);
-    const result = await fetchWilderForCode(code);
-    const targets = document.querySelectorAll(`[data-wilder-badge="${CSS.escape(code)}"]`);
-    if (result && !result.error) {
-      targets.forEach(el => {
-        el.innerHTML = wilderSignalChip(result.final);
-        el.title = '클릭하여 RSI / RTS / ASI 상세 보기\n\n' + (result.reasons || []).join('\n');
-      });
-    } else {
-      targets.forEach(el => {
-        el.innerHTML = '<span style="color:var(--text2);font-size:.65rem;">-</span>';
-        el.title = result?.error || '데이터 없음';
-      });
-    }
-    await new Promise(r => setTimeout(r, 80));
-  }
-}
-
 // 배지 클릭 시 종목 상세 + Wilder 섹션 자동 스크롤
 async function openWilderDetail(code) {
   const clean = normalizeStockCode(code);
@@ -5567,7 +5537,6 @@ function drawAcctRows(rows) {
           oninput="acctCellChange(${i},this);queueAcctCodeLookup(${i},this)" onchange="acctCellChange(${i},this)" onblur="handleAcctCodeInput(${i},this)" style="width:72px"/></td>
       <td><input class="sheet-input${a._autoName?' auto-filled':''}" type="text" value="${escapeAttr(a.stockName||'')}" data-field="stockName" placeholder="종목명"
           onchange="acctCellChange(${i},this)" style="width:120px"/></td>
-      <td class="wilder-cell" style="text-align:center;cursor:pointer;width:72px;" data-wilder-badge="${escapeAttr(normalizeStockCode(a.code||''))}" onclick="event.stopPropagation();openWilderDetail('${escapeJsAttr(a.code||'')}')">${normalizeStockCode(a.code||'') ? '<span class="wilder-loading" style="color:var(--text2);font-size:.7rem;">…</span>' : '<span style="color:var(--text2);font-size:.7rem;">-</span>'}</td>
       <td><input class="sheet-input" type="number" value="${a.qty||''}" data-field="qty" placeholder="100"
           oninput="acctCellChange(${i},this)" style="width:58px"/></td>
       <td><input class="sheet-input" type="number" value="${a.avgBuy||''}" data-field="avgBuy" placeholder="70000"
@@ -5581,9 +5550,6 @@ function drawAcctRows(rows) {
   }).join('');
   updateAcctFooter(rows);
   renderBrokerPnlChart(rows);
-  // Wilder 시그널 배지 비동기 로드 (debounce)
-  clearTimeout(window._wilderBadgeTimer);
-  window._wilderBadgeTimer=setTimeout(()=>{ try{ refreshWilderBadgesForHoldings(); }catch(e){} }, 400);
 }
 
 function acctCellChange(idx, input) {
