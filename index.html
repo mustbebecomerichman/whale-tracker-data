@@ -1482,6 +1482,22 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
 
   <div class="section">
     <div class="section-title">
+      <div class="section-title-left">🔬 내 보유 종목 종합 진단 <span class="badge">계좌별 현황 연동</span></div>
+      <button class="btn btn-outline btn-sm" onclick="refreshHoldingsAnalysis()">🔄 Wilder 재분석</button>
+    </div>
+    <div id="rb-holdings-status" style="font-size:.82rem;color:var(--text2);margin-bottom:8px;"></div>
+    <div id="rb-holdings-wrap">
+      <div class="mp-empty"><div class="ei">📋</div><p>계좌별 현황에 한국 종목을 입력하면 진단 표가 표시됩니다.</p></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><div class="section-title-left">💡 리밸런싱 추천 <span class="badge">섹터 × 종목 단위</span></div></div>
+    <div id="rb-recommendations"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
       <div class="section-title-left">📊 RRG 섹터 로테이션 차트 <span class="badge">JdK RS-Ratio × RS-Momentum</span></div>
       <div style="display:flex;gap:8px;align-items:center;">
         <button class="btn btn-outline btn-sm" onclick="rerunRebalance()">🔄 재계산</button>
@@ -1524,22 +1540,6 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     <div id="rb-portfolio-wrap">
       <div class="mp-empty"><div class="ei">📂</div><p>계좌별 현황 입력 후 분석 가능합니다.</p></div>
     </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">
-      <div class="section-title-left">🔬 내 보유 종목 종합 진단 <span class="badge">계좌별 현황 연동</span></div>
-      <button class="btn btn-outline btn-sm" onclick="refreshHoldingsAnalysis()">🔄 Wilder 재분석</button>
-    </div>
-    <div id="rb-holdings-status" style="font-size:.82rem;color:var(--text2);margin-bottom:8px;"></div>
-    <div id="rb-holdings-wrap">
-      <div class="mp-empty"><div class="ei">📋</div><p>계좌별 현황에 한국 종목을 입력하면 진단 표가 표시됩니다.</p></div>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title"><div class="section-title-left">💡 리밸런싱 추천 <span class="badge">섹터 × 종목 단위</span></div></div>
-    <div id="rb-recommendations"></div>
   </div>
 
   <div class="section">
@@ -5023,8 +5023,18 @@ function renderMyHoldingsAnalysis(holdings) {
   const statusEl = document.getElementById('rb-holdings-status');
   if (!wrap) return;
   if (!holdings || !holdings.length) {
-    wrap.innerHTML = '<div class="mp-empty"><div class="ei">📋</div><p>계좌별 현황에 한국 종목을 입력하면 진단 표가 표시됩니다.</p></div>';
-    if (statusEl) statusEl.textContent = '';
+    const totalRows = (_acctRows || []).length;
+    const koreanRows = (_acctRows || []).filter(a => normalizeStockCode(a.code) && stockRegionForCode(a.code) === 'korea').length;
+    let msg;
+    if (totalRows === 0) {
+      msg = `<p style="margin-bottom:10px;">계좌별 현황 데이터가 없습니다.</p><button class="btn btn-primary btn-sm" onclick="showPage('mypage')">MY자산 → 계좌별 현황 입력하러 가기</button>`;
+    } else if (koreanRows === 0) {
+      msg = `<p>계좌별 현황에 ${totalRows}개 행이 있지만 <b>한국 종목</b>이 없습니다. (해외 종목은 현재 한국 섹터 ETF 기반 분석에서 제외)</p>`;
+    } else {
+      msg = `<p>한국 보유 종목 ${koreanRows}개는 있지만 종목코드가 모두 비어있거나 인식 실패. 계좌별 현황의 종목코드를 확인하세요.</p>`;
+    }
+    wrap.innerHTML = `<div class="mp-empty"><div class="ei">📋</div>${msg}</div>`;
+    if (statusEl) statusEl.textContent = totalRows === 0 ? 'MY자산 계좌별 현황 입력 필요' : '한국 보유 종목 0개 — 진단 대상 없음';
     return;
   }
   const sorted = [...holdings].sort((a, b) => a.action.priority - b.action.priority || b.ev - a.ev);
@@ -5201,11 +5211,12 @@ async function runDeepAnalysis(results, force = false) {
     if (statusEl) statusEl.textContent += ' · 매수 후보 섹터 종목 분석 중…';
     _stockRecsCache = await buildStockRecommendations(results, _holdingsAnalysis);
     renderRecommendations(results, _stockRecsCache);
-    if (statusEl) {
+    if (statusEl && _holdingsAnalysis.length > 0) {
       const sellN = _holdingsAnalysis.filter(h => h.action.priority === 1).length;
       const buyN = _holdingsAnalysis.filter(h => h.action.priority <= 4 && h.action.priority >= 3).length;
       statusEl.textContent = `심층 분석 완료 · 매도/손절 ${sellN}건 · 매수확대 ${buyN}건 · 리포트 생성 가능`;
     }
+    // _holdingsAnalysis가 비어있을 땐 renderMyHoldingsAnalysis가 이미 적절한 상태 메시지 설정함
   } catch (e) {
     if (statusEl) statusEl.textContent = `심층 분석 실패: ${e.message || e}`;
   } finally {
@@ -5419,6 +5430,12 @@ async function initRebalancePage(force = false) {
   if (statusEl) statusEl.textContent = '데이터 불러오는 중… (12개 섹터 ETF + 벤치마크 일봉 365일)';
   if (chartWrap) chartWrap.innerHTML = '<div class="mp-empty"><div class="ei">⏳</div><p>섹터 ETF 일봉 데이터 로딩 중…</p></div>';
   _rebalanceLoading = true;
+  // MY자산 계좌별 현황을 Firestore에서 명시적으로 로드 (페이지 직접 진입 시 _acctRows가 비어있을 수 있음)
+  try {
+    if (typeof loadMpData === 'function' && typeof me !== 'undefined' && me) {
+      await loadMpData();
+    }
+  } catch (e) { /* 실패 시에도 진행 — RRG 분석은 보유 데이터 없이도 의미 있음 */ }
   try {
     const cache = await fetchRebalanceData(force);
     const results = cache.results;
