@@ -164,6 +164,8 @@ async function fetchAllBalances(env) {
         holdings: (domesticResult?.holdings?.length || 0) + overseasCount,
         domestic: domesticResult?.holdings?.length || 0,
         overseas: overseasCount,
+        domesticRawCount: domesticResult?.rawCount || 0,
+        domesticPages: domesticResult?.pages || 0,
         summary: domesticResult?.summary || null,
         overseasErrors: overseasErrs,
       });
@@ -188,7 +190,9 @@ async function fetchBalance(env, account = {}) {
   const allRows = [];
   let summary = null;
   let ctxFk = '', ctxNk = '', trCont = '';
+  let pages = 0;
   for (let page = 0; page < 10; page++) {
+    pages = page + 1;
     const params = new URLSearchParams({
       CANO: cano,
       ACNT_PRDT_CD: prdt,
@@ -231,12 +235,16 @@ async function fetchBalance(env, account = {}) {
         cash: Number(data.output2[0].dnca_tot_amt) || 0,
       };
     }
-    // 응답 tr_cont 헤더가 F/M 이면 다음 페이지 존재
-    const respTrCont = res.headers.get('tr_cont') || '';
-    if (respTrCont !== 'F' && respTrCont !== 'M') break;
-    ctxFk = data.ctx_area_fk100 || '';
-    ctxNk = data.ctx_area_nk100 || '';
-    if (!ctxFk && !ctxNk) break; // 컨텍스트 없으면 종료
+    // 페이지 종료 판정: 응답 tr_cont(F/M=more) 또는 ctx_area_nk100 비어있으면 종료
+    const respTrCont = (res.headers.get('tr_cont') || data.tr_cont || '').trim();
+    const nextNk = (data.ctx_area_nk100 || '').trim();
+    const nextFk = (data.ctx_area_fk100 || '').trim();
+    const headerSaysMore = respTrCont === 'F' || respTrCont === 'M';
+    const bodySaysMore = !!nextNk;
+    if (!headerSaysMore && !bodySaysMore) break;
+    if (!nextNk && !nextFk) break;  // 컨텍스트 없으면 진행 불가
+    ctxFk = nextFk;
+    ctxNk = nextNk;
     trCont = 'N';
   }
   // qty=0 행도 포함 (미체결/대출 등 누락 방지). 단, code가 빈 행은 제외
@@ -255,7 +263,7 @@ async function fetchBalance(env, account = {}) {
       purchase: Number(r.pchs_amt) || 0,
       pnl: Number(r.evlu_pfls_amt) || 0,
     }));
-  return { holdings, summary, rawCount: allRows.length, source: 'KIS', fetchedAt: new Date().toISOString() };
+  return { holdings, summary, rawCount: allRows.length, pages, source: 'KIS', fetchedAt: new Date().toISOString() };
 }
 
 // 해외주식 잔고 조회 (NASD/NYSE/AMEX — 미국 시장 위주)
@@ -268,11 +276,15 @@ async function fetchOverseasBalance(env, account) {
   const token = await getKisToken(env, account);
   const trId = env.KIS_MOCK === 'true' ? 'VTTS3012R' : 'TTTS3012R';
   const baseUrl = getBaseUrl(env);
-  // 미국 3개 거래소 + 홍콩(필요시 확장)
+  // 미국 3개 + 홍콩/도쿄/상해/심천 — 권한 없는 거래소는 KIOK0570 으로 silently skip
   const exchanges = [
     { code: 'NASD', currency: 'USD', market: 'NAS' },
     { code: 'NYSE', currency: 'USD', market: 'NYS' },
     { code: 'AMEX', currency: 'USD', market: 'AMS' },
+    { code: 'SEHK', currency: 'HKD', market: 'HKS' },
+    { code: 'TKSE', currency: 'JPY', market: 'TSE' },
+    { code: 'SHAA', currency: 'CNY', market: 'SHS' },
+    { code: 'SZAA', currency: 'CNY', market: 'SZS' },
   ];
   const seenCodes = new Set();  // 거래소별 중복 방지
   const all = [];

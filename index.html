@@ -4823,7 +4823,7 @@ function renderMomentumBoard(results) {
 
 // ── 내 포트폴리오 섹터 가중치 ──────────────────────────
 function computePortfolioSectorWeights() {
-  const rows = (_acctRows || []).filter(a => stockRegionForCode(a.code) === 'korea');
+  const rows = (_acctRows || []).filter(a => stockRegionForCode(a.code) === 'domestic');
   if (!rows.length) return null;
   const sectorEval = {};
   let totalEval = 0;
@@ -4924,7 +4924,7 @@ function diagnoseHolding({ wilder, sector, rate }) {
 }
 
 async function buildHoldingsAnalysis(results) {
-  const rows = (_acctRows || []).filter(a => normalizeStockCode(a.code) && stockRegionForCode(a.code) === 'korea');
+  const rows = (_acctRows || []).filter(a => normalizeStockCode(a.code) && stockRegionForCode(a.code) === 'domestic');
   const sectorMap = new Map(results.map(r => [r.code, r]));
   const out = [];
   const seen = new Set();
@@ -4965,7 +4965,7 @@ function renderMyHoldingsAnalysis(holdings) {
   if (!wrap) return;
   if (!holdings || !holdings.length) {
     const totalRows = (_acctRows || []).length;
-    const koreanRows = (_acctRows || []).filter(a => normalizeStockCode(a.code) && stockRegionForCode(a.code) === 'korea').length;
+    const koreanRows = (_acctRows || []).filter(a => normalizeStockCode(a.code) && stockRegionForCode(a.code) === 'domestic').length;
     let msg;
     if (totalRows === 0) {
       msg = `<p style="margin-bottom:10px;">계좌별 현황 데이터가 없습니다.</p><button class="btn btn-primary btn-sm" onclick="showPage('mypage')">MY자산 → 계좌별 현황 입력하러 가기</button>`;
@@ -6719,7 +6719,11 @@ async function importKisBalance(){
     syncAcctRowsToMpData();
     await persistMpData(true);
     setMyAssetSection('accounts');
-    const acctSummary = (data.accounts || []).map(a => `${a.acctType}: 국내 ${a.domestic||0} + 해외 ${a.overseas||0} = ${a.holdings}건`).join(' / ');
+    const acctSummary = (data.accounts || []).map(a => {
+      const pageInfo = a.domesticPages > 1 ? ` [${a.domesticPages}p]` : '';
+      const rawHint = (a.domesticRawCount > a.domestic) ? ` (raw ${a.domesticRawCount})` : '';
+      return `${a.acctType}: 국내 ${a.domestic||0}${rawHint}${pageInfo} + 해외 ${a.overseas||0} = ${a.holdings}건`;
+    }).join(' / ');
     const errs = data.errors || [];
     const zeroAccts = (data.accounts || []).filter(a => a.holdings === 0).map(a => a.acctType);
     // KIS가 알려준 계좌별 평가금액 + 예수금 (앱 화면과 대조용)
