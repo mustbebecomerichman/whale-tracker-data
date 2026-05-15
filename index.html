@@ -1268,6 +1268,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <div class="year-chips" id="year-chips" style="margin-bottom:0"></div>
         <button class="btn btn-outline btn-sm mobile-toggle" onclick="toggleMobileSection('tx-detail',this)">숨기기</button>
+        <button class="btn btn-outline btn-sm admin-only" onclick="importTx2025FromSheet()" style="border-color:#7a5a00;color:#7a5a00;font-weight:900;display:none;">📋 2025 거래 일괄입력</button>
         <button class="btn btn-outline btn-sm" id="btn-kis-tx-sync" onclick="importKisTransactions()" style="border-color:#16794b;color:#16794b;font-weight:900;">🔗 한국투자 거래내역</button>
         <button class="btn btn-primary btn-sm" onclick="addSheetRow()">＋ 행 추가</button>
       </div>
@@ -1296,6 +1297,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
           <th class="calc-col">평가손익</th>
           <th class="calc-col">수익률</th>
           <th>수수료</th>
+          <th>세금</th>
           <th>메모</th>
         </tr></thead>
         <tbody id="sheet-body"></tbody>
@@ -1305,7 +1307,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
           <td id="ft-eval" style="font-weight:700;"></td>
           <td id="ft-pnl" style="font-weight:700;"></td>
           <td id="ft-rate" style="font-weight:700;"></td>
-          <td colspan="2"></td>
+          <td colspan="3"></td>
         </tr></tfoot>
       </table>
     </div>
@@ -2267,6 +2269,7 @@ async function afterLogin(u){
   const isAdm=access.isAdmin;
   document.getElementById('admin-nav-btn').style.display=isAdm?'inline-block':'none';
   document.getElementById('admin-badge').style.display=isAdm?'inline-block':'none';
+  document.querySelectorAll('.admin-only').forEach(el=>{el.style.display=isAdm?'':'none';});
   show('app');
   setGoogleButtonsBusy(false);
   await recordUserLoginOncePerDay(u);
@@ -3131,7 +3134,9 @@ function switchYear(yr,el){
 // ═══════════════════════════════════════════════════════
 function calcPnl(t){
   const p=parseFloat(t.price)||0,a=parseFloat(t.avgBuy)||0,q=parseFloat(t.qty)||0;
-  return Math.round((p-a)*q);
+  const fee=parseFloat(t.fee)||0, tax=parseFloat(t.tax)||0;
+  // 실현손익 = (매도가 - 평균매입가) × 수량 − 수수료 − 세금
+  return Math.round((p-a)*q - fee - tax);
 }
 function calcEval(t){ return Math.round((parseFloat(t.price)||0)*(parseFloat(t.qty)||0)); }
 function calcPurchase(t){ return Math.round((parseFloat(t.avgBuy)||0)*(parseFloat(t.qty)||0)); }
@@ -3505,6 +3510,7 @@ function drawSheetRows(rows, filtered=false){
       <td><input class="sheet-input calc-input ${pc}" type="text" value="${pnl||pur?(pnl>=0?'+':'')+fmt(pnl)+'원':''}" readonly style="width:84px"/></td>
       <td><input class="sheet-input calc-input ${rc}" type="text" value="${pur||ev?(rate>=0?'+':'')+rate.toFixed(2)+'%':''}" readonly style="width:56px"/></td>
       <td><input class="sheet-input" type="number" value="${t.fee||''}" data-field="fee" placeholder="0" onchange="cellChange(${rowIdx},this)" style="width:52px"/></td>
+      <td><input class="sheet-input" type="number" value="${t.tax||''}" data-field="tax" placeholder="0" onchange="cellChange(${rowIdx},this)" style="width:60px"/></td>
       <td><input class="sheet-input" type="text" value="${escapeAttr(t.note||'')}" data-field="note" placeholder="메모" onchange="cellChange(${rowIdx},this)" style="width:80px"/></td>
     </tr>`;
   }).join('');
@@ -3563,13 +3569,74 @@ function cellChange(idx, input){
 }
 function addSheetRow(){
   const today=new Date().toISOString().slice(0,10);
-  _sheetRows.unshift({date:today,brokerage:'',acctType:'위탁',code:'',name:'',qty:0,avgBuy:0,price:0,fee:0,note:'',_draftId:String(Date.now())});
+  _sheetRows.unshift({date:today,brokerage:'',acctType:'위탁',code:'',name:'',qty:0,avgBuy:0,price:0,fee:0,tax:0,note:'',_draftId:String(Date.now())});
   drawSheetRows(_sheetRows);
   syncSheetRowsToMpData();
   schedulePortfolioAutosave(true,120);
   const firstInput=document.querySelector('#sheet-body tr:first-child input[data-field="code"]');
   if(firstInput) firstInput.focus();
 }
+
+// Google Sheets "거래내역_2025년" 탭에서 가져온 22건 일괄 입력 (관리자 전용, 1회용)
+// 사용자 요청: "이번에만 그대로 복사붙여넣기 해줘. 그 다음부터는 KIS API로 연동."
+async function importTx2025FromSheet(){
+  if(!me){showToast('로그인이 필요합니다','err');return;}
+  const isAdm=await isAdminUser();
+  if(!isAdm){showToast('관리자 전용 기능입니다','err');return;}
+  // 시트 컬럼: 날짜, 증권사, 코드, 종목명, 잔고수량, 판매가, 평균매입가, 수수료, 세금, 비고
+  // 증권사 매핑: '한화투자_종합'→{한화투자증권,위탁}, '신한투자_IRP'→{신한투자증권,IRP}, '미래에셋_연금(신)'→{미래에셋증권,연금저축} 등
+  const SHEET_2025=[
+    {date:'2025-12-25',broker:'한화투자증권',acctType:'위탁',code:'950220',name:'Neoimmunetech Inc',qty:708,price:723,avgBuy:8730,fee:20,tax:1177,note:''},
+    {date:'2025-12-19',broker:'한국투자증권',acctType:'위탁',code:'064400',name:'LG CNS Co Ltd',qty:30,price:63500,avgBuy:55100,fee:76,tax:4382,note:''},
+    {date:'2025-12-19',broker:'한국투자증권',acctType:'ISA',code:'000660',name:'SK Hynix Inc',qty:7,price:565000,avgBuy:359946,fee:158,tax:9097,note:''},
+    {date:'2025-11-03',broker:'한국투자증권',acctType:'ISA',code:'000660',name:'SK Hynix Inc',qty:7,price:596000,avgBuy:297233,fee:167,tax:9596,note:''},
+    {date:'2025-10-29',broker:'한국투자증권',acctType:'ISA',code:'000660',name:'SK Hynix Inc',qty:10,price:561000,avgBuy:297233,fee:224,tax:12903,note:''},
+    {date:'2025-11-21',broker:'한국투자증권',acctType:'ISA',code:'066570',name:'LG Electronics Inc',qty:35,price:86100,avgBuy:75571,fee:121,tax:6931,note:''},
+    {date:'2025-10-10',broker:'한국투자증권',acctType:'ISA',code:'005387',name:'Hyundai Motor S2 Pref Shs',qty:19,price:168800,avgBuy:164800,fee:128,tax:7377,note:''},
+    {date:'2025-09-26',broker:'한국투자증권',acctType:'ISA',code:'0102X0',name:'ACE 유럽방산 TOP 10',qty:222,price:10476,avgBuy:10105,fee:93,tax:5349,note:''},
+    {date:'2025-09-26',broker:'한국투자증권',acctType:'ISA',code:'004370',name:'Nongshim Co Ltd',qty:5,price:439500,avgBuy:399500,fee:88,tax:5054,note:''},
+    {date:'2025-09-19',broker:'한국투자증권',acctType:'ISA',code:'058470',name:'Leeno Industrial Inc',qty:84,price:50700,avgBuy:50604,fee:170,tax:9795,note:''},
+    {date:'2025-07-07',broker:'한국투자증권',acctType:'ISA',code:'064400',name:'LG CNS Co Ltd',qty:37,price:84900,avgBuy:53936,fee:126,tax:7225,note:''},
+    {date:'2025-06-17',broker:'한국투자증권',acctType:'ISA',code:'003280',name:'Heung-A Shipping Co Ltd',qty:200,price:2315,avgBuy:2020,fee:19,tax:1065,note:''},
+    {date:'2025-10-22',broker:'한국투자증권',acctType:'위탁',code:'PFE',name:'Pfizer Inc',qty:52,price:35773,avgBuy:35615,fee:74,tax:4278,note:'미국'},
+    {date:'2025-10-21',broker:'한국투자증권',acctType:'위탁',code:'VEEV',name:'Veeva Systems Inc',qty:6,price:416389,avgBuy:394186,fee:100,tax:5746,note:'미국'},
+    {date:'2025-05-13',broker:'미래에셋증권',acctType:'위탁',code:'NVDA',name:'NVIDIA Corp',qty:22,price:187529,avgBuy:134692,fee:165,tax:9489,note:'미국'},
+    {date:'2025-05-13',broker:'미래에셋증권',acctType:'위탁',code:'TSLA',name:'Tesla Inc',qty:5,price:464246,avgBuy:327865,fee:93,tax:5339,note:'미국'},
+    {date:'2025-12-30',broker:'한국투자증권',acctType:'위탁',code:'SMU',name:'Tradr 2X Long Smr Daily ETF',qty:15,price:14913,avgBuy:156107,fee:9,tax:514,note:'미국'},
+    {date:'2025-12-30',broker:'미래에셋증권',acctType:'위탁',code:'QTUM',name:'Defiance Quantum ETF',qty:54,price:160287,avgBuy:109678,fee:346,tax:19908,note:''},
+    {date:'2025-06-20',broker:'한화투자증권',acctType:'위탁',code:'035420',name:'Naver Corp',qty:34,price:274000,avgBuy:236126,fee:373,tax:21427,note:''},
+    {date:'2025-06-20',broker:'신한투자증권',acctType:'위탁',code:'035420',name:'Naver Corp',qty:6,price:272573,avgBuy:252325,fee:65,tax:3762,note:''},
+  ];
+  if(!confirm(`2025년 거래 ${SHEET_2025.length}건을 일괄 입력합니다.\n같은 날짜+코드+수량+증권사 조합은 중복으로 간주해 건너뜁니다.\n진행할까요?`))return;
+  if(!mpData)mpData=emptyPortfolio();
+  if(!mpData.transactions)mpData.transactions={};
+  if(!Array.isArray(mpData.transactions['2025']))mpData.transactions['2025']=[];
+  const existing=mpData.transactions['2025'];
+  const dedupKey=t=>`${t.date}|${normalizeStockCode(t.code||'')}|${t.qty||0}|${t.brokerage||''}`;
+  const existingKeys=new Set(existing.map(dedupKey));
+  let added=0,skipped=0;
+  for(const r of SHEET_2025){
+    const row={
+      date:r.date,brokerage:r.broker,acctType:r.acctType,
+      code:normalizeStockCode(r.code),name:r.name,
+      qty:r.qty,avgBuy:r.avgBuy,price:r.price,
+      fee:r.fee||0,tax:r.tax||0,note:r.note||'',
+      _autoName:false,_autoPrice:false,_bulk2025:true,
+    };
+    if(existingKeys.has(dedupKey(row))){skipped++;continue;}
+    existing.unshift(row);
+    existingKeys.add(dedupKey(row));
+    added++;
+  }
+  // 날짜 내림차순 정렬
+  existing.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  mpYear='2025';
+  renderYearChips(mpData.transactions||{});
+  renderSheet(mpYear, mpData.transactions||{});
+  await persistMpData(true);
+  showToast(`✅ 2025년 거래 일괄입력 완료 — 추가 ${added}건${skipped?`, 중복 ${skipped}건 건너뜀`:''}`,'ok');
+}
+window.importTx2025FromSheet=importTx2025FromSheet;
 function deleteRow(idx){
   if(!confirm('이 행을 삭제하시겠습니까?'))return;
   _sheetRows.splice(idx,1);
