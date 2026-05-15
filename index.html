@@ -1035,6 +1035,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     <div class="logo" onclick="showPage('mypage')">🐋 <span>Whale</span>Tracker Pro</div>
     <nav id="main-nav">
       <button class="active" onclick="showPage('mypage')">MY자산</button>
+      <button onclick="showPage('rebalance')">🔄 리밸런싱</button>
       <button onclick="showPage('wilder')">🧮 Wilder BUY</button>
       <button onclick="showPage('nps')">퀀트 스크리너</button>
       <button onclick="showPage('national')">국민연금</button>
@@ -1463,6 +1464,71 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         </div>
       </div>
     </details>
+  </div>
+</div>
+
+<!-- ── REBALANCE PAGE (RRG 섹터 로테이션) ── -->
+<div class="page" id="page-rebalance">
+  <div class="hero">
+    <h1>🔄 <span>리밸런싱</span> 분석</h1>
+    <p>RRG 섹터 로테이션 · 모멘텀 보드 · 포트폴리오 가중치 · 매수/감축 후보 자동 추천</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num" id="rb-sector-count">-</div><div class="lbl">분석 섹터</div></div>
+      <div class="hero-stat"><div class="num" id="rb-leading-count">-</div><div class="lbl">주도 진입</div></div>
+      <div class="hero-stat"><div class="num" id="rb-improving-count">-</div><div class="lbl">개선 진입</div></div>
+      <div class="hero-stat"><div class="num" id="rb-updated">-</div><div class="lbl">기준일</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
+      <div class="section-title-left">📊 RRG 섹터 로테이션 차트 <span class="badge">JdK RS-Ratio × RS-Momentum</span></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-outline btn-sm" onclick="rerunRebalance()">🔄 재계산</button>
+      </div>
+    </div>
+    <div id="rb-status" style="font-size:.86rem;color:var(--text2);margin-bottom:10px;"></div>
+    <div id="rb-chart-wrap" style="position:relative;background:var(--card2,#fafafa);border:1.5px solid var(--border);border-radius:14px;padding:10px;overflow:auto;">
+      <div class="mp-empty"><div class="ei">📊</div><p>데이터 로딩 중…</p></div>
+    </div>
+    <div style="font-size:.78rem;color:var(--text2);margin-top:10px;line-height:1.6;">
+      <b>📖 RRG 4분면 해설</b><br>
+      🟢 <b>주도 (Leading, 우상)</b> — 시장 대비 강세 + 모멘텀 강함. 비중 유지·확대 후보<br>
+      🟡 <b>약화 (Weakening, 우하)</b> — 강세지만 모멘텀 둔화. 수익 실현·감축 고려<br>
+      🔴 <b>후행 (Lagging, 좌하)</b> — 시장 대비 약세 + 모멘텀 약함. 비중 축소·회피<br>
+      🔵 <b>개선 (Improving, 좌상)</b> — 약세지만 모멘텀 회복. 분할매수·관찰 대상<br>
+      <span style="opacity:.7;">회전 사이클: 주도 → 약화 → 후행 → 개선 → 주도</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><div class="section-title-left">📈 섹터 모멘텀 보드</div></div>
+    <div class="sheet-wrap">
+      <table class="sheet-table" id="rb-momentum-table">
+        <thead><tr>
+          <th>섹터</th>
+          <th style="text-align:right">1주</th>
+          <th style="text-align:right">1개월</th>
+          <th style="text-align:right">3개월</th>
+          <th style="text-align:right">6개월</th>
+          <th style="text-align:right">1년</th>
+          <th style="text-align:center">분면</th>
+        </tr></thead>
+        <tbody id="rb-momentum-body"><tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text2);">로딩 중…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><div class="section-title-left">🏦 내 포트폴리오 섹터 가중치</div></div>
+    <div id="rb-portfolio-wrap">
+      <div class="mp-empty"><div class="ei">📂</div><p>계좌별 현황 입력 후 분석 가능합니다.</p></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><div class="section-title-left">💡 리밸런싱 추천 <span class="badge">RRG 분면 × 본인 보유 가중치</span></div></div>
+    <div class="grid-3" id="rb-recommendations"></div>
   </div>
 </div>
 
@@ -4544,12 +4610,400 @@ function showPage(p){
   document.body.classList.toggle('mypage-active',p==='mypage');
   const target=document.getElementById('page-'+p);
   if(target)target.classList.add('active');
-  const map={mypage:0,wilder:1,nps:2,national:3,alert:4,legend:5,admin:6};
+  const map={mypage:0,rebalance:1,wilder:2,nps:3,national:4,alert:5,legend:6,admin:7};
   const btns=document.querySelectorAll('nav button');
   if(btns[map[p]]) btns[map[p]].classList.add('active');
   if(p==='admin'){loadUserList();loadChangelog();}
   if(p==='mypage') initMyPage();
   if(p==='wilder') initWilderPage();
+  if(p==='rebalance') initRebalancePage();
+}
+
+// ── REBALANCE / RRG 섹터 로테이션 ──────────────────────────
+// JdK Relative Rotation Graph: 섹터 ETF의 시장 대비 강세 + 모멘텀을 4분면으로 시각화
+// 데이터: KOSPI 200 섹터 ETF (KODEX·TIGER) 일봉, 벤치마크 = KODEX 200 (069500)
+
+const RRG_BENCH = { code: '069500', name: 'KODEX 200', market: 'J' };
+const RRG_SECTORS = [
+  { code: '139260', name: 'IT',         emoji: '💻', stocks: ['005930','000660','035420','035720','018260','034730','030200','017670','066570','034220','139480','259960','251270','036570'] },
+  { code: '091160', name: '반도체',     emoji: '🔌', stocks: ['005930','000660','009150'] },
+  { code: '139270', name: '금융',       emoji: '🏦', stocks: ['105560','055550','086790','316140','138040','024110','032830','000810','006800'] },
+  { code: '091170', name: '은행',       emoji: '💰', stocks: ['105560','055550','086790','316140','024110'] },
+  { code: '091180', name: '자동차',     emoji: '🚗', stocks: ['005380','000270','012330','018880','161390'] },
+  { code: '091220', name: '운송',       emoji: '🚢', stocks: ['011200','003490','180640'] },
+  { code: '117460', name: '에너지화학', emoji: '⛽', stocks: ['051910','096770','010950','373220','006400','003670','247540','086520','285130','047050'] },
+  { code: '117680', name: '철강',       emoji: '⚙️', stocks: ['005490','010130'] },
+  { code: '117700', name: '건설',       emoji: '🏗️', stocks: ['000720','028260'] },
+  { code: '244580', name: '바이오',     emoji: '🧬', stocks: ['207940','068270','128940'] },
+  { code: '139310', name: '중공업',     emoji: '🔧', stocks: ['009540','042660','329180','010140','034020','267260','267250','012450'] },
+  { code: '139290', name: '생활소비재', emoji: '🛒', stocks: ['097950','271560','090430','051900','033780'] },
+];
+
+// 종목코드 → 섹터 코드 매핑 (위 stocks 배열 역인덱스)
+const STOCK_TO_SECTOR = (() => {
+  const m = {};
+  for (const s of RRG_SECTORS) {
+    for (const sc of (s.stocks || [])) {
+      if (!m[sc]) m[sc] = s.code; // 첫 매핑 우선 (반도체 vs IT 중복 시 IT 우선되도록 순서 조정)
+    }
+  }
+  return m;
+})();
+
+const _rebalanceCache = { savedAt: 0, results: null, bench: null };
+const REBALANCE_TTL_MS = 6 * 60 * 60 * 1000; // 6h
+let _rebalanceLoading = false;
+
+function rbAvg(arr) { return arr.reduce((s, v) => s + v, 0) / arr.length; }
+function rbStd(arr, m) { const v = arr.reduce((s, x) => s + (x - m) * (x - m), 0) / arr.length; return Math.sqrt(v); }
+
+// RRG 핵심 수식: JdK RS-Ratio · RS-Momentum
+function computeRRG(secBars, benchBars, opts = {}) {
+  const win = opts.window || 63; // 약 14주
+  const benchMap = new Map(benchBars.map(b => [b.date, b.close]));
+  const pairs = [];
+  for (const sb of secBars) {
+    const bc = benchMap.get(sb.date);
+    if (bc != null && bc > 0) pairs.push({ date: sb.date, sec: sb.close, bench: bc });
+  }
+  if (pairs.length < win + 10) return null;
+
+  const rs = pairs.map(p => (p.sec / p.bench) * 100);
+
+  const rsRatio = rs.map((_, i) => {
+    if (i < win) return null;
+    const slice = rs.slice(i - win, i + 1);
+    const m = rbAvg(slice);
+    const s = rbStd(slice, m);
+    return s > 0 ? 100 + (rs[i] - m) / s : 100;
+  });
+
+  // RS-Momentum: 5일 전 RS-Ratio 대비 변화율의 롤링 z-score
+  const roc = rsRatio.map((v, i) => {
+    if (v == null || rsRatio[i - 5] == null) return null;
+    return (v - rsRatio[i - 5]);
+  });
+
+  const rsMom = roc.map((v, i) => {
+    if (v == null || i < win) return null;
+    const slice = roc.slice(Math.max(0, i - win + 1), i + 1).filter(x => x != null);
+    if (slice.length < win / 2) return null;
+    const m = rbAvg(slice);
+    const s = rbStd(slice, m);
+    return s > 0 ? 100 + (roc[i] - m) / s : 100;
+  });
+
+  const trail = [];
+  for (let i = Math.max(0, pairs.length - 10); i < pairs.length; i++) {
+    if (rsRatio[i] == null || rsMom[i] == null) continue;
+    trail.push({ date: pairs[i].date, x: rsRatio[i], y: rsMom[i] });
+  }
+  if (trail.length < 2) return null;
+  const last = trail[trail.length - 1];
+  return { trail, last, quadrant: rrgQuadrant(last.x, last.y) };
+}
+
+function rrgQuadrant(x, y) {
+  if (x >= 100 && y >= 100) return 'leading';
+  if (x >= 100 && y < 100) return 'weakening';
+  if (x < 100 && y < 100) return 'lagging';
+  return 'improving';
+}
+
+const QUADRANT_META = {
+  leading:    { label: '주도',  emoji: '🟢', cls: 'up-chip',     hint: '강세 + 모멘텀↑' },
+  weakening:  { label: '약화',  emoji: '🟡', cls: 'money-neutral', hint: '강세지만 모멘텀↓' },
+  lagging:    { label: '후행',  emoji: '🔴', cls: 'down-chip',   hint: '약세 + 모멘텀↓' },
+  improving:  { label: '개선',  emoji: '🔵', cls: 'up-chip',     hint: '약세지만 모멘텀↑' },
+};
+
+function rbPeriodReturn(bars, p) {
+  if (!bars || bars.length <= p) return null;
+  const last = bars[bars.length - 1].close;
+  const prev = bars[bars.length - 1 - p].close;
+  if (!prev) return null;
+  return (last / prev - 1) * 100;
+}
+
+async function fetchRebalanceData(force = false) {
+  if (!force && _rebalanceCache.results && (Date.now() - _rebalanceCache.savedAt) < REBALANCE_TTL_MS) {
+    return _rebalanceCache;
+  }
+  const items = [{ code: RRG_BENCH.code, market: 'J' }, ...RRG_SECTORS.map(s => ({ code: s.code, market: 'J' }))];
+  const res = await apiFetch('/api/ohlc-history', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items, days: 365 }),
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+
+  const benchKey = `J:${RRG_BENCH.code}`;
+  const benchItem = data[benchKey];
+  if (!benchItem || benchItem.error || !Array.isArray(benchItem.bars)) {
+    throw new Error('벤치마크 데이터 없음: ' + (benchItem?.error || 'unknown'));
+  }
+  const benchBars = benchItem.bars;
+
+  const results = RRG_SECTORS.map(s => {
+    const item = data[`J:${s.code}`];
+    if (!item || item.error || !Array.isArray(item.bars) || item.bars.length < 80) {
+      return { ...s, error: item?.error || 'no bars' };
+    }
+    const rrg = computeRRG(item.bars, benchBars);
+    const returns = {
+      d5:   rbPeriodReturn(item.bars, 5),
+      d21:  rbPeriodReturn(item.bars, 21),
+      d63:  rbPeriodReturn(item.bars, 63),
+      d126: rbPeriodReturn(item.bars, 126),
+      d252: rbPeriodReturn(item.bars, 252),
+    };
+    return { ...s, rrg, returns, lastBar: item.bars[item.bars.length - 1] };
+  });
+
+  _rebalanceCache.savedAt = Date.now();
+  _rebalanceCache.results = results;
+  _rebalanceCache.bench = { ...RRG_BENCH, lastBar: benchBars[benchBars.length - 1] };
+  return _rebalanceCache;
+}
+
+// ── RRG SVG 차트 렌더링 ──────────────────────────────────
+function renderRRGChart(results) {
+  const wrap = document.getElementById('rb-chart-wrap');
+  if (!wrap) return;
+  const valid = results.filter(r => r.rrg);
+  if (!valid.length) {
+    wrap.innerHTML = '<div class="mp-empty"><div class="ei">⚠️</div><p>RRG 계산 가능한 섹터가 없습니다.</p></div>';
+    return;
+  }
+
+  const W = 720, H = 540, pad = 60;
+  const allX = valid.flatMap(r => r.rrg.trail.map(t => t.x));
+  const allY = valid.flatMap(r => r.rrg.trail.map(t => t.y));
+  const xMin = Math.min(95, Math.min(...allX) - 1);
+  const xMax = Math.max(105, Math.max(...allX) + 1);
+  const yMin = Math.min(95, Math.min(...allY) - 1);
+  const yMax = Math.max(105, Math.max(...allY) + 1);
+  const sx = v => pad + ((v - xMin) / (xMax - xMin)) * (W - 2 * pad);
+  const sy = v => H - pad - ((v - yMin) / (yMax - yMin)) * (H - 2 * pad);
+
+  const cx100 = sx(100), cy100 = sy(100);
+
+  // 분면 배경
+  const quadrants = `
+    <rect x="${cx100}" y="${pad}" width="${W - pad - cx100}" height="${cy100 - pad}" fill="#10b981" opacity="0.08"/>
+    <rect x="${cx100}" y="${cy100}" width="${W - pad - cx100}" height="${H - pad - cy100}" fill="#f59e0b" opacity="0.08"/>
+    <rect x="${pad}" y="${cy100}" width="${cx100 - pad}" height="${H - pad - cy100}" fill="#ef4444" opacity="0.08"/>
+    <rect x="${pad}" y="${pad}" width="${cx100 - pad}" height="${cy100 - pad}" fill="#3b82f6" opacity="0.08"/>
+  `;
+  const labels = `
+    <text x="${(cx100 + W - pad) / 2}" y="${pad + 18}" text-anchor="middle" font-size="13" font-weight="800" fill="#059669">🟢 주도 (Leading)</text>
+    <text x="${(cx100 + W - pad) / 2}" y="${H - pad - 8}" text-anchor="middle" font-size="13" font-weight="800" fill="#d97706">🟡 약화 (Weakening)</text>
+    <text x="${(pad + cx100) / 2}" y="${H - pad - 8}" text-anchor="middle" font-size="13" font-weight="800" fill="#dc2626">🔴 후행 (Lagging)</text>
+    <text x="${(pad + cx100) / 2}" y="${pad + 18}" text-anchor="middle" font-size="13" font-weight="800" fill="#2563eb">🔵 개선 (Improving)</text>
+  `;
+  const axes = `
+    <line x1="${pad}" y1="${cy100}" x2="${W - pad}" y2="${cy100}" stroke="#999" stroke-width="1" stroke-dasharray="4,4"/>
+    <line x1="${cx100}" y1="${pad}" x2="${cx100}" y2="${H - pad}" stroke="#999" stroke-width="1" stroke-dasharray="4,4"/>
+    <rect x="${pad}" y="${pad}" width="${W - 2 * pad}" height="${H - 2 * pad}" fill="none" stroke="#ccc" stroke-width="1"/>
+    <text x="${W - pad}" y="${cy100 - 6}" text-anchor="end" font-size="11" fill="#666">RS-Ratio (상대강세 →)</text>
+    <text x="${cx100 + 6}" y="${pad + 12}" font-size="11" fill="#666">RS-Momentum (↑ 모멘텀)</text>
+  `;
+
+  // 섹터별 trail + 끝 점
+  const palette = ['#ef4444','#f97316','#eab308','#22c55e','#14b8a6','#06b6d4','#3b82f6','#8b5cf6','#ec4899','#f43f5e','#84cc16','#a855f7'];
+  const traces = valid.map((r, i) => {
+    const color = palette[i % palette.length];
+    const pts = r.rrg.trail.map(t => `${sx(t.x).toFixed(1)},${sy(t.y).toFixed(1)}`).join(' ');
+    const last = r.rrg.last;
+    const lx = sx(last.x), ly = sy(last.y);
+    return `<g>
+      <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.55"/>
+      <circle cx="${lx}" cy="${ly}" r="7" fill="${color}" stroke="#fff" stroke-width="2">
+        <title>${r.emoji} ${r.name} · ${QUADRANT_META[r.rrg.quadrant].label}
+RS-Ratio: ${last.x.toFixed(2)}
+RS-Momentum: ${last.y.toFixed(2)}</title>
+      </circle>
+      <text x="${lx + 10}" y="${ly + 4}" font-size="11" font-weight="700" fill="${color}">${r.emoji}${r.name}</text>
+    </g>`;
+  }).join('');
+
+  wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;margin:0 auto;">
+    ${quadrants}${axes}${labels}${traces}
+  </svg>`;
+}
+
+// ── 섹터 모멘텀 보드 ────────────────────────────────────
+function renderMomentumBoard(results) {
+  const body = document.getElementById('rb-momentum-body');
+  if (!body) return;
+  const sorted = [...results].sort((a, b) => (b.returns?.d63 ?? -999) - (a.returns?.d63 ?? -999));
+  body.innerHTML = sorted.map(r => {
+    if (r.error) return `<tr><td>${r.emoji} ${escapeHtml(r.name)}</td><td colspan="6" style="text-align:center;color:var(--text2);font-size:.8rem;">데이터 없음 (${escapeHtml(r.error)})</td></tr>`;
+    const cell = v => {
+      if (v == null) return '<td style="text-align:right;color:var(--text2);">-</td>';
+      const cls = v > 0 ? 'up-chip' : v < 0 ? 'down-chip' : 'money-neutral';
+      return `<td style="text-align:right;"><span class="${cls}" style="font-size:.78rem;">${v >= 0 ? '+' : ''}${v.toFixed(2)}%</span></td>`;
+    };
+    const q = r.rrg ? QUADRANT_META[r.rrg.quadrant] : null;
+    const qCell = q ? `<td style="text-align:center;"><span class="${q.cls}" style="font-size:.78rem;font-weight:800;">${q.emoji} ${q.label}</span></td>` : '<td style="text-align:center;color:var(--text2);">-</td>';
+    return `<tr>
+      <td style="font-weight:700;">${r.emoji} ${escapeHtml(r.name)}<div style="font-size:.7rem;color:var(--text2);font-weight:500;">${r.code}</div></td>
+      ${cell(r.returns?.d5)}${cell(r.returns?.d21)}${cell(r.returns?.d63)}${cell(r.returns?.d126)}${cell(r.returns?.d252)}
+      ${qCell}
+    </tr>`;
+  }).join('');
+}
+
+// ── 내 포트폴리오 섹터 가중치 ──────────────────────────
+function computePortfolioSectorWeights() {
+  const rows = (_acctRows || []).filter(a => stockRegionForCode(a.code) === 'korea');
+  if (!rows.length) return null;
+  const sectorEval = {};
+  let totalEval = 0;
+  let unmapped = 0;
+  for (const a of rows) {
+    const ev = (a.price && a.qty) ? a.qty * a.price : (a.eval || 0);
+    if (!ev) continue;
+    totalEval += ev;
+    const code = normalizeStockCode(a.code);
+    const sectorCode = STOCK_TO_SECTOR[code];
+    if (sectorCode) {
+      sectorEval[sectorCode] = (sectorEval[sectorCode] || 0) + ev;
+    } else {
+      unmapped += ev;
+    }
+  }
+  if (!totalEval) return null;
+  return { sectorEval, totalEval, unmapped };
+}
+
+function renderPortfolioSector(results) {
+  const wrap = document.getElementById('rb-portfolio-wrap');
+  if (!wrap) return;
+  const pw = computePortfolioSectorWeights();
+  if (!pw) {
+    wrap.innerHTML = '<div class="mp-empty"><div class="ei">📂</div><p>한국 보유 종목이 없습니다. 계좌별 현황에 입력하면 섹터 가중치가 표시됩니다.</p></div>';
+    return;
+  }
+  const rows = results.map(r => {
+    const myEval = pw.sectorEval[r.code] || 0;
+    const myWeight = pw.totalEval > 0 ? (myEval / pw.totalEval) * 100 : 0;
+    const q = r.rrg ? QUADRANT_META[r.rrg.quadrant] : null;
+    return { ...r, myEval, myWeight, q };
+  }).sort((a, b) => b.myWeight - a.myWeight);
+
+  const unmappedPct = pw.totalEval > 0 ? (pw.unmapped / pw.totalEval) * 100 : 0;
+  const maxW = Math.max(...rows.map(r => r.myWeight), 1);
+  wrap.innerHTML = `<div class="sheet-wrap"><table class="sheet-table">
+    <thead><tr><th>섹터</th><th style="text-align:right">평가금액</th><th style="text-align:right">내 비중</th><th>분포</th><th style="text-align:center">현재 분면</th></tr></thead>
+    <tbody>
+      ${rows.filter(r => r.myWeight > 0).map(r => `<tr>
+        <td style="font-weight:700;">${r.emoji} ${escapeHtml(r.name)}</td>
+        <td style="text-align:right;">${Math.round(r.myEval).toLocaleString('ko-KR')}원</td>
+        <td style="text-align:right;font-weight:800;">${r.myWeight.toFixed(1)}%</td>
+        <td><div style="background:#eee;border-radius:6px;height:8px;overflow:hidden;"><div style="background:linear-gradient(90deg,#3b82f6,#10b981);height:100%;width:${(r.myWeight / maxW * 100).toFixed(1)}%;"></div></div></td>
+        <td style="text-align:center;">${r.q ? `<span class="${r.q.cls}" style="font-size:.78rem;font-weight:800;">${r.q.emoji} ${r.q.label}</span>` : '<span style="color:var(--text2);">-</span>'}</td>
+      </tr>`).join('')}
+      ${unmappedPct > 0 ? `<tr><td colspan="5" style="font-size:.78rem;color:var(--text2);padding:8px;">⚠️ 섹터 미매핑: ${unmappedPct.toFixed(1)}% (해외/소형주 등)</td></tr>` : ''}
+    </tbody>
+  </table></div>`;
+}
+
+// ── 추천 엔진 ────────────────────────────────────────
+function renderRecommendations(results) {
+  const wrap = document.getElementById('rb-recommendations');
+  if (!wrap) return;
+  const pw = computePortfolioSectorWeights();
+  const myWeightOf = code => {
+    if (!pw || !pw.totalEval) return 0;
+    return ((pw.sectorEval[code] || 0) / pw.totalEval) * 100;
+  };
+
+  const scored = results.filter(r => r.rrg).map(r => ({
+    ...r,
+    myWeight: myWeightOf(r.code),
+  }));
+
+  // 매수 후보: improving 또는 leading + 본인 비중 5% 미만
+  const buyCandidates = scored
+    .filter(r => (r.rrg.quadrant === 'improving' || (r.rrg.quadrant === 'leading' && r.rrg.last.y > 102)) && r.myWeight < 5)
+    .sort((a, b) => b.rrg.last.y - a.rrg.last.y)
+    .slice(0, 3);
+
+  // 감축 후보: weakening 또는 lagging + 본인 비중 10% 이상
+  const trimCandidates = scored
+    .filter(r => (r.rrg.quadrant === 'weakening' || r.rrg.quadrant === 'lagging') && r.myWeight > 10)
+    .sort((a, b) => b.myWeight - a.myWeight)
+    .slice(0, 3);
+
+  // 유지: leading + 적정 비중
+  const holdCandidates = scored
+    .filter(r => r.rrg.quadrant === 'leading' && r.myWeight >= 5 && r.myWeight <= 25)
+    .sort((a, b) => b.rrg.last.x - a.rrg.last.x)
+    .slice(0, 3);
+
+  const card = (title, color, items, emptyMsg) => `
+    <div class="card" style="border-left:4px solid ${color};padding:14px;background:var(--card);border:1.5px solid var(--border);border-radius:12px;">
+      <div style="font-weight:900;font-size:1rem;margin-bottom:10px;color:${color};">${title}</div>
+      ${items.length === 0 ? `<div style="font-size:.82rem;color:var(--text2);">${emptyMsg}</div>` : items.map((r, idx, arr) => {
+        const q = QUADRANT_META[r.rrg.quadrant];
+        const isLast = idx === arr.length - 1;
+        const borderStyle = isLast ? '' : 'border-bottom:1px dashed var(--border);';
+        return `<div style="margin-bottom:10px;padding-bottom:10px;${borderStyle}">
+          <div style="font-weight:800;font-size:.95rem;">${r.emoji} ${escapeHtml(r.name)}</div>
+          <div style="font-size:.74rem;color:var(--text2);margin-top:3px;">
+            <span class="${q.cls}" style="font-size:.7rem;">${q.emoji} ${q.label}</span> ·
+            RS-Ratio ${r.rrg.last.x.toFixed(1)} · 모멘텀 ${r.rrg.last.y.toFixed(1)}
+          </div>
+          <div style="font-size:.74rem;color:var(--text2);margin-top:3px;">내 비중 <b>${r.myWeight.toFixed(1)}%</b> · 3개월 ${r.returns?.d63 != null ? (r.returns.d63 >= 0 ? '+' : '') + r.returns.d63.toFixed(1) + '%' : '-'}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  wrap.innerHTML =
+    card('🟢 매수 후보 (저보유 + 모멘텀↑)', '#16794b', buyCandidates, '조건에 맞는 섹터 없음. RRG 차트와 모멘텀 보드를 직접 검토하세요.') +
+    card('🔴 감축 후보 (고보유 + 약세)', '#dc2626', trimCandidates, '본인 고비중 섹터가 모두 강세 분면. 현재 포지션 유지 권장.') +
+    card('🟡 유지 후보 (주도 + 적정 비중)', '#d97706', holdCandidates, '주도 분면의 적정비중 보유 섹터 없음.');
+}
+
+// ── 페이지 진입점 ────────────────────────────────────
+async function initRebalancePage(force = false) {
+  if (_rebalanceLoading) return;
+  const statusEl = document.getElementById('rb-status');
+  const chartWrap = document.getElementById('rb-chart-wrap');
+  if (statusEl) statusEl.textContent = '데이터 불러오는 중… (12개 섹터 ETF + 벤치마크 일봉 365일)';
+  if (chartWrap) chartWrap.innerHTML = '<div class="mp-empty"><div class="ei">⏳</div><p>섹터 ETF 일봉 데이터 로딩 중…</p></div>';
+  _rebalanceLoading = true;
+  try {
+    const cache = await fetchRebalanceData(force);
+    const results = cache.results;
+    const valid = results.filter(r => r.rrg);
+    const leadingN = valid.filter(r => r.rrg.quadrant === 'leading').length;
+    const improvingN = valid.filter(r => r.rrg.quadrant === 'improving').length;
+    document.getElementById('rb-sector-count').textContent = `${valid.length} / ${results.length}`;
+    document.getElementById('rb-leading-count').textContent = leadingN;
+    document.getElementById('rb-improving-count').textContent = improvingN;
+    document.getElementById('rb-updated').textContent = cache.bench?.lastBar?.date || '-';
+    renderRRGChart(results);
+    renderMomentumBoard(results);
+    renderPortfolioSector(results);
+    renderRecommendations(results);
+    if (statusEl) {
+      const skipped = results.length - valid.length;
+      statusEl.textContent = `기준일 ${cache.bench?.lastBar?.date || '-'} · 벤치마크 ${cache.bench.name} (${cache.bench.code})${skipped ? ` · ${skipped}개 섹터 데이터 부족으로 제외` : ''}`;
+    }
+  } catch (e) {
+    if (chartWrap) chartWrap.innerHTML = `<div class="mp-empty"><div class="ei">⚠️</div><p>데이터 로드 실패: ${escapeHtml(e.message || String(e))}</p></div>`;
+    if (statusEl) statusEl.textContent = '로드 실패. 재계산 버튼으로 재시도하세요.';
+  } finally {
+    _rebalanceLoading = false;
+  }
+}
+
+async function rerunRebalance() {
+  _rebalanceCache.savedAt = 0;
+  await initRebalancePage(true);
 }
 
 // ── Wilder BUY 페이지 ────────────────────────────────────
