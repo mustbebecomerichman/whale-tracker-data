@@ -70,10 +70,9 @@ whale tracker pro/
 
 ---
 
-## 로컬 개발 환경 세팅
+## 새 PC에서 즉시 복원 (PC 교체 시)
 
-새 PC에서 시작할 때:
-
+### 1. 저장소 클론
 ```powershell
 # Windows
 git clone https://github.com/mustbebecomerichman/whale-tracker-data.git "whale tracker pro"
@@ -88,6 +87,23 @@ cd "whale tracker pro"
 bash setup.sh
 ```
 
+### 2. Cloudflare/KIS 환경변수는 이미 클라우드 측에 저장됨
+- Cloudflare Pages env vars는 **서버 측에 영구 저장** — PC와 무관. 새 PC에서 바로 사용 가능
+- 로컬 작업은 코드 수정만 하면 됨 (앱 키/시크릿 로컬에 보관 불필요)
+
+### 3. Claude Code 사용 시
+- 이 `CLAUDE.md`가 모든 핵심 context 포함 — 첫 메시지에서 자동 로드
+- 추가 컨텍스트(사용자 선호, 진행 중 결정 등)는 git 외부에 있는 메모리 파일에 보관:
+  `~/.claude/projects/C--Users-USER-whale-tracker-pro/memory/` — PC별로 다시 학습됨 (사용자가 명시적으로 알려주거나 Claude가 관찰하면 자동 축적)
+- **즉시 복원에 필요한 모든 사실은 이 `CLAUDE.md`에 명시되어 있어야 함** — 메모리 파일은 보조용
+
+### 4. 배포 워크플로우 확인
+```bash
+git remote -v          # origin = mustbebecomerichman/whale-tracker-data
+gh auth status         # GitHub CLI 인증 필요 (PR 생성/머지용)
+```
+PR 생성/머지는 `gh pr create` + `gh pr merge --merge --delete-branch=false` 패턴 사용. Cloudflare Pages가 main push를 감지해 자동 배포.
+
 ---
 
 ## 보안 규칙 (Claude가 반드시 지켜야 할 사항)
@@ -100,29 +116,87 @@ bash setup.sh
 
 ---
 
-## 현재 작업 상태 (2026-05-09 기준)
+## 전략 방향 (2026-05-14 결정)
 
-### 완료된 작업
-- [x] 모바일 UI (컴팩트 헤더, 바텀 네비, 아이콘 기반 포트폴리오)
-- [x] PWA 기반 (manifest, sw.js, icons)
-- [x] Cloudflare Pages 보안 헤더 (`_headers`)
-- [x] AdSense/AdMob 스캐폴딩 (비활성화 상태, 실제 ID 발급 후 활성화)
-- [x] Play Store 출시 계획 문서 완성
-- [x] 포트폴리오 자산 분류 개선
+**비공개/승인제 서비스로 전환**. 공개 출시/광고 수익 모델 폐기. Owner 본인 + 소수 승인된 사용자만 접근.
+- AdSense/AdMob 코드는 비활성 상태로 잔존 — 향후 별도 PR로 완전 제거 예정
+- Play Store 출시 문서 (`docs/android-store-and-ads.md`) — 보류 처리 필요
+- 모든 민감 기능 (KIS 자동 연동 등)은 `requireAdmin` 가드로 본인 전용
 
-### 진행 중 / 대기 중
-- [ ] Google Play Store 등록 (패키지명, 서명 SHA-256 확보 필요)
-- [ ] `assetlinks.json` 실제 값으로 배포 (플레이스홀더 → 실제 값)
-- [ ] AdSense 승인 → 실제 `ca-pub-...` ID로 교체
-- [ ] AdMob 앱 등록 → `app-ads.txt` 실제 값으로 교체
-- [ ] Firebase Cloud Functions 추가 개발
+---
 
-### Owner 입력 필요
-- Google Play 패키지명 (예: `com.whaletracker.pro`)
-- Android 서명 SHA-256 지문
-- Play Store 그래픽 (앱 아이콘, 피처 그래픽, 스크린샷)
-- AdSense 퍼블리셔 ID / 광고 슬롯 ID
-- AdMob 앱 ID / 광고 유닛 ID
+## KIS 한국투자증권 자동 연동 (2026-05-14 배포 완료)
+
+**관리자 본인의 한투 2계좌를 백엔드에서 직접 조회** — 잔고/거래내역 자동 import.
+
+### 계좌 구성 (코드 hardcoded — `functions/api/kis-*.js`의 `getKisAccounts()`)
+| 계좌 | 번호 | 별도 KIS 앱 키 사용 |
+|------|------|-------------------|
+| ISA | `64635355-01` | 기본 `KIS_APP_KEY` / `KIS_APP_SECRET` |
+| 위탁 | `74118276-01` | `KIS_APP_KEY_2` / `KIS_APP_SECRET_2` |
+
+`env.KIS_ACCOUNTS` JSON으로 override 가능.
+
+### 엔드포인트
+- `/api/kis-balance` — 국내(`TTTC8434R`) + 해외(`TTTS3012R`, NASD/NYSE/AMEX 순회) 잔고 통합
+- `/api/kis-transactions` — 일별 주문체결조회(`TTTC8001R`), 90일 청크 자동 분할, `?year=YYYY` 지원
+- `/api/kis-price` — 시세 (앱 키만으로 동작, 계좌 불필요)
+
+### 가드
+- 두 API 모두 `requireFirebaseUser` + `rejectUntrustedOrigin` + `requireAdmin(auth.user, env)`
+- `ADMIN_EMAIL` env var로 허용 이메일 지정 (기본 `smmoon2030@gmail.com`)
+
+### 토큰 캐싱
+`_tokenMem` Map + KV (`kis-access-token-v2:<appKey 끝8자>`)로 앱별 분리
+
+### 프론트 dedup 정책
+KIS 연동 시 동일 종목 코드의 기존 `_acctRows` 행은 brokerage 무관하게 모두 삭제 후 KIS 데이터로 교체. 비-KIS 증권사 종목 (미래에셋 등)은 KIS가 안 가져오므로 자동 보존.
+
+### KIS 연동 결과 배너
+계좌별 현황 섹션 **하단** (acct-split-grid 아래)에 표시. KIS 앱 기준 자산 대조표 (계좌별 평가금액 + 예수금 + 합계) 포함.
+
+---
+
+## Cloudflare Pages 환경변수 (운영 필수)
+
+`dash.cloudflare.com` → Workers & Pages → `whale-tracker-data` → Settings → Environment variables → Production:
+
+| 변수명 | 필수 | 용도 |
+|--------|------|------|
+| `KIS_APP_KEY` | ✓ | ISA 계좌용 KIS App Key |
+| `KIS_APP_SECRET` | ✓ | ISA 계좌용 KIS App Secret |
+| `KIS_APP_KEY_2` | ✓ | 위탁 계좌용 KIS App Key (별도 앱) |
+| `KIS_APP_SECRET_2` | ✓ | 위탁 계좌용 KIS App Secret |
+| `ADMIN_EMAIL` | (선택) | 본 엔드포인트 허용 이메일. 기본 `smmoon2030@gmail.com` |
+| `KIS_MOCK` | (선택) | `"true"`면 모의투자 서버 사용 |
+| `KIS_ACCOUNTS` | (선택) | JSON으로 계좌 목록 override |
+
+**환경변수 추가 후 재배포 필요** (자동 안 됨): Deployments 탭 → 최신 → ⋯ → **Retry deployment**.
+
+⚠️ **API 키를 채팅/코드/커밋/문서 어디에도 평문 저장 금지.** 환경변수 이름만 참조.
+
+---
+
+## 데이터 표시 규칙
+
+- **KRW 금액**: 항상 `Math.round()` 적용 (`.999/.001` 트레일링 금지). `formatMoneyByCode`가 처리.
+- **합계 footer**: 단일 변환 통합값만 표시 (예: `₩127,326,532`). breakdown은 `title` 속성 hover 툴팁.
+- **Sheet 테이블** (`#acct-table`, `#sheet-table`, `#div-table`): 모바일 ≤720px에서도 `display:table` 유지. **카드 그리드 변환 금지** (한 줄 표시).
+- **USD 환산**: `≈ $X` 형태로 KRW 아래 별도 줄 (`split-money` 클래스).
+- **페이지 max-width**: `main { max-width: 1400px }` — 와이드 모니터에서 스크롤 없이 표시.
+
+---
+
+## 진행 중 / 대기 작업
+
+- [ ] **비공개/승인제 전환** (단계별 PR): Firestore `users/{uid}.approved` + 관리자 패널 토글 + 차단 화면 + `firestore.rules` 강화
+- [ ] **광고 코드 완전 제거**: AdSense/AdMob, `ads.txt`, `app-ads.txt` (비공개 전환에 맞춰)
+- [ ] **카카오톡 알림 백엔드**: Wilder 매매 후보 시트와 연동, Kakao OpenAPI "나에게 보내기" (사용자가 [developers.kakao.com](https://developers.kakao.com)에서 앱 등록 후 가능)
+- [ ] **Play Store 문서 보류 표시** (`docs/android-store-and-ads.md`)
+
+### 결정된 보류 사항
+- **미래에셋 등 비-KIS 증권사 자동 연동**: 안 함. 수동 입력 유지 (2026-05-14 사용자 결정).
+- **배당수익 자동 연동**: KIS Open API에 배당금 수령 조회 없음. 수동 입력 유지.
 
 ---
 
