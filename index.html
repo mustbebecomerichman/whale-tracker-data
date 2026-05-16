@@ -5223,6 +5223,39 @@ function diagnoseHolding({ wilder, sector, rate }) {
   return { tag: '⚪ 유지', priority: 7, color: '#666', reason: '명확한 신호 없음' };
 }
 
+// 네이버 섹터 룩업 (세션 캐시 + 백엔드 KV)
+const _naverSectorCache = {};
+async function resolveSectorCodeWithNaver(code) {
+  if (!code) return null;
+  // 1) 로컬 STOCK_TO_SECTOR 우선
+  if (STOCK_TO_SECTOR[code]) return { sectorCode: STOCK_TO_SECTOR[code], source: 'local' };
+  // 2) 세션 캐시
+  if (_naverSectorCache[code] !== undefined) return _naverSectorCache[code];
+  // 3) 백엔드 호출
+  try {
+    const res = await apiFetch(`/api/naver-sector?code=${encodeURIComponent(code)}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    let result;
+    if (data.mapped?.code) {
+      result = {
+        sectorCode: data.mapped.code,
+        source: 'naver',
+        naverIndustry: data.industryName,
+        matchedKeyword: data.mapped.matchedKeyword,
+      };
+    } else {
+      // 매핑 실패도 캐시 (반복 호출 방지)
+      result = { sectorCode: null, source: 'naver-unmapped', naverIndustry: data.industryName || data.error || '' };
+    }
+    _naverSectorCache[code] = result;
+    return result;
+  } catch (e) {
+    _naverSectorCache[code] = { sectorCode: null, source: 'error', error: e.message };
+    return _naverSectorCache[code];
+  }
+}
+
 async function buildHoldingsAnalysis(results) {
   const rows = (_acctRows || []).filter(a => normalizeStockCode(a.code) && stockRegionForCode(a.code) === 'domestic');
   const sectorMap = new Map(results.map(r => [r.code, r]));
@@ -5232,7 +5265,9 @@ async function buildHoldingsAnalysis(results) {
     const code = normalizeStockCode(a.code);
     if (seen.has(code)) continue;
     seen.add(code);
-    const sectorCode = STOCK_TO_SECTOR[code];
+    // 섹터 매핑: 로컬 STOCK_TO_SECTOR → 실패 시 네이버 자동 룩업
+    const sectorResolved = await resolveSectorCodeWithNaver(code);
+    const sectorCode = sectorResolved?.sectorCode || null;
     const sector = sectorCode ? sectorMap.get(sectorCode) : null;
     const ev = (a.price && a.qty) ? a.qty * a.price : (a.eval || 0);
     const pur = (a.avgBuy && a.qty) ? a.qty * a.avgBuy : (a.purchase || 0);
@@ -5248,8 +5283,10 @@ async function buildHoldingsAnalysis(results) {
       ev, pur, rate,
       brokerage: a.brokerage || '',
       sectorCode,
-      sectorName: sector?.name || '미매핑',
+      sectorName: sector?.name || (sectorResolved?.naverIndustry ? `${sectorResolved.naverIndustry} (미매핑)` : '미매핑'),
       sectorEmoji: sector?.emoji || '❓',
+      sectorSource: sectorResolved?.source || 'unknown',
+      naverIndustry: sectorResolved?.naverIndustry || null,
       quadrant: sector?.rrg?.quadrant || null,
       wilderSignal: wilder?.final || null,
       wilderError: wilder?.error || null,
@@ -5330,7 +5367,7 @@ function renderMyHoldingsAnalysis(holdings) {
         ` : '';
         return `<tr style="cursor:pointer;" onclick="showHoldingDetail('${escapeJsAttr(h.code)}')">
           <td style="font-weight:700;">${escapeHtml(h.name)}<div style="font-size:.7rem;color:var(--text2);font-weight:500;">${h.code} · ${escapeHtml(h.brokerage || '-')}</div></td>
-          <td style="text-align:center;font-size:.78rem;">${h.sectorEmoji} ${escapeHtml(h.sectorName)}</td>
+          <td style="text-align:center;font-size:.78rem;">${h.sectorEmoji} ${escapeHtml(h.sectorName)}${h.sectorSource==='naver'?` <span title="네이버 금융에서 자동 매핑 (${escapeAttr(h.naverIndustry||'')})" style="font-size:.6rem;color:var(--text2);">🌐</span>`:''}</td>
           <td style="text-align:center;">${q ? `<span class="${q.cls}" style="font-size:.7rem;font-weight:800;">${q.emoji} ${q.label}</span>` : '<span style="color:var(--text2);font-size:.7rem;">-</span>'}</td>
           <td style="text-align:center;">${sigChip}</td>
           <td style="text-align:right;" class="${rateCls}">${h.rate >= 0 ? '+' : ''}${h.rate.toFixed(2)}%</td>
