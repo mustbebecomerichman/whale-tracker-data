@@ -481,6 +481,12 @@ select.sheet-input{cursor:pointer;}
 .search-result-cell .k{font-size:.72rem;color:var(--text2);font-weight:700;margin-bottom:4px;}
 .search-result-cell .v{font-size:1rem;font-weight:900;color:var(--text);}
 
+/* 종목 검색 탭의 보유 종목 현재가 — 1줄 가로 스크롤 */
+.price-grid.price-grid-inline{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto;gap:10px;padding-bottom:10px;}
+.price-grid.price-grid-inline .price-card{flex:0 0 auto;min-width:200px;}
+.price-grid.price-grid-inline::-webkit-scrollbar{height:8px;}
+.price-grid.price-grid-inline::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+
 /* 거래내역: 계좌별 실현손익 카드 */
 .acct-pnl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;}
 .acct-pnl-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;box-shadow:var(--shadow);}
@@ -1005,9 +1011,6 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <button class="active" onclick="showPage('mypage')">MY자산</button>
       <button onclick="showPage('rebalance')">🔄 리밸런싱</button>
       <button onclick="showPage('search')">🔍 신규 종목 서치</button>
-      <button onclick="showPage('national')">국민연금</button>
-      <button onclick="showPage('alert')">대량보유</button>
-      <button onclick="showPage('legend')">투자전설</button>
       <button id="admin-nav-btn" style="display:none" onclick="showPage('admin')">⚙ 관리자</button>
     </nav>
     <div class="hdr-right">
@@ -1030,6 +1033,9 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     <button class="search-subnav-btn active" data-tab="search" onclick="showSearchTab('search')">🔎 종목 검색</button>
     <button class="search-subnav-btn" data-tab="wilder" onclick="showSearchTab('wilder')">🧮 Wilder BUY</button>
     <button class="search-subnav-btn" data-tab="nps" onclick="showSearchTab('nps')">📊 퀀트 스크리너</button>
+    <button class="search-subnav-btn" data-tab="national" onclick="showSearchTab('national')">🏦 국민연금</button>
+    <button class="search-subnav-btn" data-tab="alert" onclick="showSearchTab('alert')">📢 대량보유</button>
+    <button class="search-subnav-btn" data-tab="legend" onclick="showSearchTab('legend')">👑 투자전설</button>
   </div>
   <div id="search-tab-search-content">
     <div class="section">
@@ -1044,7 +1050,61 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
           style="width:100%;font-size:1rem;padding:12px 14px;border:2px solid var(--border);border-radius:10px;"/>
         <div id="search-stock-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:10px;margin-top:4px;max-height:280px;overflow-y:auto;box-shadow:var(--shadow-md);z-index:100;"></div>
       </div>
-      <div id="search-stock-result"><div class="mp-empty"><div class="ei">🔎</div><p>종목을 검색하면 가격·Wilder 시그널·섹터·트레이딩 플랜이 표시됩니다.</p></div></div>
+      <div id="search-stock-result"><div class="mp-empty"><div class="ei">🔎</div><p>종목을 검색하면 가격·Wilder 시그널·섹터·국민연금 동향·트레이딩 플랜이 표시됩니다.</p></div></div>
+    </div>
+
+    <!-- 보유 종목 현재가 (Wilder 페이지에서 이동, 1줄 가로 스크롤) -->
+    <div class="section search-tab-price-section" id="search-price-section">
+      <div class="section-title">
+        <div class="section-title-left">📈 보유 종목 현재가
+          <span class="badge" id="price-last-update">조회 전</span>
+          <span class="badge" id="price-api-status">API 대기</span>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="fetchAllPrices()">🔄 새로고침</button>
+      </div>
+      <div class="price-grid price-grid-inline" id="price-grid">
+        <div class="price-card price-card-ghost" aria-hidden="true">
+          <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
+          <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
+        </div>
+      </div>
+      <div class="stock-detail-panel" id="stock-detail-panel"></div>
+    </div>
+
+    <!-- 매매 후보 (Wilder 페이지에서 이동) -->
+    <div class="section">
+      <div class="section-title">
+        <div class="section-title-left">🎯 매매 후보
+          <span class="badge" id="watch-count">0건</span>
+          <span class="badge" style="background:#fff7e0;color:#b07900;border-color:#f4d685;">📲 카톡 알림 준비중</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="fetchAndUpdateWatchPrices()">📈 현재가 갱신</button>
+          <button class="btn btn-primary btn-sm" onclick="addWatchRow()">＋ 후보 추가</button>
+        </div>
+      </div>
+      <p style="font-size:.78rem;color:var(--text2);line-height:1.55;margin:0 0 10px;">
+        관심 종목과 목표가/매매 시그널 임계치를 등록해두면, 추후 카카오톡 "나에게 보내기"로 자동 알림이 전송됩니다.
+        현재는 시트 저장과 시그널/현재가 표시만 동작하며, 백엔드 연동 후 알림이 활성화됩니다.
+      </p>
+      <div class="sheet-wrap">
+        <table class="sheet-table" id="watch-table">
+          <thead><tr>
+            <th style="width:34px">#</th>
+            <th>종목코드</th>
+            <th>종목명</th>
+            <th class="calc-col">현재가</th>
+            <th>목표가</th>
+            <th class="calc-col">갭(%)</th>
+            <th style="width:88px">RSI 임계</th>
+            <th style="width:96px">시그널 종류</th>
+            <th class="calc-col" style="width:80px">Wilder</th>
+            <th style="width:64px;text-align:center">알림</th>
+            <th>메모</th>
+          </tr></thead>
+          <tbody id="watch-body"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -1585,65 +1645,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     <div class="hero-stat"><div class="num" id="wilder-watch-count">0개</div><div class="lbl">관찰 대상</div></div>
   </div>
 
-  <!-- 매매 후보 시트 (목표가/RSI 임계 도달 시 카카오톡 알림 — 알림 기능은 추후) -->
-  <div class="section">
-    <div class="section-title">
-      <div class="section-title-left">🎯 매매 후보
-        <span class="badge" id="watch-count">0건</span>
-        <span class="badge" style="background:#fff7e0;color:#b07900;border-color:#f4d685;">📲 카톡 알림 준비중</span>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <button class="btn btn-outline btn-sm" onclick="fetchAndUpdateWatchPrices()">📈 현재가 갱신</button>
-        <button class="btn btn-primary btn-sm" onclick="addWatchRow()">＋ 후보 추가</button>
-      </div>
-    </div>
-    <p style="font-size:.78rem;color:var(--text2);line-height:1.55;margin:0 0 10px;">
-      관심 종목과 목표가/매매 시그널 임계치를 등록해두면, 추후 카카오톡 "나에게 보내기"로 자동 알림이 전송됩니다.
-      현재는 시트 저장과 시그널/현재가 표시만 동작하며, 백엔드 연동 후 알림이 활성화됩니다.
-    </p>
-    <div class="sheet-wrap">
-      <table class="sheet-table" id="watch-table">
-        <thead><tr>
-          <th style="width:34px">#</th>
-          <th>종목코드</th>
-          <th>종목명</th>
-          <th class="calc-col">현재가</th>
-          <th>목표가</th>
-          <th class="calc-col">갭(%)</th>
-          <th style="width:88px">RSI 임계</th>
-          <th style="width:96px">시그널 종류</th>
-          <th class="calc-col" style="width:80px">Wilder</th>
-          <th style="width:64px;text-align:center">알림</th>
-          <th>메모</th>
-        </tr></thead>
-        <tbody id="watch-body"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 보유 종목 현재가 (MY자산에서 머지) — 보유종목 탭에서만 표시 -->
-  <div class="section wilder-my-only" id="wilder-price-section">
-    <div class="section-title">
-      <div class="section-title-left">📈 보유 종목 현재가 <span class="badge" id="price-last-update">조회 전</span>
-        <span class="badge" id="price-api-status">API 대기</span></div>
-      <button class="btn btn-outline btn-sm" onclick="fetchAllPrices()">🔄 새로고침</button>
-    </div>
-    <div class="price-grid" id="price-grid">
-      <div class="price-card price-card-ghost" aria-hidden="true">
-        <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
-        <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
-      </div>
-      <div class="price-card price-card-ghost" aria-hidden="true">
-        <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
-        <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
-      </div>
-      <div class="price-card price-card-ghost" aria-hidden="true">
-        <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
-        <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
-      </div>
-    </div>
-    <div class="stock-detail-panel" id="stock-detail-panel"></div>
-  </div>
+  <!-- 매매 후보 + 보유 종목 현재가 섹션은 신규 종목 서치 → 종목 검색 탭으로 이동됨 -->
 
   <div class="section">
     <div class="section-title">
@@ -4928,14 +4930,20 @@ function showSearchTab(name) {
   document.querySelectorAll('.search-subnav-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === name);
   });
-  const wilderEl = document.getElementById('page-wilder');
-  const npsEl    = document.getElementById('page-nps');
-  const searchEl = document.getElementById('search-tab-search-content');
-  if (wilderEl) wilderEl.style.display = name === 'wilder' ? 'block' : 'none';
-  if (npsEl)    npsEl.style.display    = name === 'nps' ? 'block' : 'none';
-  if (searchEl) searchEl.style.display = name === 'search' ? 'block' : 'none';
+  const targets = {
+    search:   'search-tab-search-content',
+    wilder:   'page-wilder',
+    nps:      'page-nps',
+    national: 'page-national',
+    alert:    'page-alert',
+    legend:   'page-legend',
+  };
+  Object.entries(targets).forEach(([tabName, elId]) => {
+    const el = document.getElementById(elId);
+    if (el) el.style.display = (tabName === name) ? 'block' : 'none';
+  });
   if (name === 'wilder') initWilderPage();
-  // nps 는 페이지 자체가 자동 렌더 (초기화 함수 없음, S_QUANT 로드 시 함께)
+  // nps/national/alert/legend 는 페이지 자체가 자동 렌더 (S_QUANT/S_NPS 등 로드 시 함께)
 }
 window.showSearchTab = showSearchTab;
 
@@ -5024,6 +5032,19 @@ function onSearchStockKey(ev, input) {
 window.onSearchStockInput = onSearchStockInput;
 window.onSearchStockKey = onSearchStockKey;
 
+// 국민연금 보유 룩업 (S_NPS + runtime _npsAll 병합)
+function lookupNpsHolding(code) {
+  const clean = normalizeStockCode(code);
+  if (!clean) return null;
+  const pools = [_npsAll, _npsOverseas, S_NPS, S_OVS];
+  for (const pool of pools) {
+    if (!Array.isArray(pool)) continue;
+    const found = pool.find(x => normalizeStockCode(x.code || x.ticker || '') === clean);
+    if (found) return found;
+  }
+  return null;
+}
+
 async function selectSearchStock(code, name) {
   const cleanCode = normalizeStockCode(code);
   const sug = document.getElementById('search-stock-suggest');
@@ -5033,18 +5054,19 @@ async function selectSearchStock(code, name) {
   const result = document.getElementById('search-stock-result');
   if (!result) return;
   const isOverseas = stockRegionForCode(cleanCode) === 'overseas';
-  result.innerHTML = `<div class="mp-empty"><div class="ei">⏳</div><p>${cleanCode} 분석 중... (가격 · Wilder · 섹터)</p></div>`;
+  result.innerHTML = `<div class="mp-empty"><div class="ei">⏳</div><p>${cleanCode} 분석 중... (가격 · Wilder · 섹터 · 국민연금)</p></div>`;
   // 병렬 조회: 가격, Wilder, 섹터(한국만)
   const [quote, wilder, sector] = await Promise.all([
     fetchQuoteForCode(cleanCode).catch(e => ({ error: e.message })),
     fetchWilderForCode(cleanCode).catch(e => ({ error: e.message })),
     isOverseas ? Promise.resolve(null) : resolveSectorCodeWithNaver(cleanCode).catch(e => null),
   ]);
-  renderSearchResult({ code: cleanCode, name, quote, wilder, sector, isOverseas });
+  const nps = lookupNpsHolding(cleanCode);
+  renderSearchResult({ code: cleanCode, name, quote, wilder, sector, isOverseas, nps });
 }
 window.selectSearchStock = selectSearchStock;
 
-function renderSearchResult({ code, name, quote, wilder, sector, isOverseas }) {
+function renderSearchResult({ code, name, quote, wilder, sector, isOverseas, nps }) {
   const result = document.getElementById('search-stock-result');
   if (!result) return;
   const stockName = quote?.name || name || code;
@@ -5100,14 +5122,30 @@ function renderSearchResult({ code, name, quote, wilder, sector, isOverseas }) {
       </div>
     </div>
   ` : '';
-  // Wilder 상세 (RSI/HBOP/LBOP)
+  // Wilder 상세 (RSI/HBOP/LBOP) + 국민연금 보유
   const w = wilder && !wilder.error ? wilder : null;
-  const wilderDetail = w ? `
+  // NPS 셀 — 보유 비율 + 최근 변동 (delta) + 추세
+  let npsCell = '';
+  if (nps) {
+    const delta = Number(nps.delta) || 0;
+    const trend = nps.trend === 'increase' ? '🟢 순매수↑' : nps.trend === 'decrease' ? '🔴 순매도↓' : '⚪ 보합';
+    const deltaCls = delta > 0 ? 'up' : delta < 0 ? 'down' : 'money-neutral';
+    const pctTxt = nps.pct ? `${nps.pct.toFixed(2)}%` : '';
+    npsCell = `<div class="search-result-cell" style="background:#fffbeb;border-color:#fde68a;">
+      <div class="k">🏦 국민연금 ${pctTxt ? `보유 ${pctTxt}` : ''}</div>
+      <div class="v ${deltaCls}" style="font-size:.85rem;">${trend} ${delta !== 0 ? `(${delta>=0?'+':''}${delta.toFixed(2)}pt)` : ''}</div>
+      ${nps.shares ? `<div style="font-size:.7rem;color:var(--text2);margin-top:2px;">${escapeHtml(nps.shares)}</div>` : ''}
+    </div>`;
+  }
+  const wilderDetail = (w || nps) ? `
     <div class="search-result-grid">
-      <div class="search-result-cell"><div class="k">RSI(14)</div><div class="v">${w.rsi?.rsi != null ? w.rsi.rsi.toFixed(1) : '-'}</div></div>
-      <div class="search-result-cell"><div class="k">RTS 모드</div><div class="v" style="font-size:.85rem;">${w.rts?.mode === 'TREND' ? '추세' : '박스권'}</div></div>
-      <div class="search-result-cell"><div class="k">HBOP / LBOP</div><div class="v" style="font-size:.85rem;">${w.rts?.hbop?.toFixed(2) || '-'} / ${w.rts?.lbop?.toFixed(2) || '-'}</div></div>
-      <div class="search-result-cell"><div class="k">ASI 누적</div><div class="v" style="font-size:.95rem;">${w.asi?.asi?.toFixed(1) || '-'}</div></div>
+      ${w ? `
+        <div class="search-result-cell"><div class="k">RSI(14)</div><div class="v">${w.rsi?.rsi != null ? w.rsi.rsi.toFixed(1) : '-'}</div></div>
+        <div class="search-result-cell"><div class="k">RTS 모드</div><div class="v" style="font-size:.85rem;">${w.rts?.mode === 'TREND' ? '추세' : '박스권'}</div></div>
+        <div class="search-result-cell"><div class="k">HBOP / LBOP</div><div class="v" style="font-size:.85rem;">${w.rts?.hbop?.toFixed(2) || '-'} / ${w.rts?.lbop?.toFixed(2) || '-'}</div></div>
+        <div class="search-result-cell"><div class="k">ASI 누적</div><div class="v" style="font-size:.95rem;">${w.asi?.asi?.toFixed(1) || '-'}</div></div>
+      ` : ''}
+      ${npsCell}
     </div>
   ` : '';
   result.innerHTML = `
@@ -5136,14 +5174,14 @@ function renderSearchResult({ code, name, quote, wilder, sector, isOverseas }) {
 function showPage(p){
   document.querySelectorAll('.page').forEach(x=>{
     x.classList.remove('active');
-    // search 탭에서 사용 중이던 sub-page 의 인라인 display 초기화
-    if(x.id==='page-wilder'||x.id==='page-nps'){x.style.display='';}
+    // search 탭에서 sub-page 로 사용되는 5개 페이지의 인라인 display 초기화
+    if(['page-wilder','page-nps','page-national','page-alert','page-legend'].includes(x.id)){x.style.display='';}
   });
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   document.body.classList.toggle('mypage-active',p==='mypage');
   const target=document.getElementById('page-'+p);
   if(target)target.classList.add('active');
-  const map={mypage:0,rebalance:1,search:2,national:3,alert:4,legend:5,admin:6};
+  const map={mypage:0,rebalance:1,search:2,admin:3};
   const btns=document.querySelectorAll('nav button');
   if(btns[map[p]]) btns[map[p]].classList.add('active');
   if(p==='admin'){loadUserList();loadChangelog();}
