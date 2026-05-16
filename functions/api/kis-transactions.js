@@ -228,7 +228,12 @@ async function fetchTransactions(env, fromYmd, toYmd, account = {}) {
       if (!code || code === '000000') return;
       const isBuy = String(r.sll_buy_dvsn_cd || '').trim() === '02';
       const price = Number(r.avg_prvs || 0) || Number(r.ord_unpr || 0);
-      const fee = Number(r.tlex_smtl || 0);
+      // 위탁수수료(comm_smtl) 와 제비용합계(tlex_smtl) 분리
+      // tlex_smtl 은 수수료+세금 합산 → 차이가 세금 분
+      const commission = Number(r.comm_smtl || 0);
+      const totalCharges = Number(r.tlex_smtl || 0);
+      const fee = commission > 0 ? commission : totalCharges;
+      const tax = commission > 0 ? Math.max(0, totalCharges - commission) : 0;
       const amount = Number(r.tot_ccld_amt || 0);
       results.push({
         date: isoFromKisDate(r.ord_dt),
@@ -238,6 +243,7 @@ async function fetchTransactions(env, fromYmd, toYmd, account = {}) {
         qty,
         price,
         fee,
+        tax,
         amount,
         orderNo: r.odno || '',
       });
