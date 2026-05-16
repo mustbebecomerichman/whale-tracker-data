@@ -1074,11 +1074,12 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <button class="btn btn-primary btn-sm" onclick="runBreakoutScreener()">▶ 스크리닝 실행</button>
       </div>
       <p style="font-size:.74rem;color:var(--text2);line-height:1.6;margin:0 0 10px;">
-        조건 ① 당일 종가가 직전 60거래일 최고가 돌파 · ② 당일 양봉(종가 &gt; 시가) · ③ 장대양봉(몸통/전체 ≥ 60%) ·
-        ④ 거래대금 충분(국내 ≥ 100억원, 해외 ≥ $50M) · ⑤ 대장주(KOSPI 대형주 + DOW30 + NASDAQ 상위) 한정.
+        조건 ① 종가가 직전 60거래일 최고가 돌파 · ② 양봉(종가 &gt; 시가) · ③ 장대양봉(몸통/전체 ≥ 60%) ·
+        ④ 거래대금 충분(국내 ≥ 100억원, 해외 ≥ $50M) · ⑤ 대장주(KOSPI 대형 + DOW30) 한정.
+        <br>※ 휴장일에는 자동으로 <b>각 시장의 최근 거래일</b> 데이터를 기준으로 검색합니다 (KR/US 별도 기준일).
       </p>
       <div id="search-breakout-result">
-        <div class="mp-empty"><div class="ei">🚀</div><p>스크리닝을 실행하면 오늘 조건을 만족하는 대장주가 표시됩니다.</p></div>
+        <div class="mp-empty"><div class="ei">🚀</div><p>스크리닝을 실행하면 최근 거래일에 조건을 만족하는 대장주가 표시됩니다.</p></div>
       </div>
     </div>
 
@@ -2416,6 +2417,40 @@ const S_PORT={
 // ═══════════════════════════════════════════════════════
 let _npsAll=S_NPS.slice(), _npsOverseas=S_OVS.slice(), _npsFilter='all', _a5All=S_A5.slice();
 let _quantAll=S_QUANT.slice(), _quantFilter='balanced';
+// DOW 30 펀더멘털 데이터셋 (Yahoo Finance 등 공개 자료 기반 근사치, 2026-05 기준)
+// per/pbr/roe/dividend/momentum(6M %)/volatility/debt/volume 0~100 스케일 = 한국 데이터와 동일 의미
+const S_QUANT_DOW=[
+  {code:'AAPL',name:'Apple',market:'DOW',sector:'IT',per:32,pbr:48,roe:160,dividend:.5,momentum:8,volatility:24,debt:65,volume:96,note:'대형 IT'},
+  {code:'MSFT',name:'Microsoft',market:'DOW',sector:'IT',per:34,pbr:11,roe:36,dividend:.7,momentum:15,volatility:22,debt:32,volume:92,note:'클라우드'},
+  {code:'NVDA',name:'NVIDIA',market:'DOW',sector:'반도체',per:48,pbr:42,roe:115,dividend:.03,momentum:55,volatility:42,debt:18,volume:99,note:'AI 가속기'},
+  {code:'JPM',name:'JPMorgan',market:'DOW',sector:'금융',per:13,pbr:1.9,roe:17,dividend:2.3,momentum:18,volatility:21,debt:90,volume:80,note:'대형 은행'},
+  {code:'V',name:'Visa',market:'DOW',sector:'금융',per:32,pbr:14,roe:50,dividend:.7,momentum:10,volatility:18,debt:35,volume:78,note:'결제 네트워크'},
+  {code:'JNJ',name:'Johnson & Johnson',market:'DOW',sector:'바이오',per:24,pbr:6,roe:20,dividend:3.2,momentum:-2,volatility:16,debt:55,volume:60,note:'헬스케어 배당'},
+  {code:'WMT',name:'Walmart',market:'DOW',sector:'생활소비재',per:31,pbr:7,roe:21,dividend:1.0,momentum:24,volatility:18,debt:55,volume:75,note:'소매 디지털화'},
+  {code:'PG',name:'Procter & Gamble',market:'DOW',sector:'생활소비재',per:25,pbr:8,roe:32,dividend:2.4,momentum:5,volatility:16,debt:45,volume:62,note:'필수소비재'},
+  {code:'MA',name:'Mastercard',market:'DOW',sector:'금융',per:35,pbr:60,roe:170,dividend:.6,momentum:11,volatility:19,debt:65,volume:74,note:'결제 네트워크'},
+  {code:'UNH',name:'UnitedHealth',market:'DOW',sector:'바이오',per:18,pbr:4.5,roe:25,dividend:1.6,momentum:-12,volatility:24,debt:55,volume:70,note:'헬스 보험'},
+  {code:'HD',name:'Home Depot',market:'DOW',sector:'생활소비재',per:25,pbr:60,roe:380,dividend:2.4,momentum:6,volatility:21,debt:80,volume:68,note:'주택 리모델링'},
+  {code:'MRK',name:'Merck',market:'DOW',sector:'바이오',per:21,pbr:5.5,roe:25,dividend:3.0,momentum:-8,volatility:21,debt:60,volume:62,note:'제약 대형'},
+  {code:'KO',name:'Coca-Cola',market:'DOW',sector:'생활소비재',per:25,pbr:11,roe:42,dividend:2.9,momentum:7,volatility:14,debt:60,volume:70,note:'배당 귀족'},
+  {code:'MCD',name:"McDonald's",market:'DOW',sector:'생활소비재',per:24,pbr:-30,roe:0,dividend:2.4,momentum:-4,volatility:16,debt:90,volume:62,note:'프랜차이즈'},
+  {code:'CSCO',name:'Cisco',market:'DOW',sector:'IT',per:18,pbr:5,roe:25,dividend:2.9,momentum:6,volatility:18,debt:45,volume:70,note:'네트워크 장비'},
+  {code:'CVX',name:'Chevron',market:'DOW',sector:'에너지화학',per:14,pbr:1.7,roe:13,dividend:4.4,momentum:0,volatility:25,debt:30,volume:68,note:'대형 정유'},
+  {code:'NKE',name:'Nike',market:'DOW',sector:'생활소비재',per:25,pbr:7,roe:30,dividend:2.1,momentum:-22,volatility:28,debt:45,volume:64,note:'스포츠 의류'},
+  {code:'HON',name:'Honeywell',market:'DOW',sector:'중공업',per:22,pbr:8,roe:30,dividend:2.1,momentum:3,volatility:18,debt:55,volume:60,note:'산업 자동화'},
+  {code:'AMGN',name:'Amgen',market:'DOW',sector:'바이오',per:18,pbr:30,roe:130,dividend:3.4,momentum:-5,volatility:22,debt:90,volume:58,note:'바이오테크'},
+  {code:'IBM',name:'IBM',market:'DOW',sector:'IT',per:25,pbr:8,roe:32,dividend:3.0,momentum:32,volatility:20,debt:70,volume:62,note:'AI 컨설팅 전환'},
+  {code:'CRM',name:'Salesforce',market:'DOW',sector:'IT',per:48,pbr:5,roe:11,dividend:.6,momentum:12,volatility:28,debt:25,volume:70,note:'CRM SaaS'},
+  {code:'GS',name:'Goldman Sachs',market:'DOW',sector:'금융',per:14,pbr:1.6,roe:12,dividend:2.2,momentum:25,volatility:24,debt:88,volume:66,note:'IB 대형'},
+  {code:'BA',name:'Boeing',market:'DOW',sector:'중공업',per:60,pbr:-15,roe:0,dividend:0,momentum:-10,volatility:32,debt:95,volume:65,note:'737 회복기'},
+  {code:'AXP',name:'American Express',market:'DOW',sector:'금융',per:18,pbr:6,roe:32,dividend:1.1,momentum:18,volatility:22,debt:80,volume:62,note:'프리미엄 카드'},
+  {code:'MMM',name:'3M',market:'DOW',sector:'중공업',per:14,pbr:5,roe:30,dividend:5.8,momentum:18,volatility:25,debt:85,volume:60,note:'산업 배당'},
+  {code:'DIS',name:'Disney',market:'DOW',sector:'IT',per:35,pbr:1.8,roe:5,dividend:.9,momentum:-2,volatility:26,debt:55,volume:65,note:'스트리밍 흑자'},
+  {code:'CAT',name:'Caterpillar',market:'DOW',sector:'중공업',per:15,pbr:8,roe:55,dividend:1.6,momentum:14,volatility:24,debt:60,volume:60,note:'건설 장비'},
+  {code:'TRV',name:'Travelers',market:'DOW',sector:'금융',per:11,pbr:1.9,roe:18,dividend:1.8,momentum:8,volatility:18,debt:55,volume:50,note:'보험'},
+  {code:'VZ',name:'Verizon',market:'DOW',sector:'IT',per:10,pbr:1.8,roe:18,dividend:6.4,momentum:-2,volatility:14,debt:90,volume:62,note:'통신 고배당'},
+  {code:'SHW',name:'Sherwin-Williams',market:'DOW',sector:'에너지화학',per:33,pbr:25,roe:75,dividend:.9,momentum:5,volatility:20,debt:70,volume:50,note:'페인트 시장 지배'},
+];
 let _legendAll=LEGENDS.slice();
 let _whaleMeta={}, _globalMeta={};
 function formatDataDate(v){
@@ -4987,28 +5022,35 @@ function loadQuantTop5() {
   const ol = document.getElementById('search-quant-top5');
   const status = document.getElementById('search-quant-status');
   if (!ol) return;
-  if (!Array.isArray(_quantAll) || !_quantAll.length) {
-    ol.innerHTML = '<li class="top-rec-empty">퀀트 데이터가 아직 로드되지 않았습니다.</li>';
-    if (status) status.textContent = '데이터 없음';
-    return;
-  }
   try {
-    const scored = scoreQuantRows(_quantAll, _quantFilter || 'balanced', _quantAll).slice(0, 5);
-    if (!scored.length) {
-      ol.innerHTML = '<li class="top-rec-empty">조건을 만족하는 종목이 없습니다.</li>';
-      if (status) status.textContent = '0개';
-      return;
-    }
-    ol.innerHTML = scored.map((d, i) => `
+    const krSource = Array.isArray(_quantAll) && _quantAll.length ? _quantAll : [];
+    const usSource = Array.isArray(S_QUANT_DOW) ? S_QUANT_DOW : [];
+    const method = _quantFilter || 'balanced';
+    const krTop = krSource.length ? scoreQuantRows(krSource, method, krSource).slice(0, 5) : [];
+    const usTop = usSource.length ? scoreQuantRows(usSource, method, usSource).slice(0, 5) : [];
+
+    const renderItem = (d, i, flag) => `
       <li class="top-rec-item" onclick="selectSearchStock('${escapeJsAttr(d.code)}','${escapeJsAttr(d.name)}')">
         <div class="top-rec-rank">${i + 1}</div>
         <div>
-          <div class="top-rec-name">${escapeHtml(d.name)}</div>
+          <div class="top-rec-name">${flag} ${escapeHtml(d.name)}</div>
           <div class="top-rec-meta">${escapeHtml(d.code)} · ${escapeHtml(d.sector || '-')} · PER ${(d.per||0).toFixed(1)} · ROE ${(d.roe||0).toFixed(1)}%</div>
         </div>
         <div class="top-rec-right ${d.score >= 78 ? 'up-chip' : d.score >= 62 ? '' : 'down-chip'}">${d.score}점</div>
-      </li>`).join('');
-    if (status) status.textContent = `상위 ${scored.length}개`;
+      </li>`;
+
+    const krBlock = krTop.length
+      ? `<div style="font-size:.7rem;font-weight:700;color:var(--text2);margin:2px 0 4px;">🇰🇷 KOSPI</div>` +
+        krTop.map((d, i) => renderItem(d, i, '🇰🇷')).join('')
+      : `<div style="font-size:.7rem;font-weight:700;color:var(--text2);margin:2px 0 4px;">🇰🇷 KOSPI</div>
+         <li class="top-rec-empty">데이터 로드 대기 중...</li>`;
+    const usBlock = usTop.length
+      ? `<div style="font-size:.7rem;font-weight:700;color:var(--text2);margin:10px 0 4px;">🇺🇸 DOW 30</div>` +
+        usTop.map((d, i) => renderItem(d, i, '🇺🇸')).join('')
+      : '';
+
+    ol.innerHTML = krBlock + usBlock;
+    if (status) status.textContent = `KR ${krTop.length} · US ${usTop.length}`;
   } catch (e) {
     ol.innerHTML = `<li class="top-rec-empty">로드 실패: ${escapeHtml(e.message || '')}</li>`;
     if (status) status.textContent = '오류';
@@ -5089,19 +5131,18 @@ async function runBreakoutScreener() {
   const result = document.getElementById('search-breakout-result');
   if (!result) return;
   if (status) status.textContent = '실행 중...';
-  result.innerHTML = '<div class="muted-card" style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div><p style="font-size:.78rem;color:var(--text2);margin-top:10px;">대장주 OHLC 조회 중... (30~60초 소요)</p></div>';
+  result.innerHTML = '<div class="muted-card" style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div><p style="font-size:.78rem;color:var(--text2);margin-top:10px;">KOSPI 대형 + DOW30 OHLC 조회 중...</p></div>';
 
-  // 대장주 유니버스
+  // 대장주 유니버스: KOSPI 대형 + DOW30
   const koLeaders = (WILDER_UNIVERSES.kospi || []).slice(0, 50);
-  const usLeadersRaw = [...(WILDER_UNIVERSES.dow || []), ...(WILDER_UNIVERSES.nasdaq || []).slice(0, 50)];
-  const usLeaders = usLeadersRaw.filter((v, i, a) => a.findIndex(x => x.code === v.code) === i);
+  const usLeaders = (WILDER_UNIVERSES.dow || []);
 
   const allLeaders = [
     ...koLeaders.map(x => ({ ...x, market: 'J' })),
     ...usLeaders.map(x => ({ ...x, market: x.market || 'NAS' })),
   ];
 
-  // 30개씩 청크
+  // 25개씩 청크
   const chunkSize = 25;
   const chunks = [];
   for (let i = 0; i < allLeaders.length; i += chunkSize) {
@@ -5128,7 +5169,7 @@ async function runBreakoutScreener() {
     if (status) status.textContent = `조회 ${done}/${allLeaders.length}`;
   }
 
-  // 조건 검사
+  // 조건 검사 — 휴장일 자동 처리: 각 종목의 마지막 bar(=최근 거래일)를 "기준일"로 사용
   const PRIOR_HIGH_WINDOW = 60;
   const MIN_BODY_RATIO = 0.6;
   const MIN_TURNOVER_KRW = 10_000_000_000;
@@ -5140,31 +5181,31 @@ async function runBreakoutScreener() {
     const item = allBars[key] || allBars[`${leader.market === 'J' ? 'J' : 'NAS'}:${leader.code}`];
     if (!item || item.error || !Array.isArray(item.bars) || item.bars.length < PRIOR_HIGH_WINDOW + 2) continue;
     const bars = item.bars;
-    const today = bars[bars.length - 1];
-    if (!today || !Number.isFinite(today.close) || !Number.isFinite(today.open) || !Number.isFinite(today.high) || !Number.isFinite(today.low)) continue;
+    const refBar = bars[bars.length - 1];  // 최근 거래일 (휴장일이면 직전 영업일이 들어옴)
+    if (!refBar || !Number.isFinite(refBar.close) || !Number.isFinite(refBar.open) || !Number.isFinite(refBar.high) || !Number.isFinite(refBar.low)) continue;
 
     const priorBars = bars.slice(Math.max(0, bars.length - 1 - PRIOR_HIGH_WINDOW), bars.length - 1);
     if (!priorBars.length) continue;
     const priorHigh = Math.max(...priorBars.map(b => b.high || 0));
     if (!Number.isFinite(priorHigh) || priorHigh <= 0) continue;
-    if (today.close <= priorHigh) continue;             // ① 전 고점 돌파
-    if (today.close <= today.open) continue;            // ② 당일 양봉
+    if (refBar.close <= priorHigh) continue;             // ① 전 고점 돌파
+    if (refBar.close <= refBar.open) continue;           // ② 양봉
 
-    const range = today.high - today.low;
-    const body = today.close - today.open;
+    const range = refBar.high - refBar.low;
+    const body = refBar.close - refBar.open;
     const bodyRatio = range > 0 ? body / range : 0;
     if (bodyRatio < MIN_BODY_RATIO) continue;            // ③ 장대양봉
 
-    const turnover = today.close * (today.volume || 0);
+    const turnover = refBar.close * (refBar.volume || 0);
     const minTurnover = leader.market === 'J' ? MIN_TURNOVER_KRW : MIN_TURNOVER_USD;
     if (turnover < minTurnover) continue;                // ④ 거래대금
 
-    const breakoutPct = ((today.close - priorHigh) / priorHigh) * 100;
-    const dayChangePct = ((today.close - today.open) / today.open) * 100;
+    const breakoutPct = ((refBar.close - priorHigh) / priorHigh) * 100;
+    const dayChangePct = ((refBar.close - refBar.open) / refBar.open) * 100;
 
     candidates.push({
       ...leader,
-      today,
+      refBar,
       priorHigh,
       breakoutPct,
       dayChangePct,
@@ -5175,19 +5216,35 @@ async function runBreakoutScreener() {
   }
   candidates.sort((a, b) => b._score - a._score);
 
+  // 시장별 최근 거래일 추출 (참고용 배지)
+  const lastDates = { J: '', US: '' };
+  for (const leader of allLeaders) {
+    const key = `${leader.market}:${leader.code}`;
+    const item = allBars[key] || allBars[`${leader.market === 'J' ? 'J' : 'NAS'}:${leader.code}`];
+    if (!item || !Array.isArray(item.bars) || !item.bars.length) continue;
+    const d = item.bars[item.bars.length - 1].date || '';
+    const bucket = leader.market === 'J' ? 'J' : 'US';
+    if (d > (lastDates[bucket] || '')) lastDates[bucket] = d;
+  }
+  const refBadge = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;font-size:.74rem;color:var(--text2);">
+    <span class="status-chip">🇰🇷 KR 기준일: <b>${escapeHtml(lastDates.J || '-')}</b></span>
+    <span class="status-chip">🇺🇸 US 기준일: <b>${escapeHtml(lastDates.US || '-')}</b></span>
+  </div>`;
+
   if (!candidates.length) {
-    result.innerHTML = '<div class="mp-empty"><div class="ei">😔</div><p>오늘 조건을 만족하는 대장주가 없습니다. 시장이 조용하거나 신선 데이터가 아직 반영되지 않았을 수 있습니다.</p></div>';
+    result.innerHTML = refBadge + '<div class="mp-empty"><div class="ei">😔</div><p>최근 거래일 기준으로 조건을 만족하는 대장주가 없습니다.</p></div>';
     if (status) status.textContent = '0개';
     return;
   }
 
-  result.innerHTML = `<div class="sheet-wrap"><table class="sheet-table">
+  result.innerHTML = refBadge + `<div class="sheet-wrap"><table class="sheet-table">
     <thead><tr>
       <th style="width:32px">#</th>
       <th>종목명</th>
       <th>코드</th>
       <th>시장</th>
-      <th class="calc-col">현재가</th>
+      <th>기준일</th>
+      <th class="calc-col">종가</th>
       <th class="calc-col">전고점</th>
       <th class="calc-col">돌파(%)</th>
       <th class="calc-col">당일(%)</th>
@@ -5200,7 +5257,8 @@ async function runBreakoutScreener() {
         <td>${escapeHtml(c.name)}</td>
         <td>${escapeHtml(c.code)}</td>
         <td>${c.market === 'J' ? '🇰🇷 KR' : '🇺🇸 US'}</td>
-        <td class="up-chip">${formatMoneyByCode(c.today.close, c.code)}</td>
+        <td style="font-size:.74rem;color:var(--text2);">${escapeHtml(c.refBar.date || '-')}</td>
+        <td class="up-chip">${formatMoneyByCode(c.refBar.close, c.code)}</td>
         <td>${formatMoneyByCode(c.priorHigh, c.code)}</td>
         <td class="up-chip">+${c.breakoutPct.toFixed(2)}%</td>
         <td class="up-chip">+${c.dayChangePct.toFixed(2)}%</td>
@@ -5312,6 +5370,16 @@ function lookupNpsHolding(code) {
   return null;
 }
 
+async function fetchStockDetail(code) {
+  try {
+    const res = await apiFetch('/api/stock-detail?code=' + encodeURIComponent(code));
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  } catch (e) {
+    return { error: e.message || String(e) };
+  }
+}
+
 async function selectSearchStock(code, name) {
   const cleanCode = normalizeStockCode(code);
   const sug = document.getElementById('search-stock-suggest');
@@ -5321,100 +5389,98 @@ async function selectSearchStock(code, name) {
   const result = document.getElementById('search-stock-result');
   if (!result) return;
   const isOverseas = stockRegionForCode(cleanCode) === 'overseas';
-  result.innerHTML = `<div class="mp-empty"><div class="ei">⏳</div><p>${cleanCode} 분석 중... (가격 · Wilder · 섹터 · 국민연금)</p></div>`;
-  // 병렬 조회: 가격, Wilder, 섹터(한국만)
-  const [quote, wilder, sector] = await Promise.all([
+  result.innerHTML = `<div class="mp-empty"><div class="ei">⏳</div><p>${cleanCode} 핵심 지표 조회 중...</p></div>`;
+  const [quote, detail] = await Promise.all([
     fetchQuoteForCode(cleanCode).catch(e => ({ error: e.message })),
-    fetchWilderForCode(cleanCode).catch(e => ({ error: e.message })),
-    isOverseas ? Promise.resolve(null) : resolveSectorCodeWithNaver(cleanCode).catch(e => null),
+    isOverseas ? Promise.resolve(null) : fetchStockDetail(cleanCode),
   ]);
-  const nps = lookupNpsHolding(cleanCode);
-  renderSearchResult({ code: cleanCode, name, quote, wilder, sector, isOverseas, nps });
+  renderSearchResult({ code: cleanCode, name, quote, detail, isOverseas });
 }
 window.selectSearchStock = selectSearchStock;
 
-function renderSearchResult({ code, name, quote, wilder, sector, isOverseas, nps }) {
+function fmtMetric(v, opts = {}) {
+  if (v == null || !Number.isFinite(Number(v))) return '-';
+  const n = Number(v);
+  const digits = opts.digits ?? 2;
+  const suffix = opts.suffix || '';
+  return (opts.sign && n > 0 ? '+' : '') + n.toLocaleString('ko-KR', { maximumFractionDigits: digits, minimumFractionDigits: digits }) + suffix;
+}
+function fmtShareDelta(n) {
+  if (n == null || !Number.isFinite(Number(n))) return '-';
+  const v = Number(n);
+  const sign = v > 0 ? '+' : '';
+  const abs = Math.abs(v);
+  let body;
+  if (abs >= 1e8) body = (v / 1e8).toFixed(2) + '억주';
+  else if (abs >= 1e4) body = Math.round(v / 1e4).toLocaleString('ko-KR') + '만주';
+  else body = Math.round(v).toLocaleString('ko-KR') + '주';
+  return sign + body;
+}
+
+function renderSearchResult({ code, name, quote, detail, isOverseas }) {
   const result = document.getElementById('search-stock-result');
   if (!result) return;
-  const stockName = quote?.name || name || code;
+  const stockName = detail?.name || quote?.name || name || code;
   const price = quote?.price;
   const change = quote?.change || 0;
   const changeRate = quote?.changeRate || 0;
-  const priceFmt = price ? (isOverseas ? `$${price.toLocaleString('en-US', {maximumFractionDigits: 2})}` : `${price.toLocaleString('ko-KR')}원`) : '-';
+  const priceFmt = price ? (isOverseas ? `$${price.toLocaleString('en-US', {maximumFractionDigits: 2})}` : `${Math.round(price).toLocaleString('ko-KR')}원`) : '-';
   const changeCls = change > 0 ? 'up' : change < 0 ? 'down' : 'money-neutral';
   const changeSign = change > 0 ? '+' : '';
-  // 섹터 정보
-  let sectorHtml = '';
-  if (!isOverseas && sector) {
-    if (sector.sectorCode) {
-      const rrgSector = RRG_SECTORS.find(s => s.code === sector.sectorCode);
-      sectorHtml = `<span class="status-chip">🏭 ${rrgSector?.emoji || ''} ${escapeHtml(rrgSector?.name || '-')}${sector.source === 'naver' ? ' 🌐' : ''}</span>`;
-    } else if (sector.naverIndustry) {
-      sectorHtml = `<span class="status-chip" style="color:var(--text2);">🏭 ${escapeHtml(sector.naverIndustry)} (미매핑)</span>`;
+
+  let metricsHtml = '';
+  if (isOverseas) {
+    metricsHtml = `<div class="search-result-cell" style="grid-column:1/-1;background:#fffbeb;border-color:#fde68a;color:#7a5a00;font-size:.8rem;line-height:1.55;text-align:center;padding:14px;">
+      해외 종목은 현재가/등락만 표시됩니다. PER/EPS 등 핵심 지표는 한국 종목 전용입니다.
+    </div>`;
+  } else if (!detail || detail.error) {
+    metricsHtml = `<div class="search-result-cell" style="grid-column:1/-1;color:var(--down);text-align:center;padding:14px;font-size:.8rem;">
+      지표 조회 실패: ${escapeHtml(detail?.error || '데이터 없음')}
+    </div>`;
+  } else {
+    const cells = [
+      { k: 'PER',       v: fmtMetric(detail.per, { digits: 2 }) },
+      { k: 'EPS',       v: detail.eps != null ? Math.round(detail.eps).toLocaleString('ko-KR') + '원' : '-' },
+      { k: 'PBR',       v: fmtMetric(detail.pbr, { digits: 2 }) },
+      { k: 'BPS',       v: detail.bps != null ? Math.round(detail.bps).toLocaleString('ko-KR') + '원' : '-' },
+      { k: '추정 PER',  v: fmtMetric(detail.estimatePer, { digits: 2 }) },
+      { k: '추정 EPS',  v: detail.estimateEps != null ? Math.round(detail.estimateEps).toLocaleString('ko-KR') + '원' : '-' },
+      { k: '외인 소진율', v: detail.foreignerHoldingRate != null ? detail.foreignerHoldingRate.toFixed(2) + '%' : '-' },
+    ];
+    metricsHtml = cells.map(c => `
+      <div class="search-result-cell">
+        <div class="k">${escapeHtml(c.k)}</div>
+        <div class="v">${escapeHtml(c.v)}</div>
+      </div>`).join('');
+  }
+
+  let dealTrendHtml = '';
+  if (!isOverseas && detail && !detail.error) {
+    const rows = (detail.dealTrend || []).filter(r => r && (r.foreigner != null || r.organ != null || r.individual != null));
+    if (rows.length) {
+      const headerCells = ['기준일', '외국인', '기관', '개인'].map(h => `<th style="padding:7px 9px;text-align:right;font-size:.74rem;color:var(--text2);background:var(--bg3);">${h}</th>`).join('');
+      const bodyRows = rows.map(r => {
+        const f = r.foreigner, o = r.organ, p = r.individual;
+        const cls = (v) => v == null ? 'cell-flat' : v > 0 ? 'cell-up' : v < 0 ? 'cell-down' : 'cell-flat';
+        return `<tr>
+          <td style="padding:7px 9px;font-size:.78rem;color:var(--text2);">${escapeHtml(r.bizdate || '-')}</td>
+          <td style="padding:7px 9px;text-align:right;font-size:.78rem;font-weight:800;" class="${cls(f)}">${fmtShareDelta(f)}</td>
+          <td style="padding:7px 9px;text-align:right;font-size:.78rem;font-weight:800;" class="${cls(o)}">${fmtShareDelta(o)}</td>
+          <td style="padding:7px 9px;text-align:right;font-size:.78rem;font-weight:800;" class="${cls(p)}">${fmtShareDelta(p)}</td>
+        </tr>`;
+      }).join('');
+      dealTrendHtml = `<div style="margin-top:14px;">
+        <div style="font-size:.85rem;font-weight:800;margin-bottom:6px;">📊 투자자별 매매 동향 (최근 5거래일)</div>
+        <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead><tr>${headerCells}</tr></thead>
+            <tbody>${bodyRows}</tbody>
+          </table>
+        </div>
+      </div>`;
     }
   }
-  // Wilder 시그널
-  const wsig = wilder?.final;
-  const wsigChip = wsig ? wilderSignalChip(wsig) : `<span style="color:var(--text2);font-size:.78rem;">Wilder: ${wilder?.error ? '데이터 부족' : '-'}</span>`;
-  // 트레이딩 플랜 (가짜 action 만들어 넘김 — wsig 기반)
-  let plan = null;
-  if (wilder && !wilder.error && price) {
-    const fakeAction = {
-      priority: wsig === 'BUY' ? 3 : (wsig === 'SELL' || wsig === 'EXIT' ? 1 : (wsig === 'REDUCE' ? 2 : 5)),
-    };
-    plan = generateTradingPlan({ wilder, action: fakeAction, currentPrice: price, avgBuy: 0, rate: 0 });
-  }
-  const fmtP = (n) => isOverseas
-    ? `$${(Number(n)||0).toLocaleString('en-US', {maximumFractionDigits: 2})}`
-    : `${Math.round(Number(n)||0).toLocaleString('ko-KR')}원`;
-  const urgencyColor = { high: '#dc2626', mid: '#d97706', low: '#16794b' };
-  const planHtml = plan ? `
-    <div style="margin-top:14px;padding:12px 14px;background:#fafbfc;border:1px solid var(--border);border-radius:10px;">
-      <div style="font-size:.85rem;font-weight:800;margin-bottom:8px;">📋 트레이딩 플랜</div>
-      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:.74rem;color:var(--text2);margin-bottom:8px;">
-        <span>🟢 지지선 <b style="color:#16794b;">${fmtP(plan.support)}</b></span>
-        <span>🟠 저항선 <b style="color:#d97706;">${fmtP(plan.resistance)}</b></span>
-        ${plan.lossStop ? `<span>🚫 손절가 <b style="color:#dc2626;">${fmtP(plan.lossStop)}</b></span>` : ''}
-        ${plan.target ? `<span>🎯 목표가 <b style="color:#2563eb;">${fmtP(plan.target)}</b></span>` : ''}
-      </div>
-      <div style="display:flex;flex-direction:column;gap:5px;">
-        ${plan.rules.map(r => `
-          <div style="display:flex;align-items:center;gap:9px;padding:6px 10px;background:#fff;border:1px solid ${urgencyColor[r.urgency]||'#e5e7eb'}33;border-left:3px solid ${urgencyColor[r.urgency]||'#9ca3af'};border-radius:6px;font-size:.78rem;">
-            <span style="font-size:1rem;">${r.icon}</span>
-            <span><b>${escapeHtml(r.trigger)}</b></span>
-            <span style="color:var(--text2);">→</span>
-            <span style="color:${urgencyColor[r.urgency]||'var(--text)'};font-weight:700;">${escapeHtml(r.act)}</span>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  ` : '';
-  // Wilder 상세 (RSI/HBOP/LBOP) + 국민연금 보유
-  const w = wilder && !wilder.error ? wilder : null;
-  // NPS 셀 — 보유 비율 + 최근 변동 (delta) + 추세
-  let npsCell = '';
-  if (nps) {
-    const delta = Number(nps.delta) || 0;
-    const trend = nps.trend === 'increase' ? '🟢 순매수↑' : nps.trend === 'decrease' ? '🔴 순매도↓' : '⚪ 보합';
-    const deltaCls = delta > 0 ? 'up' : delta < 0 ? 'down' : 'money-neutral';
-    const pctTxt = nps.pct ? `${nps.pct.toFixed(2)}%` : '';
-    npsCell = `<div class="search-result-cell" style="background:#fffbeb;border-color:#fde68a;">
-      <div class="k">🏦 국민연금 ${pctTxt ? `보유 ${pctTxt}` : ''}</div>
-      <div class="v ${deltaCls}" style="font-size:.85rem;">${trend} ${delta !== 0 ? `(${delta>=0?'+':''}${delta.toFixed(2)}pt)` : ''}</div>
-      ${nps.shares ? `<div style="font-size:.7rem;color:var(--text2);margin-top:2px;">${escapeHtml(nps.shares)}</div>` : ''}
-    </div>`;
-  }
-  const wilderDetail = (w || nps) ? `
-    <div class="search-result-grid">
-      ${w ? `
-        <div class="search-result-cell"><div class="k">RSI(14)</div><div class="v">${w.rsi?.rsi != null ? w.rsi.rsi.toFixed(1) : '-'}</div></div>
-        <div class="search-result-cell"><div class="k">RTS 모드</div><div class="v" style="font-size:.85rem;">${w.rts?.mode === 'TREND' ? '추세' : '박스권'}</div></div>
-        <div class="search-result-cell"><div class="k">HBOP / LBOP</div><div class="v" style="font-size:.85rem;">${w.rts?.hbop?.toFixed(2) || '-'} / ${w.rts?.lbop?.toFixed(2) || '-'}</div></div>
-        <div class="search-result-cell"><div class="k">ASI 누적</div><div class="v" style="font-size:.95rem;">${w.asi?.asi?.toFixed(1) || '-'}</div></div>
-      ` : ''}
-      ${npsCell}
-    </div>
-  ` : '';
+
   result.innerHTML = `
     <div class="search-result-card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
@@ -5427,13 +5493,8 @@ function renderSearchResult({ code, name, quote, wilder, sector, isOverseas, nps
           <div class="${changeCls}" style="font-size:.85rem;font-weight:700;">${changeSign}${(change || 0).toLocaleString('ko-KR')} (${changeSign}${(changeRate || 0).toFixed(2)}%)</div>
         </div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-        ${wsigChip}
-        ${sectorHtml}
-        <button class="btn btn-outline btn-sm" onclick="showHoldingDetail('${escapeJsAttr(code)}')" style="margin-left:auto;">🔬 상세 분석</button>
-      </div>
-      ${wilderDetail}
-      ${planHtml}
+      <div class="search-result-grid" style="margin-top:12px;">${metricsHtml}</div>
+      ${dealTrendHtml}
     </div>
   `;
 }
