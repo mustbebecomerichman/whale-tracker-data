@@ -465,6 +465,17 @@ select.sheet-input{cursor:pointer;}
 .broker-pnl-value{text-align:right;font-size:.78rem;font-weight:900;}
 .mobile-toggle{display:none;}
 
+/* 거래내역: 계좌별 실현손익 카드 */
+.acct-pnl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;}
+.acct-pnl-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;box-shadow:var(--shadow);}
+.acct-pnl-card.total{background:#f0fff6;border-color:#abe5c3;}
+.acct-pnl-card .ap-name{font-weight:800;font-size:.85rem;color:var(--text);margin-bottom:4px;}
+.acct-pnl-card .ap-pnl{font-weight:900;font-size:1.05rem;}
+.acct-pnl-card .ap-pnl.up{color:var(--up);}
+.acct-pnl-card .ap-pnl.down{color:var(--down);}
+.acct-pnl-card .ap-meta{font-size:.72rem;color:var(--text2);margin-top:3px;line-height:1.45;}
+.acct-pnl-card .ap-meta b{color:var(--text);font-weight:700;}
+
 /* QUANT SCREENER */
 .quant-score{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:28px;
   border-radius:8px;background:#edfff5;color:#168747;font-weight:900;}
@@ -1279,6 +1290,10 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         style="background:#fff;border:1.5px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:.875rem;outline:none;">
         <option value="">전체 증권사</option>
       </select>
+    </div>
+    <div class="acct-pnl-section mobile-collapsible" data-mobile-group="tx-detail" style="margin-bottom:12px;">
+      <div style="font-size:.85rem;font-weight:700;color:var(--text2);margin-bottom:6px;">📊 계좌별 실현손익 <span id="acct-pnl-year" style="font-weight:400;color:var(--text3);"></span></div>
+      <div class="acct-pnl-grid" id="acct-pnl-grid"></div>
     </div>
     <div class="sheet-wrap mobile-collapsible" data-mobile-group="tx-detail">
       <table class="sheet-table" id="sheet-table">
@@ -3550,7 +3565,51 @@ function renderSheet(year, allTxs){
   const prev=sel.value;
   sel.innerHTML='<option value="">전체 증권사</option>'+brokers.map(b=>`<option>${escapeHtml(b)}</option>`).join('');
   if(brokers.includes(prev)) sel.value=prev;
+  renderAcctPnlCards(_sheetRows, year);
   drawSheetRows(_sheetRows);
+}
+
+// 거래내역 — 계좌별(증권사+계좌유형) 실현손익 요약 카드
+function renderAcctPnlCards(rows, year){
+  const grid = document.getElementById('acct-pnl-grid');
+  const yLbl = document.getElementById('acct-pnl-year');
+  if(!grid)return;
+  if(yLbl) yLbl.textContent = year ? `· ${year}년 기준` : '';
+  // 매도 행만 집계 (price > 0)
+  const sells = (rows||[]).filter(t => (Number(t.price)||0) > 0);
+  if(!sells.length){
+    grid.innerHTML = '<div style="color:var(--text2);font-size:.78rem;padding:8px 0;">집계할 매도 거래가 없습니다.</div>';
+    return;
+  }
+  const groups = {};
+  sells.forEach(t => {
+    const key = `${t.brokerage||'미지정'} ${t.acctType||''}`.trim();
+    if(!groups[key]) groups[key] = {name:key, count:0, sellAmt:0, costAmt:0, pnl:0};
+    const g = groups[key];
+    const q = Number(t.qty)||0, p = Number(t.price)||0, a = Number(t.avgBuy)||0;
+    g.count++;
+    g.sellAmt += p*q;
+    g.costAmt += a*q;
+    g.pnl += calcPnl(t);
+  });
+  const arr = Object.values(groups).sort((a,b)=>b.pnl-a.pnl);
+  const totalCount = arr.reduce((s,g)=>s+g.count,0);
+  const totalSell = arr.reduce((s,g)=>s+g.sellAmt,0);
+  const totalCost = arr.reduce((s,g)=>s+g.costAmt,0);
+  const totalPnl = arr.reduce((s,g)=>s+g.pnl,0);
+  const totalRate = totalCost>0 ? (totalPnl/totalCost*100) : 0;
+  const fmtSign = (n) => (n>=0?'+':'') + Math.round(n).toLocaleString('ko-KR') + '원';
+  const cardHtml = (g, isTotal=false) => {
+    const rate = g.costAmt>0 ? (g.pnl/g.costAmt*100) : 0;
+    const cls = g.pnl>=0?'up':'down';
+    return `<div class="acct-pnl-card${isTotal?' total':''}">
+      <div class="ap-name">${isTotal?'🏁 ':''}${escapeHtml(g.name)}</div>
+      <div class="ap-pnl ${cls}">${fmtSign(g.pnl)} <span style="font-size:.78rem;font-weight:700;">(${rate>=0?'+':''}${rate.toFixed(2)}%)</span></div>
+      <div class="ap-meta">${g.count}건 매도 · 매도 <b>${Math.round(g.sellAmt).toLocaleString('ko-KR')}원</b> · 매입 <b>${Math.round(g.costAmt).toLocaleString('ko-KR')}원</b></div>
+    </div>`;
+  };
+  const totalCard = cardHtml({name:'전체 합계', count:totalCount, sellAmt:totalSell, costAmt:totalCost, pnl:totalPnl}, true);
+  grid.innerHTML = totalCard + arr.map(g=>cardHtml(g)).join('');
 }
 function filterSheet(){
   const q=document.getElementById('mp-search').value.toLowerCase();
@@ -7091,15 +7150,18 @@ async function importKisTransactions(options={}){
         }
       }
     });
-    let added = 0;
+    // 사용자 요청: 거래내역에는 매도만 추가 (매수는 위 FIFO 포지션 계산에만 사용)
+    // 매수는 mpData 에 저장 안 함 → 거래내역 테이블은 깔끔하게 매도(실현손익) 위주
+    let added = 0, skippedBuys = 0;
     sortedFetched.forEach(t => {
       const orderNo = String(t.orderNo || '');
       if (!orderNo || existingOrders.has(orderNo)) return;
       const code = normalizeStockCode(t.code || '');
       const yr = (t.date || '').slice(0, 4);
       if (!yr || !code) return;
-      if (!mpData.transactions[yr]) mpData.transactions[yr] = [];
       const isBuy = t.action === '매수';
+      if (isBuy) { skippedBuys++; return; }  // 매수는 mpData 에 저장 안 함
+      if (!mpData.transactions[yr]) mpData.transactions[yr] = [];
       const acctType = t.acctType || '위탁';
       mpData.transactions[yr].push({
         date: t.date,
@@ -7108,11 +7170,11 @@ async function importKisTransactions(options={}){
         code,
         name: t.stockName || resolveStockName(code, ''),
         qty: t.qty || 0,
-        avgBuy: t._computedAvgBuy ?? (isBuy ? (t.price || 0) : 0),
-        price: isBuy ? 0 : (t.price || 0),
+        avgBuy: t._computedAvgBuy ?? 0,
+        price: t.price || 0,
         fee: t.fee || 0,
         tax: t.tax || 0,
-        note: `${isBuy ? '매수' : '매도'} (KIS:${acctType})`,
+        note: `매도 (KIS:${acctType})`,
         _kisOrderNo: orderNo,
         _autoName: true,
         _autoFee: false,  // KIS 가 준 실제값이므로 자동재계산 금지
@@ -7127,7 +7189,8 @@ async function importKisTransactions(options={}){
     await persistMpData(!silent);
     if(!silent) setMyAssetSection('tx');
     const errMsg = (data.errors || []).length ? ` (실패: ${data.errors.map(e=>e.acctType).join(', ')})` : '';
-    if(!silent) showToast(`✅ 거래내역 가져오기 완료 — 신규 ${added}건 (총 ${fetched.length}건 조회)${errMsg}`, 'ok');
+    const buyMsg = skippedBuys > 0 ? ` · 매수 ${skippedBuys}건은 평균매입가 계산용으로만 사용 (저장 X)` : '';
+    if(!silent) showToast(`✅ 매도 거래 ${added}건 신규 추가${buyMsg}${errMsg}`, 'ok');
     return added;
   } catch (e) {
     console.error('[importKisTransactions] failed', e);
