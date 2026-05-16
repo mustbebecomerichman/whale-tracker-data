@@ -2959,6 +2959,24 @@ function schedulePortfolioAutosave(showSaved=false, delay=1500){
 }
 function renderMp(data){
   initFxControls();
+  // Firestore 에 저장된 summary 가 outdated 일 수 있으므로 accounts 로부터 즉시 재계산
+  // (예: 첫 로그인 시 stale summary 가 3억으로 보였는데 KIS 연동 후에야 갱신되는 문제 방지)
+  if (data && Array.isArray(data.accounts)) {
+    const active = data.accounts.filter(a => a.eval || a.purchase);
+    const ct = portfolioCurrencyTotals(active);
+    const total = ct.KRW.eval + (ct.USD.eval * _fxTtsRate);
+    const purchase = ct.KRW.purchase + (ct.USD.purchase * _fxTtsRate);
+    data.summary = {
+      ...(data.summary || {}),
+      total, purchase,
+      pnl: total - purchase,
+      returnRate: purchase > 0 ? Math.round((total - purchase) / purchase * 10000) / 100 : 0,
+      currencyTotals: ct,
+      numStocks: active.length,
+      profitCount: active.filter(a => (a.rate || 0) >= 0).length,
+      lossCount: active.filter(a => (a.rate || 0) < 0).length,
+    };
+  }
   renderMpSummary(data);
   promoteDailyChangeSection();
   initAcctSheet(data.accounts||[]);
@@ -3137,6 +3155,27 @@ function calcPnl(t){
   const fee=parseFloat(t.fee)||0, tax=parseFloat(t.tax)||0;
   // 실현손익 = (매도가 - 평균매입가) × 수량 − 수수료 − 세금
   return Math.round((p-a)*q - fee - tax);
+}
+
+// 거래 수수료·세금 자동 계산 비율 (사용자 Google Sheet 데이터 기준)
+// 수수료: 0.004% (한국투자 온라인 매매 기준 근사치)
+// 세금: 0.23% (거래세 + 농어촌특별세 합산 근사치 — 매도 시에만 적용)
+const TX_FEE_RATE = 0.00004;
+const TX_TAX_RATE = 0.0023;
+function autoCalcFeeTax(t){
+  if(!t)return;
+  const p=parseFloat(t.price)||0, q=parseFloat(t.qty)||0, a=parseFloat(t.avgBuy)||0;
+  // 수수료: 매수/매도 양쪽에 부과 — price 가 있으면 매도가 기준, 없으면 매입가 기준
+  if(t._autoFee !== false){
+    const baseAmt = (p > 0 ? p : a) * q;
+    t.fee = Math.round(baseAmt * TX_FEE_RATE);
+    t._autoFee = true;
+  }
+  // 세금: 매도 시에만 (price > 0). 매수만 한 행은 tax = 0
+  if(t._autoTax !== false){
+    t.tax = p > 0 ? Math.round(p * q * TX_TAX_RATE) : 0;
+    t._autoTax = true;
+  }
 }
 function calcEval(t){ return Math.round((parseFloat(t.price)||0)*(parseFloat(t.qty)||0)); }
 function calcPurchase(t){ return Math.round((parseFloat(t.avgBuy)||0)*(parseFloat(t.qty)||0)); }
@@ -3542,6 +3581,18 @@ function cellChange(idx, input){
   if(field==='code'){_sheetRows[idx]._autoName=false;_sheetRows[idx]._autoPrice=false;}
   if(field==='name'){_sheetRows[idx]._autoName=false;input.classList.remove('auto-filled');}
   if(field==='price'){_sheetRows[idx]._autoPrice=false;input.classList.remove('auto-price');}
+  // 사용자가 fee/tax 직접 수정 → auto 플래그 해제
+  if(field==='fee')_sheetRows[idx]._autoFee=false;
+  if(field==='tax')_sheetRows[idx]._autoTax=false;
+  // qty/price/avgBuy 변경 시 fee/tax 자동 재계산 (auto 플래그 살아있을 때만)
+  if(field==='qty'||field==='price'||field==='avgBuy'){
+    autoCalcFeeTax(_sheetRows[idx]);
+    // 자동 계산 후 셀 값 동기화
+    const feeInput=input.closest('tr')?.querySelector('input[data-field="fee"]');
+    const taxInput=input.closest('tr')?.querySelector('input[data-field="tax"]');
+    if(feeInput && _sheetRows[idx]._autoFee !== false) feeInput.value=_sheetRows[idx].fee||'';
+    if(taxInput && _sheetRows[idx]._autoTax !== false) taxInput.value=_sheetRows[idx].tax||'';
+  }
   // 계산된 셀 업데이트
   const row=input.closest('tr');if(!row)return;
   if(field==='code'){
@@ -3569,7 +3620,7 @@ function cellChange(idx, input){
 }
 function addSheetRow(){
   const today=new Date().toISOString().slice(0,10);
-  _sheetRows.unshift({date:today,brokerage:'',acctType:'위탁',code:'',name:'',qty:0,avgBuy:0,price:0,fee:0,tax:0,note:'',_draftId:String(Date.now())});
+  _sheetRows.unshift({date:today,brokerage:'',acctType:'위탁',code:'',name:'',qty:0,avgBuy:0,price:0,fee:0,tax:0,note:'',_autoFee:true,_autoTax:true,_draftId:String(Date.now())});
   drawSheetRows(_sheetRows);
   syncSheetRowsToMpData();
   schedulePortfolioAutosave(true,120);
@@ -6817,6 +6868,15 @@ async function importKisBalance(){
     } catch (e) {
       console.warn('[KIS] 자동 가격 갱신 실패:', e.message || e);
     }
+    // 거래내역도 함께 자동 동기화 (현재 연도 기준, 백그라운드)
+    try {
+      const txAdded = await importKisTransactions({silent: true});
+      if (typeof txAdded === 'number' && txAdded > 0) {
+        showToast(`📋 거래내역 ${txAdded}건도 자동 동기화됨`, 'ok');
+      }
+    } catch (e) {
+      console.warn('[KIS] 거래내역 자동 동기화 실패:', e.message || e);
+    }
     const acctSummary = (data.accounts || []).map(a => {
       const pageInfo = a.domesticPages > 1 ? ` [${a.domesticPages}p]` : '';
       const rawHint = (a.domesticRawCount > a.domestic) ? ` (raw ${a.domesticRawCount})` : '';
@@ -6903,21 +6963,26 @@ async function importKisBalance(){
 window.importKisBalance = importKisBalance;
 
 // ═══ 한국투자 거래내역 자동 가져오기 ════════════════════════════
-async function importKisTransactions(){
-  const btn = document.getElementById('btn-kis-tx-sync');
-  // 연도 선택 (취소하면 기본 90일)
-  const curYear = new Date().getFullYear();
-  const yr = window.prompt(`가져올 연도 입력 (예: ${curYear}, ${curYear-1}).\nEnter만 누르면 최근 90일.`, String(curYear));
-  if (yr === null) return;  // 사용자가 취소
+// silent: true 면 prompt 없이 현재 연도 자동, toast/스크롤 등 UI 알림 최소화
+async function importKisTransactions(options={}){
+  const silent = !!options.silent;
+  const btn = silent ? null : document.getElementById('btn-kis-tx-sync');
   let qs = '';
-  if (yr && /^\d{4}$/.test(yr.trim())) {
-    qs = `?year=${yr.trim()}`;
+  if (silent) {
+    qs = `?year=${new Date().getFullYear()}`;
+  } else {
+    const curYear = new Date().getFullYear();
+    const yr = window.prompt(`가져올 연도 입력 (예: ${curYear}, ${curYear-1}).\nEnter만 누르면 최근 90일.`, String(curYear));
+    if (yr === null) return;  // 사용자가 취소
+    if (yr && /^\d{4}$/.test(yr.trim())) {
+      qs = `?year=${yr.trim()}`;
+    }
   }
   if (btn) { btn.disabled = true; btn.textContent = '🔄 가져오는 중... (수초 소요)'; }
   try {
     const res = await apiFetch('/api/kis-transactions' + qs, {method:'GET'});
     if (res.status === 403) {
-      showToast('관리자 본인 계정만 사용 가능합니다.', 'err');
+      if(!silent) showToast('관리자 본인 계정만 사용 가능합니다.', 'err');
       return;
     }
     if (!res.ok) {
@@ -6928,7 +6993,7 @@ async function importKisTransactions(){
     const data = await res.json();
     const fetched = data.items || [];
     if (!fetched.length) {
-      showToast('최근 90일간 한국투자증권 거래내역이 없습니다.', 'err');
+      if(!silent) showToast('한국투자증권 거래내역이 없습니다.', 'err');
       return;
     }
     if (!mpData) mpData = emptyPortfolio();
@@ -6958,9 +7023,12 @@ async function importKisTransactions(){
         avgBuy: isBuy ? (t.price || 0) : 0,
         price: isBuy ? 0 : (t.price || 0),
         fee: t.fee || 0,
+        tax: t.tax || 0,
         note: `${isBuy ? '매수' : '매도'} (KIS:${acctType})`,
         _kisOrderNo: orderNo,
         _autoName: true,
+        _autoFee: false,  // KIS 가 준 실제값이므로 자동재계산 금지
+        _autoTax: false,
       });
       existingOrders.add(orderNo);
       added++;
@@ -6968,13 +7036,14 @@ async function importKisTransactions(){
     renderYearChips(mpData.transactions);
     renderSheet(mpYear, mpData.transactions || {});
     syncSheetRowsToMpData();
-    await persistMpData(true);
-    setMyAssetSection('tx');
+    await persistMpData(!silent);
+    if(!silent) setMyAssetSection('tx');
     const errMsg = (data.errors || []).length ? ` (실패: ${data.errors.map(e=>e.acctType).join(', ')})` : '';
-    showToast(`✅ 거래내역 가져오기 완료 — 신규 ${added}건 (총 ${fetched.length}건 조회)${errMsg}`, 'ok');
+    if(!silent) showToast(`✅ 거래내역 가져오기 완료 — 신규 ${added}건 (총 ${fetched.length}건 조회)${errMsg}`, 'ok');
+    return added;
   } catch (e) {
     console.error('[importKisTransactions] failed', e);
-    showToast('연동 실패: ' + (e.message || e), 'err');
+    if(!silent) showToast('연동 실패: ' + (e.message || e), 'err');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '🔗 한국투자 거래내역'; }
   }
