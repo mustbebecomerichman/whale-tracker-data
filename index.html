@@ -1096,19 +1096,27 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <table class="sheet-table" id="search-acct-table">
           <thead><tr>
             <th style="width:32px">#</th>
-            <th>증권사</th><th>계좌유형</th><th>종목코드</th><th>종목명</th>
-            <th>수량</th><th>평균매입가</th>
+            <th>종목명</th>
             <th class="calc-col">현재가</th>
-            <th class="calc-col">평가금액</th>
-            <th class="calc-col">매입금액</th>
-            <th class="calc-col">수익률</th>
-            <th class="calc-col">평가손익</th>
+            <th class="calc-col">외국인</th>
+            <th class="calc-col">기관</th>
+            <th class="calc-col">개인</th>
+            <th class="calc-col">외인소진율</th>
+            <th class="calc-col">PER</th>
+            <th class="calc-col">EPS</th>
+            <th class="calc-col">PBR</th>
+            <th class="calc-col">BPS</th>
+            <th class="calc-col">추정PER</th>
+            <th class="calc-col">추정EPS</th>
           </tr></thead>
           <tbody id="search-acct-body">
-            <tr><td colspan="12" style="text-align:center;padding:18px;color:var(--text2);font-size:.82rem;">계좌별 현황을 입력하면 여기에 현재가가 표시됩니다. (MY자산 → 계좌별 현황)</td></tr>
+            <tr><td colspan="13" style="text-align:center;padding:18px;color:var(--text2);font-size:.82rem;">계좌별 현황을 입력하면 여기에 핵심 지표가 표시됩니다. (MY자산 → 계좌별 현황)</td></tr>
           </tbody>
         </table>
       </div>
+      <p style="font-size:.72rem;color:var(--text2);margin-top:8px;line-height:1.5;">
+        ※ PER/EPS/PBR/BPS/추정값 및 투자자별 매매동향은 Naver Finance (국내 종목만 지원). 해외 보유분은 종목명/현재가만 표시됩니다.
+      </p>
       <div class="stock-detail-panel" id="stock-detail-panel"></div>
     </div>
 
@@ -7467,37 +7475,111 @@ function drawAcctRows(rows) {
   renderSearchAcctTable(rows);
 }
 
+// 종목 검색 탭의 보유 종목 현재가 — Naver 핵심 지표 캐시
+const _searchAcctDetailCache = {};  // code → { savedAt, data }
+const SEARCH_ACCT_DETAIL_TTL_MS = 5 * 60 * 1000;
+
+function fmtShareCompactKR(n) {
+  if (n == null || !Number.isFinite(Number(n))) return '-';
+  const v = Number(n);
+  const sign = v > 0 ? '+' : '';
+  const abs = Math.abs(v);
+  if (abs >= 1e8) return sign + (v / 1e8).toFixed(2) + '억주';
+  if (abs >= 1e4) return sign + Math.round(v / 1e4).toLocaleString('ko-KR') + '만주';
+  return sign + Math.round(v).toLocaleString('ko-KR') + '주';
+}
+
 function renderSearchAcctTable(rows) {
   const tbody = document.getElementById('search-acct-body');
   if (!tbody) return;
-  const valid = (rows || []).filter(a => normalizeStockCode(a.code) || a.stockName);
+  // 종목 코드 기준 dedupe — 같은 코드가 여러 계좌에 있어도 한 줄
+  const seen = new Set();
+  const valid = [];
+  for (const a of (rows || [])) {
+    const code = normalizeStockCode(a.code);
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    valid.push({ ...a, code });
+  }
   if (!valid.length) {
-    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:18px;color:var(--text2);font-size:.82rem;">계좌별 현황을 입력하면 여기에 현재가가 표시됩니다. (MY자산 → 계좌별 현황)</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:18px;color:var(--text2);font-size:.82rem;">계좌별 현황을 입력하면 여기에 핵심 지표가 표시됩니다. (MY자산 → 계좌별 현황)</td></tr>';
     return;
   }
   tbody.innerHTML = valid.map((a, i) => {
-    const ev   = a.price && a.qty ? a.qty * a.price : (a.eval || 0);
-    const pur  = a.avgBuy && a.qty ? a.qty * a.avgBuy : (a.purchase || 0);
-    const pnl  = ev - pur;
-    const rate = pur > 0 ? Math.round(pnl / pur * 10000) / 100 : 0;
-    const pc   = pnl > 0 ? 'cell-up' : pnl < 0 ? 'cell-down' : 'cell-flat';
-    const rc   = rate > 0 ? 'cell-up' : rate < 0 ? 'cell-down' : 'cell-flat';
-    const codeClean = normalizeStockCode(a.code);
-    return `<tr onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))showHoldingDetail('${escapeJsAttr(a.code||'')}')">
+    const code = a.code;
+    const isOverseas = stockRegionForCode(code) === 'overseas';
+    const priceHtml = a.price ? formatMoneyByCode(a.price, code) : '-';
+    const flag = isOverseas ? '🇺🇸' : '🇰🇷';
+    return `<tr id="sat-${escapeAttr(code)}" onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))selectSearchStock('${escapeJsAttr(code)}','${escapeJsAttr(a.stockName||'')}')">
       <td>${i + 1}</td>
-      <td>${escapeHtml(a.brokerage || '-')}</td>
-      <td>${escapeHtml(a.acctType || '-')}</td>
-      <td>${escapeHtml(codeClean || a.code || '-')}</td>
-      <td>${escapeHtml(a.stockName || '-')}</td>
-      <td>${a.qty ? fmt(a.qty) : '-'}</td>
-      <td>${a.avgBuy ? formatMoneyByCode(a.avgBuy, a.code) : '-'}</td>
-      <td class="cell-flat">${a.price ? formatMoneyByCode(a.price, a.code) : '-'}</td>
-      <td>${ev ? formatMoneyByCode(ev, a.code) : '-'}</td>
-      <td class="cell-flat">${pur ? formatMoneyByCode(pur, a.code) : '-'}</td>
-      <td class="${rc}">${pur || ev ? (rate >= 0 ? '+' : '') + rate.toFixed(2) + '%' : '-'}</td>
-      <td class="${pc}">${pur || ev ? (pnl >= 0 ? '+' : '-') + formatMoneyByCode(Math.abs(pnl), a.code) : '-'}</td>
+      <td><b>${escapeHtml(a.stockName || code)}</b> <span style="font-size:.7rem;color:var(--text2);">${flag} ${escapeHtml(code)}</span></td>
+      <td class="cell-flat">${priceHtml}</td>
+      <td data-col="foreigner" class="cell-flat">${isOverseas ? '-' : '<span style="color:var(--text2);font-size:.72rem;">조회중...</span>'}</td>
+      <td data-col="organ" class="cell-flat">${isOverseas ? '-' : '<span style="color:var(--text2);font-size:.72rem;">…</span>'}</td>
+      <td data-col="individual" class="cell-flat">${isOverseas ? '-' : '<span style="color:var(--text2);font-size:.72rem;">…</span>'}</td>
+      <td data-col="foreigner-rate">${isOverseas ? '-' : '<span style="color:var(--text2);font-size:.72rem;">…</span>'}</td>
+      <td data-col="per">${isOverseas ? '-' : '<span style="color:var(--text2);font-size:.72rem;">…</span>'}</td>
+      <td data-col="eps">${isOverseas ? '-' : '<span style="color:var(--text2);font-size:.72rem;">…</span>'}</td>
+      <td data-col="pbr">${isOverseas ? '-' : '<span style="color:var(--text2);font-size:.72rem;">…</span>'}</td>
+      <td data-col="bps">${isOverseas ? '-' : '<span style="color:var(--text2);font-size:.72rem;">…</span>'}</td>
+      <td data-col="est-per">${isOverseas ? '-' : '<span style="color:var(--text2);font-size:.72rem;">…</span>'}</td>
+      <td data-col="est-eps">${isOverseas ? '-' : '<span style="color:var(--text2);font-size:.72rem;">…</span>'}</td>
     </tr>`;
   }).join('');
+  // KR 종목 핵심 지표 비동기 로드
+  const krCodes = valid.filter(a => stockRegionForCode(a.code) !== 'overseas').map(a => a.code);
+  loadSearchAcctDetails(krCodes);
+}
+
+async function loadSearchAcctDetails(codes) {
+  const CONCURRENT = 4;
+  const queue = [...codes];
+  const workers = [];
+  for (let i = 0; i < CONCURRENT; i++) {
+    workers.push((async () => {
+      while (queue.length) {
+        const code = queue.shift();
+        if (!code) break;
+        const cached = _searchAcctDetailCache[code];
+        let detail;
+        if (cached && (Date.now() - cached.savedAt) < SEARCH_ACCT_DETAIL_TTL_MS) {
+          detail = cached.data;
+        } else {
+          detail = await fetchStockDetail(code);
+          if (!detail.error) _searchAcctDetailCache[code] = { savedAt: Date.now(), data: detail };
+        }
+        applySearchAcctDetailRow(code, detail);
+      }
+    })());
+  }
+  await Promise.all(workers);
+}
+
+function applySearchAcctDetailRow(code, detail) {
+  const row = document.getElementById(`sat-${code}`);
+  if (!row) return;
+  const setCell = (col, html, cls) => {
+    const td = row.querySelector(`[data-col="${col}"]`);
+    if (!td) return;
+    td.innerHTML = html;
+    if (cls != null) td.className = cls;
+  };
+  if (!detail || detail.error) {
+    ['foreigner','organ','individual','foreigner-rate','per','eps','pbr','bps','est-per','est-eps'].forEach(c => setCell(c, '<span class="cell-flat">-</span>', ''));
+    return;
+  }
+  const latest = (detail.dealTrend || []).find(r => r && (r.foreigner != null || r.organ != null || r.individual != null)) || {};
+  const cls = (v) => v == null ? 'cell-flat' : v > 0 ? 'cell-up' : v < 0 ? 'cell-down' : 'cell-flat';
+  setCell('foreigner', fmtShareCompactKR(latest.foreigner), cls(latest.foreigner));
+  setCell('organ',     fmtShareCompactKR(latest.organ),     cls(latest.organ));
+  setCell('individual',fmtShareCompactKR(latest.individual),cls(latest.individual));
+  setCell('foreigner-rate', detail.foreignerHoldingRate != null ? detail.foreignerHoldingRate.toFixed(2) + '%' : '-', '');
+  setCell('per', detail.per != null ? detail.per.toFixed(2) : '-', '');
+  setCell('eps', detail.eps != null ? Math.round(detail.eps).toLocaleString('ko-KR') : '-', '');
+  setCell('pbr', detail.pbr != null ? detail.pbr.toFixed(2) : '-', '');
+  setCell('bps', detail.bps != null ? Math.round(detail.bps).toLocaleString('ko-KR') : '-', '');
+  setCell('est-per', detail.estimatePer != null ? detail.estimatePer.toFixed(2) : '-', '');
+  setCell('est-eps', detail.estimateEps != null ? Math.round(detail.estimateEps).toLocaleString('ko-KR') : '-', '');
 }
 
 function acctCellChange(idx, input) {
