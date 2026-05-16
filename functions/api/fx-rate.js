@@ -1,4 +1,4 @@
-import { corsHeaders, rejectUntrustedOrigin, requireFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
+﻿import { corsHeaders, rejectUntrustedOrigin, requireApprovedFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
 
 const METHODS = 'GET, OPTIONS';
 
@@ -118,7 +118,7 @@ export async function onRequest(context) {
   if (blocked) return blocked;
   if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders(request, env, METHODS) });
   if (request.method !== 'GET') return json(request, env, { error: 'GET only' }, 405);
-  const auth = await requireFirebaseUser(request, env);
+  const auth = await requireApprovedFirebaseUser(request, env);
   if (!auth.ok) return auth.response;
 
   const today = ymd();

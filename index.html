@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="whale-tracker-version" content="2026-04-30-store-ads-mobile-v1"/>
+<meta name="whale-tracker-version" content="2026-05-16-google-approval-v1"/>
 <meta name="theme-color" content="#03C75A"/>
 <meta name="application-name" content="WhaleTracker Pro"/>
 <meta name="apple-mobile-web-app-title" content="WhaleTracker Pro"/>
@@ -38,22 +38,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
 .auth-logo h1{font-size:1.45rem;font-weight:900;}
 .auth-logo h1 span{color:var(--accent);}
 .auth-logo p{font-size:.8rem;color:var(--text2);margin-top:4px;}
-.auth-tabs{display:flex;gap:0;margin-bottom:24px;background:var(--bg3);border-radius:10px;padding:4px;}
-.auth-tab{flex:1;padding:9px;background:none;border:none;color:var(--text2);
-  cursor:pointer;border-radius:8px;font-size:.875rem;font-weight:600;transition:all .2s;}
-.auth-tab.active{background:#fff;color:var(--accent);box-shadow:0 2px 6px rgba(0,0,0,.08);font-weight:700;}
-.auth-field{margin-bottom:14px;}
-.auth-field label{display:block;font-size:.78rem;color:var(--text2);margin-bottom:5px;font-weight:600;}
-.auth-field input{width:100%;background:var(--bg3);border:1.5px solid var(--border);
-  border-radius:10px;padding:11px 14px;color:var(--text);font-size:.92rem;outline:none;transition:border-color .2s;}
-.auth-field input:focus{border-color:var(--accent);background:#fff;}
-.auth-btn{width:100%;padding:13px;background:var(--accent);border:none;border-radius:10px;
-  color:#fff;font-size:.95rem;font-weight:800;cursor:pointer;margin-top:6px;transition:background .2s;}
-.auth-btn:hover{background:var(--accent-h);}
-.auth-btn:disabled{opacity:.5;cursor:not-allowed;}
-.auth-separator{display:flex;align-items:center;gap:10px;margin:14px 0 6px;
-  color:var(--text2);font-size:.72rem;font-weight:700;}
-.auth-separator::before,.auth-separator::after{content:'';height:1px;background:var(--border);flex:1;}
+.auth-entry{display:flex;flex-direction:column;gap:12px;}
+.auth-copy{font-size:.82rem;color:var(--text2);line-height:1.65;text-align:center;margin:-6px 0 2px;}
 .auth-google-btn{width:100%;padding:14px;background:#fff;border:1px solid #d5dbe3;border-radius:10px;
   color:var(--text);font-size:.95rem;font-weight:900;cursor:pointer;margin-top:8px;
   display:flex;align-items:center;justify-content:center;gap:9px;transition:all .2s;
@@ -69,10 +55,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
 .mobile-browser-tip-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px;}
 .mobile-browser-tip-actions button{border:1px solid #e6c24f;background:#fff;color:#6b4e00;border-radius:8px;
   padding:7px 10px;font-size:.76rem;font-weight:800;cursor:pointer;}
-.email-auth-fields{margin-top:10px;}
-.auth-link-btn{display:block;width:100%;background:none;border:none;color:var(--text2);font-size:.78rem;font-weight:700;
-  text-align:center;padding:9px 6px;margin-top:6px;cursor:pointer;}
-.auth-link-btn:hover{color:var(--accent);}
 .auth-note{font-size:.75rem;color:var(--text2);text-align:center;margin-top:12px;line-height:1.6;}
 .auth-links{display:flex;justify-content:center;gap:12px;margin-top:12px;font-size:.76rem;}
 .auth-links a{color:var(--text2);text-decoration:none;}
@@ -933,47 +915,19 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <h1>Whale<span>Tracker</span> Pro</h1>
       <p>기관 투자자 지분 추적 플랫폼</p>
     </div>
-    <div class="auth-tabs">
-      <button class="auth-tab active" onclick="switchTab('login')">로그인</button>
-      <button class="auth-tab" onclick="switchTab('signup')">회원가입</button>
+    <div class="auth-entry">
+      <p class="auth-copy">WhaleTracker Pro는 승인된 Google 계정만 이용할 수 있습니다. 처음 들어오는 계정은 신청 대기 상태로 남고, 관리자가 승인하면 바로 사용할 수 있습니다.</p>
+      <button type="button" class="auth-google-btn" id="google-login-btn" onclick="doGoogleLogin()">
+        <span class="auth-google-icon">G</span><span>Google로 신청/로그인</span>
+      </button>
+      <p class="auth-note">이메일/비밀번호 가입은 운영하지 않습니다.</p>
     </div>
-    <p class="privacy-hint">Google로 계속하기를 누르면 서비스 이용에 필요한 개인정보 안내를 먼저 확인합니다.</p>
     <div class="mobile-browser-tip" id="mobile-browser-tip">
       <strong>기본 브라우저에서 열면 Google 로그인이 됩니다</strong>
       <span id="mobile-browser-tip-copy">지금 화면은 앱 안에서 열린 브라우저일 수 있습니다. Chrome 또는 Safari에서 다시 열어주세요.</span>
       <div class="mobile-browser-tip-actions">
         <button type="button" onclick="copyCurrentUrl()">주소 복사</button>
         <button type="button" onclick="openCurrentPageInChrome()">기본 브라우저 열기</button>
-      </div>
-    </div>
-    <div id="login-form">
-      <button type="button" class="auth-google-btn" id="google-login-btn" onclick="doGoogleLogin()">
-        <span class="auth-google-icon">G</span><span>Google로 계속하기</span>
-      </button>
-      <div class="auth-separator">또는 이메일로 로그인</div>
-      <div class="email-auth-fields">
-        <div class="auth-field"><label>이메일</label>
-          <input type="email" id="login-email" placeholder="your@email.com"/></div>
-        <div class="auth-field"><label>비밀번호</label>
-          <input type="password" id="login-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
-        <button class="auth-btn" id="login-btn" onclick="doLogin()">로그인</button>
-        <button type="button" class="auth-link-btn" id="reset-pw-btn" onclick="resetLoginPassword()">비밀번호 재설정 메일 보내기</button>
-      </div>
-    </div>
-    <div id="signup-form" style="display:none">
-      <button type="button" class="auth-google-btn" id="google-signup-btn" onclick="doGoogleLogin()">
-        <span class="auth-google-icon">G</span><span>Google로 가입/로그인</span>
-      </button>
-      <div class="auth-separator">또는 이메일로 가입</div>
-      <div class="email-auth-fields">
-        <div class="auth-field"><label>이름</label>
-          <input type="text" id="su-name" placeholder="홍길동"/></div>
-        <div class="auth-field"><label>이메일</label>
-          <input type="email" id="su-email" placeholder="your@email.com"/></div>
-        <div class="auth-field"><label>비밀번호 (6자 이상)</label>
-          <input type="password" id="su-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doSignup()"/></div>
-        <button class="auth-btn" id="su-btn" onclick="doSignup()">회원가입</button>
-        <p class="auth-note">회원가입 후 바로 이용할 수 있습니다</p>
       </div>
     </div>
     <div id="auth-msg"></div>
@@ -1675,12 +1629,13 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <div class="admin-section">
         <div class="admin-title">👥 사용자 관리</div>
         <p style="font-size:.78rem;color:var(--text2);margin-bottom:10px;line-height:1.6;">
-          Google 또는 이메일로 로그인한 사용자는 바로 이용할 수 있습니다. 이 목록은 운영 메모와 로그인 기록 확인용입니다.
+          승인된 Google 이메일 또는 UID만 이용할 수 있습니다. 새 사용자는 Google 신청 후 승인 대기 상태로 기록됩니다.
         </p>
         <div class="admin-form-row">
           <input class="admin-input" id="new-user-email" placeholder="이메일 주소" type="email"/>
+          <input class="admin-input" id="new-user-uid" placeholder="Firebase UID (선택)" style="max-width:190px"/>
           <input class="admin-input" id="new-user-name" placeholder="이름" style="max-width:130px"/>
-          <button class="btn btn-primary" onclick="addUser()">추가</button>
+          <button class="btn btn-primary" onclick="addUser()">승인 추가</button>
         </div>
         <div id="user-list"><div style="text-align:center;padding:16px;"><div class="spinner"></div></div></div>
       </div>
@@ -1817,6 +1772,7 @@ async function isAdminUser(u=auth.currentUser){
 }
 async function resolveUserAccess(u=auth.currentUser){
   if(!u)return {allowed:false,isAdmin:false};
+  if(providerForUser(u)!=='google')return {allowed:false,isAdmin:false,provider:providerForUser(u)};
   const mail=emailKey(u.email||'');
   const cacheKey=`${u.uid}:${mail}`;
   if(_authAccessCache?.key===cacheKey)return _authAccessCache.value;
@@ -1833,32 +1789,41 @@ async function resolveUserAccess(u=auth.currentUser){
       if(s.exists)isAdmin=true;
     }catch(e){}
   }
-  if(!isAdmin){
+  let allowedByEmail=false;
+  let allowedByUid=false;
+  const allowedByClaim=claims.approved===true;
+  if(mail){
     try{
-      await db.collection('approved_users').limit(1).get();
-      isAdmin=true;
+      const s=await db.collection('approved_users').doc(mail).get();
+      allowedByEmail=s.exists;
     }catch(e){}
   }
-  const allowed=true;
-  const value={allowed,isAdmin};
+  try{
+    const s=await db.collection('approved_uids').doc(u.uid).get();
+    allowedByUid=s.exists;
+  }catch(e){}
+  const allowed=isAdmin||allowedByClaim||allowedByEmail||allowedByUid;
+  const value={allowed,isAdmin,allowedByEmail,allowedByUid,allowedByClaim};
   _authAccessCache={key:cacheKey,value};
   return value;
 }
-async function recordUserLoginOncePerDay(u){
+async function recordUserLoginOncePerDay(u,accessStatus='pending'){
   if(!u)return false;
   const today=localDateKey();
   const key=LOGIN_WRITE_KEY_PREFIX+u.uid;
   try{
-    if(localStorage.getItem(key)===today)return;
+    if(localStorage.getItem(key)===`${today}:${accessStatus}`)return;
   }catch(e){}
   try{
     await db.collection('users').doc(u.uid).set({
       uid:u.uid,
       email:u.email,
       name:u.displayName||u.email.split('@')[0],
+      provider:providerForUser(u),
+      accessStatus,
       lastLoginAt:firebase.firestore.FieldValue.serverTimestamp()
     },{merge:true});
-    localStorage.setItem(key,today);
+    localStorage.setItem(key,`${today}:${accessStatus}`);
   }catch(e){}
 }
 function appVersion(){
@@ -1917,13 +1882,9 @@ function requestPrivacyConsent(provider){
   const copy=document.getElementById('privacy-consent-copy');
   if(!modal)return Promise.resolve(preparePrivacyConsent(provider));
 
-  title.textContent=provider==='google'
-    ? 'Google로 계속하기 전에 잠깐만 확인할게요'
-    : '가입 전에 잠깐만 확인할게요';
-  copy.textContent=provider==='google'
-    ? 'WhaleTracker Pro는 Google 로그인과 포트폴리오 저장에 필요한 정보만 사용합니다.'
-    : 'WhaleTracker Pro는 회원 식별과 포트폴리오 저장에 필요한 정보만 사용합니다.';
-  agreeBtn.textContent=provider==='google'?'동의하고 Google로 계속':'동의하고 가입 계속';
+  title.textContent='Google로 신청/로그인하기 전에 잠깐만 확인할게요';
+  copy.textContent='WhaleTracker Pro는 Google 로그인, 승인 확인, 포트폴리오 저장에 필요한 정보만 사용합니다.';
+  agreeBtn.textContent='동의하고 Google로 계속';
   modal.classList.add('show');
 
   return new Promise(resolve=>{
@@ -2025,7 +1986,7 @@ async function ensurePrivacyConsentForAuth(u){
     }
   }catch(e){}
 
-  throw new Error('Google 로그인/가입은 개인정보 수집·이용 동의가 필요합니다. 동의 후 다시 진행해주세요.');
+  throw new Error('Google 신청/로그인은 개인정보 수집·이용 동의가 필요합니다. 동의 후 다시 진행해주세요.');
 }
 function providerForUser(u){
   const ids=(u?.providerData||[]).map(p=>p.providerId);
@@ -2160,43 +2121,16 @@ function show(which){
   document.getElementById('app').style.display          = which==='auth'?'none':'block';
   if(which==='auth')setTimeout(maybeOpenExternalBrowser,0);
 }
-function switchTab(t){
-  document.querySelectorAll('.auth-tab').forEach(b=>b.classList.remove('active'));
-  event.target.classList.add('active');
-  document.getElementById('login-form').style.display  = t==='login' ?'block':'none';
-  document.getElementById('signup-form').style.display = t==='signup'?'block':'none';
-  document.getElementById('auth-msg').innerHTML='';
-  updateMobileBrowserTip();
-}
-async function doLogin(){
-  const email=document.getElementById('login-email').value.trim();
-  const pw=document.getElementById('login-pw').value;
-  if(!email||!pw){setAuthMsg("이메일과 비밀번호를 입력하세요.","error");return;}
-  const btn=document.getElementById('login-btn');
-  btn.disabled=true;btn.textContent='로그인 중...';
-  sessionStorage.setItem(AUTH_SESSION_KEY,'1');
-  try{ await auth.signInWithEmailAndPassword(email,pw); }
-  catch(e){
-    sessionStorage.removeItem(AUTH_SESSION_KEY);
-    const m={'auth/user-not-found':'등록되지 않은 이메일입니다.',
-      'auth/wrong-password':'비밀번호가 올바르지 않습니다.',
-      'auth/invalid-credential':'이메일 또는 비밀번호가 맞지 않습니다. 브라우저에 저장된 비밀번호가 예전 값일 수 있으니 직접 다시 입력하거나 비밀번호 재설정 메일을 보내세요.',
-      'auth/too-many-requests':'잠시 후 다시 시도하세요.'};
-    setAuthMsg(m[e.code]||'로그인 실패: '+e.message,"error");
-    btn.disabled=false;btn.textContent='로그인';
-  }
-}
 function setGoogleButtonsBusy(busy){
   const labels={
-    'google-login-btn':'Google로 계속하기',
-    'google-signup-btn':'Google로 가입/로그인'
+    'google-login-btn':'Google로 신청/로그인'
   };
   Object.keys(labels).forEach(id=>{
     const btn=document.getElementById(id);
     if(!btn)return;
     btn.disabled=busy;
     btn.innerHTML=busy
-      ? '<span class="auth-google-icon">G</span><span>Google 로그인 중...</span>'
+      ? '<span class="auth-google-icon">G</span><span>Google 확인 중...</span>'
       : `<span class="auth-google-icon">G</span><span>${labels[id]}</span>`;
   });
 }
@@ -2236,61 +2170,11 @@ async function doGoogleLogin(){
       'auth/popup-closed-by-user':'Google 로그인이 취소되었습니다.',
       'auth/cancelled-popup-request':'이미 진행 중인 Google 로그인 창이 있습니다.',
       'auth/unauthorized-domain':'Firebase Console의 승인된 도메인에 현재 도메인을 추가해야 합니다.',
-      'auth/operation-not-allowed':'Firebase Console에서 Google 로그인 provider를 먼저 활성화해야 합니다.'
+      'auth/operation-not-allowed':'Firebase Console에서 Google 로그인 provider를 먼저 활성화해야 합니다.',
+      'auth/account-exists-with-different-credential':'같은 이메일의 기존 비밀번호 계정이 있습니다. Google 계정으로 다시 신청하려면 관리자에게 전환을 요청하세요.'
     };
     setAuthMsg(m[e.code]||'Google 로그인 실패: '+(e.message||e.code||e),"error");
     setGoogleButtonsBusy(false);
-  }
-}
-async function resetLoginPassword(){
-  const email=document.getElementById('login-email').value.trim();
-  if(!email){setAuthMsg("비밀번호를 재설정할 이메일을 먼저 입력하세요.","error");return;}
-  const btn=document.getElementById('reset-pw-btn');
-  if(btn){btn.disabled=true;btn.textContent='메일 전송 중...';}
-  try{
-    await auth.sendPasswordResetEmail(email);
-    setAuthMsg("비밀번호 재설정 메일을 보냈습니다. 메일함에서 링크를 눌러 새 비밀번호를 만든 뒤 다시 로그인하세요.","success");
-  }catch(e){
-    const m={'auth/user-not-found':'등록되지 않은 이메일입니다.',
-      'auth/invalid-email':'이메일 형식을 확인하세요.',
-      'auth/too-many-requests':'요청이 많습니다. 잠시 후 다시 시도하세요.'};
-    setAuthMsg(m[e.code]||'재설정 메일 전송 실패: '+e.message,"error");
-  }finally{
-    if(btn){btn.disabled=false;btn.textContent='비밀번호 재설정 메일 보내기';}
-  }
-}
-async function doSignup(){
-  const name=document.getElementById('su-name').value.trim();
-  const email=document.getElementById('su-email').value.trim();
-  const pw=document.getElementById('su-pw').value;
-  if(!name||!email||!pw){setAuthMsg("모든 항목을 입력하세요.","error");return;}
-  if(pw.length<6){setAuthMsg("비밀번호는 6자 이상이어야 합니다.","error");return;}
-  const consent=await requestPrivacyConsent('password');
-  if(!consent)return;
-  const btn=document.getElementById('su-btn');btn.disabled=true;btn.textContent='가입 중...';
-  sessionStorage.setItem(AUTH_SESSION_KEY,'1');
-  try{
-    const c=await auth.createUserWithEmailAndPassword(email,pw);
-    await c.user.updateProfile({displayName:name});
-    await recordPendingPrivacyConsent(c.user,{required:false});
-    setAuthMsg("✅ 가입 완료! 로그인됩니다.","success");
-  }catch(e){
-    if(e.code==='auth/email-already-in-use'){
-      try{
-        sessionStorage.setItem(AUTH_SESSION_KEY,'1');
-        await auth.signInWithEmailAndPassword(email,pw);
-        return;
-      }catch(loginErr){
-        sessionStorage.removeItem(AUTH_SESSION_KEY);
-        sessionStorage.removeItem(PRIVACY_CONSENT_PENDING_KEY);
-        setAuthMsg('이미 가입된 이메일입니다. 기존 비밀번호로 로그인하세요.',"error");
-      }
-    }else{
-      sessionStorage.removeItem(AUTH_SESSION_KEY);
-      sessionStorage.removeItem(PRIVACY_CONSENT_PENDING_KEY);
-      setAuthMsg('가입 실패: '+e.message,"error");
-    }
-    btn.disabled=false;btn.textContent='회원가입';
   }
 }
 async function doLogout(){
@@ -2328,10 +2212,11 @@ async function afterLogin(u){
     sessionStorage.removeItem(AUTH_SESSION_KEY);
     me=null;
     _mpLoadedUid=null;
+    await recordUserLoginOncePerDay(u,'pending');
     try{ await auth.signOut(); }catch(e){}
     show('auth');
     setGoogleButtonsBusy(false);
-    setAuthMsg('로그인 권한을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.', 'error');
+    setAuthMsg('신청이 접수되었습니다. 관리자가 Google 계정을 승인하면 WhaleTracker Pro를 이용할 수 있습니다.', 'success');
     return;
   }
   document.getElementById('user-display').textContent=u.displayName||u.email.split('@')[0];
@@ -2341,7 +2226,7 @@ async function afterLogin(u){
   document.querySelectorAll('.admin-only').forEach(el=>{el.style.display=isAdm?'':'none';});
   show('app');
   setGoogleButtonsBusy(false);
-  await recordUserLoginOncePerDay(u);
+  await recordUserLoginOncePerDay(u,'approved');
   await loadWhaleData({force:isAdm});
   showPage('mypage');
   if(isAdm){loadUserList();loadChangelog();}
@@ -4793,6 +4678,7 @@ async function loadUserList(){
   const list=document.getElementById('user-list');
   try{
     const rowsByEmail=new Map();
+    const approvedUidSet=new Set();
     const errors=[];
     for(const col of ['users','approved_users']){
       try{
@@ -4808,6 +4694,18 @@ async function loadUserList(){
         errors.push(`${col}: ${e.message}`);
       }
     }
+    try{
+      const snap=await db.collection('approved_uids').get();
+      snap.forEach(doc=>{
+        approvedUidSet.add(doc.id);
+        const d=doc.data()||{};
+        const email=(d.email||`uid:${doc.id}`).trim();
+        const prev=rowsByEmail.get(email)||{};
+        rowsByEmail.set(email,{...prev,...d,id:prev.id||doc.id,email,uid:doc.id,_source:[...(prev._source||[]),'approved_uids']});
+      });
+    }catch(e){
+      errors.push(`approved_uids: ${e.message}`);
+    }
     const rows=[...rowsByEmail.values()].sort((a,b)=>String(a.email).localeCompare(String(b.email)));
     if(!rows.length){
       list.innerHTML='<p style="color:var(--text2);text-align:center;padding:14px;font-size:.82rem;">표시할 회원이 없습니다. Firestore users 컬렉션 권한을 확인하세요.</p>';
@@ -4815,38 +4713,73 @@ async function loadUserList(){
     }
     const dt=v=>v?.toDate?v.toDate().toLocaleString('ko-KR'):(v||'-');
     const errHtml=errors.length?`<div style="color:var(--down);font-size:.74rem;margin-bottom:8px;line-height:1.5">일부 목록을 읽지 못했습니다: ${escapeHtml(errors.join(' / '))}</div>`:'';
-    list.innerHTML=errHtml+`<div class="status-chip" style="display:inline-flex;margin-bottom:8px;">전체 회원 ${rows.length}명</div>`+
+    const pendingCount=rows.filter(d=>!(d._source||[]).includes('approved_users') && !(d.uid&&approvedUidSet.has(d.uid))).length;
+    list.innerHTML=errHtml+`<div class="status-chip" style="display:inline-flex;margin-bottom:8px;">전체 ${rows.length}명 · 승인 대기 ${pendingCount}명</div>`+
       rows.map(d=>{
         const isAdm=false;
         const joined=dt(d.joinedAt||d.addedAt);
         const last=dt(d.lastLoginAt);
-        const src=(d._source||[]).includes('approved_users')?'운영 메모':'가입 기록';
+        const sources=d._source||[];
+        const approvedByEmail=sources.includes('approved_users');
+        const approvedByUid=!!(d.uid&&approvedUidSet.has(d.uid));
+        const src=approvedByEmail||approvedByUid?'승인됨':'승인 대기';
         const rmId=encodeURIComponent(d.id||ekey(d.email));
         const rmEmail=encodeURIComponent(d.email||'');
         const rmUid=encodeURIComponent(d.uid||'');
+        const approveUidBtn=d.uid&&!approvedByUid
+          ? `<button class="btn btn-success btn-sm" onclick="approveUserUid(decodeURIComponent('${rmUid}'),decodeURIComponent('${rmEmail}'),decodeURIComponent('${encodeURIComponent(d.name||d.displayName||d.email||'')}'))">UID 승인</button>`
+          : '';
+        const removeBtn=!isAdm&&(approvedByEmail||approvedByUid)
+          ? `<button class="btn btn-danger btn-sm" onclick="removeUser(decodeURIComponent('${rmId}'),decodeURIComponent('${rmEmail}'),decodeURIComponent('${rmUid}'))">승인 해제</button>`
+          : '';
         return `<div class="user-row"><div>
           <div class="user-email">${escapeHtml(d.name||d.displayName||d.email)}${isAdm?' <span class="admin-badge">ADMIN</span>':''}</div>
-          <div class="user-meta">${escapeHtml(d.email)} · ${src} · 가입 ${escapeHtml(joined)} · 최근 로그인 ${escapeHtml(last)}</div>
-        </div><div class="user-row-actions">${!isAdm&&(d._source||[]).includes('approved_users')?`<button class="btn btn-danger btn-sm" onclick="removeUser(decodeURIComponent('${rmId}'),decodeURIComponent('${rmEmail}'),decodeURIComponent('${rmUid}'))">메모 삭제</button>`:''}</div></div>`;
+          <div class="user-meta">${escapeHtml(d.email)} · ${src} · UID ${escapeHtml(d.uid||'-')} · 가입 ${escapeHtml(joined)} · 최근 로그인 ${escapeHtml(last)}</div>
+        </div><div class="user-row-actions">${approveUidBtn}${removeBtn}</div></div>`;
       }).join('');
   }catch(e){list.innerHTML=`<p style="color:var(--down);font-size:.82rem;">오류: ${escapeHtml(e.message)}</p>`;}
 }
 async function addUser(){
   const email=document.getElementById('new-user-email').value.trim();
+  const uid=document.getElementById('new-user-uid')?.value.trim();
   const name=document.getElementById('new-user-name').value.trim();
-  if(!email){showToast("이메일을 입력하세요","err");return;}
+  if(!email&&!uid){showToast("이메일 또는 UID를 입력하세요","err");return;}
   const normalized=emailKey(email);
-  await db.collection('approved_users').doc(normalized).set({email:normalized,name:name||normalized.split('@')[0],addedAt:firebase.firestore.FieldValue.serverTimestamp(),addedBy:me?.email});
-  document.getElementById('new-user-email').value='';document.getElementById('new-user-name').value='';
-  showToast("✅ 추가 완료","ok");loadUserList();
+  const displayName=name||normalized.split('@')[0]||uid;
+  const writes=[];
+  if(normalized){
+    writes.push(db.collection('approved_users').doc(normalized).set({email:normalized,name:displayName,uid:uid||'',addedAt:firebase.firestore.FieldValue.serverTimestamp(),addedBy:me?.email}));
+  }
+  if(uid){
+    writes.push(db.collection('approved_uids').doc(uid).set({uid,email:normalized,name:displayName,addedAt:firebase.firestore.FieldValue.serverTimestamp(),addedBy:me?.email},{merge:true}));
+  }
+  await Promise.all(writes);
+  document.getElementById('new-user-email').value='';
+  const uidInput=document.getElementById('new-user-uid'); if(uidInput)uidInput.value='';
+  document.getElementById('new-user-name').value='';
+  showToast("승인 추가 완료","ok");loadUserList();
+}
+async function approveUserUid(uid,email='',name=''){
+  if(!uid){showToast("승인할 UID가 없습니다","err");return;}
+  await db.collection('approved_uids').doc(uid).set({
+    uid,
+    email:emailKey(email).startsWith('uid:')?'':emailKey(email),
+    name:name||email||uid,
+    addedAt:firebase.firestore.FieldValue.serverTimestamp(),
+    addedBy:me?.email
+  },{merge:true});
+  showToast("UID 승인 완료","ok");loadUserList();
 }
 async function removeUser(id,email,uid=''){
-  if(!confirm(`${email} 운영 메모를 삭제할까요?`))return;
+  if(!confirm(`${email||uid} 승인을 해제할까요?`))return;
   const raw=emailKey(email);
   const legacy=ekey(email);
   const refs=[id,raw,legacy].filter((v,i,a)=>v&&a.indexOf(v)===i);
-  await Promise.all(refs.map(ref=>db.collection('approved_users').doc(ref).delete().catch(()=>{})));
-  showToast("삭제 완료","ok");loadUserList();
+  await Promise.all([
+    ...refs.map(ref=>db.collection('approved_users').doc(ref).delete().catch(()=>{})),
+    uid?db.collection('approved_uids').doc(uid).delete().catch(()=>{}):Promise.resolve()
+  ]);
+  showToast("승인 해제 완료","ok");loadUserList();
 }
 function loadJSONFile(e){
   const f=e.target.files[0];if(!f)return;

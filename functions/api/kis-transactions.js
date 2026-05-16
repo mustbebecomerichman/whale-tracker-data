@@ -1,4 +1,4 @@
-import { corsHeaders, rejectUntrustedOrigin, requireFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
+﻿import { corsHeaders, rejectUntrustedOrigin, requireApprovedFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
 
 /**
  * Cloudflare Pages Function — KIS 일별 주문체결조회 (관리자 본인 계정 전용)
@@ -267,7 +267,7 @@ export async function onRequestGet(context) {
   try {
     const blocked = rejectUntrustedOrigin(request, env, METHODS);
     if (blocked) return blocked;
-    const auth = await requireFirebaseUser(request, env);
+    const auth = await requireApprovedFirebaseUser(request, env);
     if (!auth.ok) return auth.response;
     if (!requireAdmin(auth.user, env)) {
       return adminError(request, env, '관리자 본인 계정만 사용 가능합니다.', 403);

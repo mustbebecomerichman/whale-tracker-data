@@ -19,13 +19,13 @@ git diff --check
 - Prefer `textContent`, `value`, `setAttribute`, and DOM creation for new UI. Use `innerHTML` only when markup is genuinely needed.
 - Do not place KIS secrets, Firebase service credentials, AdSense secrets, or signing keys in frontend files. Public Firebase web config is acceptable only with Firestore rules and authorized domains kept tight.
 - Keep API calls behind `apiFetch()` so Firebase ID tokens are attached.
-- Keep Cloudflare Pages Functions protected by Firebase token verification and the trusted-origin allowlist.
+- Keep Cloudflare Pages Functions protected by approved Google Firebase user verification and the trusted-origin allowlist.
 - After changing Firebase/Auth/AdSense/AdMob scripts, check browser console for `Content-Security-Policy-Report-Only` warnings from `_headers`.
 - If report-only CSP is clean across login, portfolio save/load, quote lookup, and ads, then consider moving more directives into the enforced `Content-Security-Policy`.
 
 ## Current security posture
 
-- Firestore rules restrict portfolio reads/writes to the signed-in user and admin-only datasets to admins.
-- Pages Functions reject untrusted origins and require Firebase ID tokens.
+- Firestore rules restrict portfolio and whale-data reads to approved Google users only.
+- Pages Functions reject untrusted origins and require approved Google Firebase users.
 - `_headers` adds `nosniff`, frame blocking, referrer policy, permissions policy, and a safe enforced CSP baseline.
 - Full script/connect/frame policy is currently report-only to avoid breaking Google login or future ad tags during store preparation.

@@ -1,4 +1,4 @@
-import { corsHeaders, rejectUntrustedOrigin, requireFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
+﻿import { corsHeaders, rejectUntrustedOrigin, requireApprovedFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
 
 /**
  * Cloudflare Pages Function — OHLC daily history proxy
@@ -192,7 +192,7 @@ export async function onRequestPost(context) {
   try {
     const blocked = rejectUntrustedOrigin(request, env, METHODS);
     if (blocked) return blocked;
-    const auth = await requireFirebaseUser(request, env);
+    const auth = await requireApprovedFirebaseUser(request, env);
     if (!auth.ok) return auth.response;
     const results = await handleRequest(request);
     return new Response(JSON.stringify(results), {
@@ -208,7 +208,7 @@ export async function onRequestGet(context) {
   try {
     const blocked = rejectUntrustedOrigin(request, env, METHODS);
     if (blocked) return blocked;
-    const auth = await requireFirebaseUser(request, env);
+    const auth = await requireApprovedFirebaseUser(request, env);
     if (!auth.ok) return auth.response;
     const results = await handleRequest(request);
     return new Response(JSON.stringify(results), {

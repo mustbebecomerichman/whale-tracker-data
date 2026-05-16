@@ -36,13 +36,13 @@ jobs:
             exit 1
           fi
 
-      - name: Require API auth guard
+      - name: Require API approved-auth guard
         shell: bash
         run: |
           set -euo pipefail
           for file in functions/api/*.js; do
-            if ! grep -q "requireFirebaseUser" "$file"; then
-              echo "$file is missing requireFirebaseUser." >&2
+            if ! grep -q "requireApprovedFirebaseUser" "$file"; then
+              echo "$file is missing requireApprovedFirebaseUser." >&2
               exit 1
             fi
           done

@@ -6,18 +6,23 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function primaryAdmin() {
+    function signedInWithGoogle() {
       return signedIn()
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+
+    function primaryAdmin() {
+      return signedInWithGoogle()
         && request.auth.token.email == 'smmoon2030@gmail.com';
     }
 
     function adminByClaim() {
-      return signedIn()
+      return signedInWithGoogle()
         && request.auth.token.admin == true;
     }
 
     function adminByDoc() {
-      return signedIn()
+      return signedInWithGoogle()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
@@ -26,33 +31,36 @@ service cloud.firestore {
     }
 
     function approvedByEmail() {
-      return signedIn()
+      return signedInWithGoogle()
         && request.auth.token.email is string
         && exists(/databases/$(database)/documents/approved_users/$(request.auth.token.email));
     }
 
     function approvedByUid() {
-      return signedIn()
+      return signedInWithGoogle()
         && exists(/databases/$(database)/documents/approved_uids/$(request.auth.uid));
     }
 
     function approvedByClaim() {
-      return signedIn()
+      return signedInWithGoogle()
         && request.auth.token.approved == true;
     }
 
     function isApproved() {
-      return signedIn();
+      return isAdmin()
+        || approvedByEmail()
+        || approvedByUid()
+        || approvedByClaim();
     }
 
     function ownsProfile(uid) {
-      return signedIn()
+      return signedInWithGoogle()
         && uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email;
     }
 
     function ownsConsent(uid) {
-      return signedIn()
+      return signedInWithGoogle()
         && uid == request.auth.uid
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email
@@ -61,24 +69,24 @@ service cloud.firestore {
     }
 
     match /portfolio_data/{uid} {
-      allow read, write: if signedIn() && isApproved() && uid == request.auth.uid;
+      allow read, write: if signedInWithGoogle() && isApproved() && uid == request.auth.uid;
     }
 
     match /users/{uid} {
-      allow get: if isAdmin() || (signedIn() && uid == request.auth.uid);
+      allow get: if isAdmin() || (signedInWithGoogle() && uid == request.auth.uid);
       allow list: if isAdmin();
-      allow create, update: if isApproved() && ownsProfile(uid);
+      allow create, update: if ownsProfile(uid);
       allow delete: if isAdmin();
     }
 
     match /user_consents/{uid} {
-      allow get: if isAdmin() || (signedIn() && uid == request.auth.uid);
+      allow get: if isAdmin() || (signedInWithGoogle() && uid == request.auth.uid);
       allow list: if isAdmin();
       allow create, update: if ownsConsent(uid);
       allow delete: if isAdmin();
 
       match /logs/{logId} {
-        allow get, list: if isAdmin() || (signedIn() && uid == request.auth.uid);
+        allow get, list: if isAdmin() || (signedInWithGoogle() && uid == request.auth.uid);
         allow create: if ownsConsent(uid);
         allow update, delete: if false;
       }
@@ -86,29 +94,29 @@ service cloud.firestore {
 
     match /approved_users/{email} {
       allow get: if isAdmin()
-        || (signedIn() && request.auth.token.email == email);
+        || (signedInWithGoogle() && request.auth.token.email == email);
       allow list, create, update, delete: if isAdmin();
     }
 
     match /approved_uids/{uid} {
       allow get: if isAdmin()
-        || (signedIn() && uid == request.auth.uid);
+        || (signedInWithGoogle() && uid == request.auth.uid);
       allow list, create, update, delete: if isAdmin();
     }
 
     match /admins/{uid} {
-      allow get: if signedIn() && (uid == request.auth.uid || isAdmin());
+      allow get: if signedInWithGoogle() && (uid == request.auth.uid || isAdmin());
       allow list: if primaryAdmin() || adminByClaim();
       allow create, update, delete: if primaryAdmin() || adminByClaim();
     }
 
     match /whale_data/{docId} {
-      allow read: if signedIn() && isApproved();
+      allow read: if signedInWithGoogle() && isApproved();
       allow write: if isAdmin();
     }
 
     match /changelog/{docId} {
-      allow read: if signedIn() && isApproved();
+      allow read: if signedInWithGoogle() && isApproved();
       allow create, update, delete: if isAdmin();
     }
 

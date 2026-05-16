@@ -121,9 +121,51 @@ export function safeErrorResponse(request, env, error, status = 500, methods = '
   });
 }
 
-export async function requireFirebaseUser(request, env = {}) {
+function bearerToken(request) {
   const header = request.headers.get('authorization') || '';
-  const token = header.match(/^Bearer\s+(.+)$/i)?.[1];
+  return header.match(/^Bearer\s+(.+)$/i)?.[1] || '';
+}
+
+function envList(value = '') {
+  return new Set(String(value).split(',').map(v => v.trim().toLowerCase()).filter(Boolean));
+}
+
+function isApprovedClaim(user, env = {}) {
+  const email = String(user.email || '').toLowerCase();
+  const uid = String(user.sub || user.user_id || '');
+  const adminEmails = envList(`smmoon2030@gmail.com,${env.ADMIN_EMAILS || env.ADMIN_EMAIL || ''}`);
+  const approvedEmails = envList(env.APPROVED_EMAILS || env.APPROVED_EMAIL || '');
+  const approvedUids = envList(env.APPROVED_UIDS || env.APPROVED_UID || '');
+  return user.admin === true
+    || user.approved === true
+    || adminEmails.has(email)
+    || approvedEmails.has(email)
+    || approvedUids.has(uid.toLowerCase());
+}
+
+function isGoogleAuthUser(user = {}) {
+  return user.firebase?.sign_in_provider === 'google.com';
+}
+
+async function firestoreDocExists(path, token) {
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${path}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 404) return false;
+  if (res.status === 200) return true;
+  throw new Error(`Firestore approval check HTTP ${res.status}`);
+}
+
+async function isApprovedInFirestore(user, token) {
+  const email = String(user.email || '').trim().toLowerCase();
+  const uid = String(user.sub || user.user_id || '').trim();
+  if (uid && await firestoreDocExists(`admins/${encodeURIComponent(uid)}`, token)) return true;
+  if (email && await firestoreDocExists(`approved_users/${encodeURIComponent(email)}`, token)) return true;
+  if (uid && await firestoreDocExists(`approved_uids/${encodeURIComponent(uid)}`, token)) return true;
+  return false;
+}
+
+export async function requireFirebaseUser(request, env = {}) {
+  const token = bearerToken(request);
   if (!token) {
     return {
       ok: false,
@@ -152,4 +194,41 @@ export async function requireFirebaseUser(request, env = {}) {
       }),
     };
   }
+}
+
+export async function requireApprovedFirebaseUser(request, env = {}) {
+  const auth = await requireFirebaseUser(request, env);
+  if (!auth.ok) return auth;
+  if (!isGoogleAuthUser(auth.user)) {
+    return {
+      ok: false,
+      response: new Response(JSON.stringify({ error: 'Google sign-in required' }), {
+        status: 403,
+        headers: {
+          ...corsHeaders(request, env),
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Content-Type': 'application/json',
+        },
+      }),
+    };
+  }
+  const token = bearerToken(request);
+  try {
+    if (isApprovedClaim(auth.user, env) || await isApprovedInFirestore(auth.user, token)) {
+      return auth;
+    }
+  } catch (e) {
+    console.warn('Approval check failed:', e.message);
+  }
+  return {
+    ok: false,
+    response: new Response(JSON.stringify({ error: 'Approval required' }), {
+      status: 403,
+      headers: {
+        ...corsHeaders(request, env),
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Content-Type': 'application/json',
+      },
+    }),
+  };
 }

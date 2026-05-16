@@ -1,4 +1,4 @@
-import { corsHeaders, rejectUntrustedOrigin, requireFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
+﻿import { corsHeaders, rejectUntrustedOrigin, requireApprovedFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
 
 /**
  * Cloudflare Pages Function - KIS 투자자별 수급 현황
@@ -140,7 +140,7 @@ export async function onRequestPost(context) {
   try {
     const blocked = rejectUntrustedOrigin(request, env, METHODS);
     if (blocked) return blocked;
-    const auth = await requireFirebaseUser(request, env);
+    const auth = await requireApprovedFirebaseUser(request, env);
     if (!auth.ok) return auth.response;
     const { appKey, appSecret } = getKisCreds(env);
     if (!appKey || !appSecret) {
