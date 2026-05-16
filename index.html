@@ -5142,6 +5142,60 @@ function lookupKoreanStockName(code) {
   return clean;
 }
 
+// 종목별 구체 트레이딩 플랜 (지지/저항/손절가 + 트리거별 행동지침)
+// Wilder.analyze 의 priceTargets (current, stopLoss, target, atr, resistance60, support60)
+// 와 rts (hbop/lbop/trailStop) 를 결합해 "X원 붕괴 시 N% 매도" 형태 생성
+function generateTradingPlan({ wilder, action, currentPrice, avgBuy, rate }) {
+  if (!wilder || wilder.error) return null;
+  const pt = wilder.priceTargets;
+  const rts = wilder.rts;
+  if (!pt) return null;
+  const current = Number(currentPrice) || pt.current || 0;
+  if (!current) return null;
+  // 지지선 후보: RTS LBOP > 60일 저점 > 현재가-3*ATR
+  const support = (rts?.lbop && rts.lbop > 0) ? rts.lbop : (pt.support60 || (current - (pt.atr || 0) * 3));
+  // 저항선 후보: RTS HBOP > 60일 고점 > 현재가+3*ATR
+  const resistance = (rts?.hbop && rts.hbop > 0) ? rts.hbop : (pt.resistance60 || (current + (pt.atr || 0) * 3));
+  // 손절가: 트레일링 스탑 > 60일 저점 또는 -8% (보유시)
+  const trailStop = rts?.trailStop || pt.stopLoss;
+  const lossStop = avgBuy ? Math.max(trailStop || 0, avgBuy * 0.92) : trailStop;
+  const target = pt.target || resistance;
+  const atr = pt.atr || (current * 0.02);
+  const fmtP = (n) => Math.round(Number(n) || 0).toLocaleString('ko-KR') + '원';
+  const distPct = (a, b) => ((a - b) / b * 100);
+  const rules = [];
+  const pri = action?.priority || 7;
+  if (pri === 1) {
+    // 매도 강력 / 손절검토 — 즉각 행동
+    rules.push({ icon: '🔻', trigger: `${fmtP(support)} (지지선) 붕괴`, act: `50% 매도 (1차 손절)`, urgency: 'high' });
+    if (lossStop && lossStop !== support) {
+      rules.push({ icon: '🚫', trigger: `${fmtP(lossStop)} 도달`, act: `잔여 100% 전량 손절`, urgency: 'high' });
+    }
+    rules.push({ icon: '🔄', trigger: `${fmtP(resistance)} (저항선) 돌파`, act: `매도 보류, 홀딩 전환 검토`, urgency: 'low' });
+  } else if (pri === 2) {
+    // 비중축소 / 익절검토
+    const profitTake = Math.round(current + atr * 2);
+    rules.push({ icon: '💰', trigger: `${fmtP(profitTake)} 도달`, act: `30% 부분 익절`, urgency: 'mid' });
+    rules.push({ icon: '🔻', trigger: `${fmtP(support)} (지지선) 붕괴`, act: `추가 50% 매도`, urgency: 'high' });
+    rules.push({ icon: '✅', trigger: `${fmtP(resistance)} (저항선) 돌파`, act: `홀딩 유지, 추가매수 보류`, urgency: 'low' });
+  } else if (pri >= 3 && pri <= 4) {
+    // 비중확대 / 분할매수
+    rules.push({ icon: '🛒', trigger: `${fmtP(current)} 부근`, act: `분할매수 진입 (1/3씩 3회)`, urgency: 'mid' });
+    rules.push({ icon: '🎯', trigger: `${fmtP(target)} (목표가) 도달`, act: `50% 1차 차익실현`, urgency: 'mid' });
+    rules.push({ icon: '🚫', trigger: `${fmtP(lossStop || support)} 도달`, act: `손절 실행`, urgency: 'high' });
+  } else {
+    // 5-7: 유지 / 관찰
+    rules.push({ icon: '✅', trigger: `${fmtP(resistance)} (저항선) 돌파`, act: `추세 진입 → 비중확대 검토`, urgency: 'mid' });
+    rules.push({ icon: '🔻', trigger: `${fmtP(support)} (지지선) 붕괴`, act: `매도 검토`, urgency: 'mid' });
+  }
+  return {
+    current, support, resistance, lossStop, target, atr,
+    supportDistPct: distPct(support, current),
+    resistanceDistPct: distPct(resistance, current),
+    rules,
+  };
+}
+
 function diagnoseHolding({ wilder, sector, rate }) {
   const q = sector?.rrg?.quadrant;
   const sig = wilder?.final;
@@ -5186,6 +5240,7 @@ async function buildHoldingsAnalysis(results) {
     let wilder = null;
     try { wilder = await fetchWilderForCode(code); } catch (e) { wilder = { error: e.message }; }
     const action = diagnoseHolding({ wilder, sector, rate });
+    const tradingPlan = generateTradingPlan({ wilder, action, currentPrice: a.price, avgBuy: a.avgBuy, rate });
     out.push({
       code,
       name: a.stockName || lookupKoreanStockName(code),
@@ -5199,6 +5254,7 @@ async function buildHoldingsAnalysis(results) {
       wilderSignal: wilder?.final || null,
       wilderError: wilder?.error || null,
       action,
+      tradingPlan,
     });
     await new Promise(r => setTimeout(r, 60));
   }
@@ -5230,6 +5286,8 @@ function renderMyHoldingsAnalysis(holdings) {
   const buyN = sorted.filter(h => h.action.priority <= 4 && h.action.priority >= 3).length;
   const failedN = sorted.filter(h => h.wilderError).length;
   if (statusEl) statusEl.textContent = `${sorted.length}개 종목 진단 완료 · 매도/손절 ${sellN}건 · 축소 ${trimN}건 · 매수 ${buyN}건${failedN ? ` · Wilder 미수신 ${failedN}건` : ''}`;
+  const fmtP = (n) => Math.round(Number(n)||0).toLocaleString('ko-KR') + '원';
+  const urgencyColor = { high:'#dc2626', mid:'#d97706', low:'#16794b' };
   wrap.innerHTML = `<div class="sheet-wrap"><table class="sheet-table" style="font-size:.82rem;">
     <thead><tr>
       <th>종목</th>
@@ -5246,6 +5304,30 @@ function renderMyHoldingsAnalysis(holdings) {
         const sig = h.wilderSignal;
         const sigChip = sig ? wilderSignalChip(sig) : `<span style="color:var(--text2);font-size:.7rem;">${h.wilderError ? '데이터 부족' : '-'}</span>`;
         const rateCls = h.rate > 0 ? 'up' : h.rate < 0 ? 'down' : 'money-neutral';
+        const tp = h.tradingPlan;
+        const planHtml = tp ? `
+          <tr class="trading-plan-row" style="background:#fafbfc;">
+            <td colspan="7" style="padding:9px 14px;border-top:none;">
+              <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:.74rem;color:var(--text2);margin-bottom:8px;">
+                <span>📊 <b style="color:var(--text);">현재 ${fmtP(tp.current)}</b></span>
+                <span>🟢 지지선 <b style="color:#16794b;">${fmtP(tp.support)}</b> (${tp.supportDistPct>=0?'+':''}${tp.supportDistPct.toFixed(1)}%)</span>
+                <span>🟠 저항선 <b style="color:#d97706;">${fmtP(tp.resistance)}</b> (${tp.resistanceDistPct>=0?'+':''}${tp.resistanceDistPct.toFixed(1)}%)</span>
+                ${tp.lossStop?`<span>🚫 손절가 <b style="color:#dc2626;">${fmtP(tp.lossStop)}</b></span>`:''}
+                ${tp.target?`<span>🎯 목표가 <b style="color:#2563eb;">${fmtP(tp.target)}</b></span>`:''}
+              </div>
+              <div style="display:flex;flex-direction:column;gap:5px;">
+                ${tp.rules.map(r => `
+                  <div style="display:flex;align-items:center;gap:9px;padding:6px 10px;background:#fff;border:1px solid ${urgencyColor[r.urgency]||'#e5e7eb'}33;border-left:3px solid ${urgencyColor[r.urgency]||'#9ca3af'};border-radius:6px;font-size:.78rem;">
+                    <span style="font-size:1rem;">${r.icon}</span>
+                    <span><b style="color:var(--text);">${escapeHtml(r.trigger)}</b></span>
+                    <span style="color:var(--text2);">→</span>
+                    <span style="color:${urgencyColor[r.urgency]||'var(--text)'};font-weight:700;">${escapeHtml(r.act)}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </td>
+          </tr>
+        ` : '';
         return `<tr style="cursor:pointer;" onclick="showHoldingDetail('${escapeJsAttr(h.code)}')">
           <td style="font-weight:700;">${escapeHtml(h.name)}<div style="font-size:.7rem;color:var(--text2);font-weight:500;">${h.code} · ${escapeHtml(h.brokerage || '-')}</div></td>
           <td style="text-align:center;font-size:.78rem;">${h.sectorEmoji} ${escapeHtml(h.sectorName)}</td>
@@ -5254,11 +5336,11 @@ function renderMyHoldingsAnalysis(holdings) {
           <td style="text-align:right;" class="${rateCls}">${h.rate >= 0 ? '+' : ''}${h.rate.toFixed(2)}%</td>
           <td style="text-align:right;font-weight:600;">${Math.round(h.ev).toLocaleString('ko-KR')}원</td>
           <td style="text-align:center;"><span style="background:${h.action.color};color:white;padding:3px 8px;border-radius:6px;font-size:.72rem;font-weight:800;" title="${escapeAttr(h.action.reason)}">${h.action.tag}</span></td>
-        </tr>`;
+        </tr>${planHtml}`;
       }).join('')}
     </tbody>
   </table></div>
-  <div style="font-size:.74rem;color:var(--text2);margin-top:10px;">💡 행 클릭 시 종목 상세 모달 (Wilder 알고리즘 상세, OHLC 차트 등)이 열립니다. 액션 칩에 마우스 올리면 판정 근거가 표시됩니다.</div>`;
+  <div style="font-size:.74rem;color:var(--text2);margin-top:10px;">💡 종목 행 아래 회색 박스는 트레이딩 플랜 — 지지/저항선과 트리거별 행동지침. 행 클릭 시 종목 상세 모달이 열립니다.</div>`;
 }
 
 // 섹터별 후보 종목 풀에서 Wilder BUY/HOLD 신호 종목 추출
