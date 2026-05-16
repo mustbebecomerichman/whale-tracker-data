@@ -469,6 +469,36 @@ select.sheet-input{cursor:pointer;}
 .price-grid.price-grid-inline::-webkit-scrollbar{height:8px;}
 .price-grid.price-grid-inline::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
 
+/* 오늘의 추천 Top 5 (Wilder BUY + 퀀트) */
+.top-rec-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media (max-width:720px){.top-rec-grid{grid-template-columns:1fr;}}
+.top-rec-col{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow);}
+.top-rec-title{font-weight:900;font-size:.92rem;color:var(--text);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.top-rec-sub{font-size:.7rem;font-weight:700;color:var(--text2);background:var(--bg3);border-radius:14px;padding:3px 9px;}
+.top-rec-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;}
+.top-rec-item{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 10px;cursor:pointer;transition:border-color .15s,transform .15s;}
+.top-rec-item:hover{border-color:var(--accent4);transform:translateY(-1px);}
+.top-rec-rank{font-weight:900;font-size:.85rem;color:var(--accent);text-align:center;}
+.top-rec-name{font-weight:800;font-size:.86rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.top-rec-meta{font-size:.7rem;color:var(--text2);font-weight:600;margin-top:1px;}
+.top-rec-right{text-align:right;font-size:.78rem;font-weight:800;}
+.top-rec-empty{background:none;border:none;text-align:center;color:var(--text2);font-size:.78rem;padding:14px;cursor:default;}
+.top-rec-empty:hover{transform:none;border-color:transparent;}
+
+/* 종목 검색 탭의 계좌 미러 테이블 */
+#search-acct-table{width:100%;}
+#search-acct-table tbody tr{cursor:pointer;}
+#search-acct-table tbody tr:hover td{background:#f7fafc;}
+#search-acct-table td{padding:7px 9px;font-size:.82rem;}
+#search-acct-table .cell-up{color:var(--up);font-weight:800;}
+#search-acct-table .cell-down{color:var(--down);font-weight:800;}
+#search-acct-table .cell-flat{color:var(--text2);}
+
+/* 돌파 스크리너 테이블 */
+#search-breakout-result table{width:100%;}
+#search-breakout-result td{padding:7px 9px;font-size:.82rem;}
+#search-breakout-result tr:hover td{background:#f7fafc;}
+
 /* 거래내역: 계좌별 실현손익 카드 */
 .acct-pnl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;}
 .acct-pnl-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;box-shadow:var(--shadow);}
@@ -1007,20 +1037,76 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <div id="search-stock-result"><div class="mp-empty"><div class="ei">🔎</div><p>종목을 검색하면 가격·Wilder 시그널·섹터·국민연금 동향·트레이딩 플랜이 표시됩니다.</p></div></div>
     </div>
 
-    <!-- 보유 종목 현재가 (Wilder 페이지에서 이동, 1줄 가로 스크롤) -->
+    <!-- 오늘의 추천 Top 5 (Wilder BUY + 퀀트 스크리너) -->
+    <div class="section">
+      <div class="section-title">
+        <div class="section-title-left">🌟 오늘의 추천 Top 5
+          <span class="badge">Wilder + 퀀트</span>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="loadTopRecommendations(true)">🔄 갱신</button>
+      </div>
+      <div class="top-rec-grid">
+        <div class="top-rec-col">
+          <div class="top-rec-title">🧮 Wilder BUY Top 5
+            <span class="top-rec-sub" id="search-wilder-status">분석 대기</span>
+          </div>
+          <ol id="search-wilder-top5" class="top-rec-list">
+            <li class="top-rec-empty">아직 분석되지 않았습니다.</li>
+          </ol>
+        </div>
+        <div class="top-rec-col">
+          <div class="top-rec-title">📊 퀀트 스크리너 Top 5
+            <span class="top-rec-sub" id="search-quant-status">데이터 대기</span>
+          </div>
+          <ol id="search-quant-top5" class="top-rec-list">
+            <li class="top-rec-empty">아직 분석되지 않았습니다.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- 대장주 전 고점 돌파 + 장대양봉 스크리너 -->
+    <div class="section">
+      <div class="section-title">
+        <div class="section-title-left">🚀 전 고점 돌파 + 장대양봉 대장주
+          <span class="badge" id="breakout-status">대기</span>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="runBreakoutScreener()">▶ 스크리닝 실행</button>
+      </div>
+      <p style="font-size:.74rem;color:var(--text2);line-height:1.6;margin:0 0 10px;">
+        조건 ① 당일 종가가 직전 60거래일 최고가 돌파 · ② 당일 양봉(종가 &gt; 시가) · ③ 장대양봉(몸통/전체 ≥ 60%) ·
+        ④ 거래대금 충분(국내 ≥ 100억원, 해외 ≥ $50M) · ⑤ 대장주(KOSPI 대형주 + DOW30 + NASDAQ 상위) 한정.
+      </p>
+      <div id="search-breakout-result">
+        <div class="mp-empty"><div class="ei">🚀</div><p>스크리닝을 실행하면 오늘 조건을 만족하는 대장주가 표시됩니다.</p></div>
+      </div>
+    </div>
+
+    <!-- 보유 종목 현재가 — 계좌별 현황 미러 테이블 -->
     <div class="section search-tab-price-section" id="search-price-section">
       <div class="section-title">
         <div class="section-title-left">📈 보유 종목 현재가
           <span class="badge" id="price-last-update">조회 전</span>
           <span class="badge" id="price-api-status">API 대기</span>
         </div>
-        <button class="btn btn-outline btn-sm" onclick="fetchAllPrices()">🔄 새로고침</button>
+        <button class="btn btn-outline btn-sm" onclick="fetchAndUpdateAcctPrices()">🔄 현재가 새로고침</button>
       </div>
-      <div class="price-grid price-grid-inline" id="price-grid">
-        <div class="price-card price-card-ghost" aria-hidden="true">
-          <div class="price-ghost-line name"></div><div class="price-ghost-line code"></div>
-          <div class="price-ghost-line price"></div><div class="price-ghost-line change"></div>
-        </div>
+      <div class="sheet-wrap">
+        <table class="sheet-table" id="search-acct-table">
+          <thead><tr>
+            <th style="width:32px">#</th>
+            <th>증권사</th><th>계좌유형</th><th>종목코드</th><th>종목명</th>
+            <th>수량</th><th>평균매입가</th>
+            <th class="calc-col">현재가</th>
+            <th class="calc-col">평가금액</th>
+            <th class="calc-col">매입금액</th>
+            <th class="calc-col">수익률</th>
+            <th class="calc-col">평가손익</th>
+          </tr></thead>
+          <tbody id="search-acct-body">
+            <tr><td colspan="12" style="text-align:center;padding:18px;color:var(--text2);font-size:.82rem;">계좌별 현황을 입력하면 여기에 현재가가 표시됩니다. (MY자산 → 계좌별 현황)</td></tr>
+          </tbody>
+        </table>
       </div>
       <div class="stock-detail-panel" id="stock-detail-panel"></div>
     </div>
@@ -4086,6 +4172,7 @@ async function fetchAllPrices(options={}){
   const silent=!!options.silent;
   if(_priceBusy)return; _priceBusy=true;
   const grid=document.getElementById('price-grid');
+  if(!grid){ _priceBusy=false; return false; }  // 종목 검색 탭이 테이블로 전환되면서 #price-grid 미존재 — no-op
   const holdings=[];const seen=new Set();
   const addHolding=(code,name,qty=0,avgBuy=0)=>{
     const clean=normalizeStockCode(code);
@@ -4877,9 +4964,255 @@ function showSearchTab(name) {
     if (el) el.style.display = (tabName === name) ? 'block' : 'none';
   });
   if (name === 'wilder') initWilderPage();
+  if (name === 'search') {
+    try { renderSearchAcctTable(_acctRows || []); } catch(_) {}
+    try { fetchAndUpdateAcctPrices({silent:true, auto:true}); } catch(_) {}
+    try { loadTopRecommendations(false); } catch(_) {}
+  }
   // nps/national/alert/legend 는 페이지 자체가 자동 렌더 (S_QUANT/S_NPS 등 로드 시 함께)
 }
 window.showSearchTab = showSearchTab;
+
+// ═══ 오늘의 추천 Top 5 (Wilder BUY + 퀀트) ═══════════════════════════
+let _topRecLoaded = false;
+async function loadTopRecommendations(force = false) {
+  if (_topRecLoaded && !force) return;
+  _topRecLoaded = true;
+  // 두 영역 병렬 로드
+  loadQuantTop5();
+  loadWilderTop5(force);
+}
+
+function loadQuantTop5() {
+  const ol = document.getElementById('search-quant-top5');
+  const status = document.getElementById('search-quant-status');
+  if (!ol) return;
+  if (!Array.isArray(_quantAll) || !_quantAll.length) {
+    ol.innerHTML = '<li class="top-rec-empty">퀀트 데이터가 아직 로드되지 않았습니다.</li>';
+    if (status) status.textContent = '데이터 없음';
+    return;
+  }
+  try {
+    const scored = scoreQuantRows(_quantAll, _quantFilter || 'balanced', _quantAll).slice(0, 5);
+    if (!scored.length) {
+      ol.innerHTML = '<li class="top-rec-empty">조건을 만족하는 종목이 없습니다.</li>';
+      if (status) status.textContent = '0개';
+      return;
+    }
+    ol.innerHTML = scored.map((d, i) => `
+      <li class="top-rec-item" onclick="selectSearchStock('${escapeJsAttr(d.code)}','${escapeJsAttr(d.name)}')">
+        <div class="top-rec-rank">${i + 1}</div>
+        <div>
+          <div class="top-rec-name">${escapeHtml(d.name)}</div>
+          <div class="top-rec-meta">${escapeHtml(d.code)} · ${escapeHtml(d.sector || '-')} · PER ${(d.per||0).toFixed(1)} · ROE ${(d.roe||0).toFixed(1)}%</div>
+        </div>
+        <div class="top-rec-right ${d.score >= 78 ? 'up-chip' : d.score >= 62 ? '' : 'down-chip'}">${d.score}점</div>
+      </li>`).join('');
+    if (status) status.textContent = `상위 ${scored.length}개`;
+  } catch (e) {
+    ol.innerHTML = `<li class="top-rec-empty">로드 실패: ${escapeHtml(e.message || '')}</li>`;
+    if (status) status.textContent = '오류';
+  }
+}
+
+async function loadWilderTop5(force = false) {
+  const ol = document.getElementById('search-wilder-top5');
+  const status = document.getElementById('search-wilder-status');
+  if (!ol) return;
+  if (status) status.textContent = '분석 중...';
+  ol.innerHTML = '<li class="top-rec-empty"><div class="spinner" style="margin:0 auto 6px;"></div>대장주 Wilder 분석 중...</li>';
+
+  // 3개 유니버스 분석 — 캐시 우선, 없으면 백그라운드 실행
+  const universes = ['kospi', 'dow', 'nasdaq'];
+  try {
+    for (const u of universes) {
+      if (!_wilderResults[u]) {
+        // 강제 백그라운드 분석 (await — 사용자가 종목 검색 탭에 들어왔으니 한 번 돌려둘 가치 있음)
+        await runWilderAnalysisForUniverse(u);
+      }
+    }
+    const buyAll = universes.flatMap(u =>
+      (_wilderResults[u] || []).filter(x => x && x.result && !x.result.error && x.result.final === 'BUY')
+    );
+    if (!buyAll.length) {
+      ol.innerHTML = '<li class="top-rec-empty">현재 BUY 시그널이 발생한 대장주가 없습니다.</li>';
+      if (status) status.textContent = '0개';
+      return;
+    }
+    const ranked = buyAll.map(x => {
+      const pt = x.result.priceTargets || {};
+      const rsi = x.result.rsi?.rsi;
+      const score =
+        (Number(pt.riskReward) || 0) * 8 +
+        (Number(pt.upsidePct) || 0) +
+        (rsi != null && rsi < 40 ? 8 : 0) +
+        (x.result.reasons?.length || 0) * 2;
+      return { ...x, _recScore: score };
+    }).sort((a, b) => b._recScore - a._recScore).slice(0, 5);
+
+    ol.innerHTML = ranked.map((x, i) => {
+      const pt = x.result.priceTargets || {};
+      const upside = Number.isFinite(pt.upsidePct) ? `+${pt.upsidePct.toFixed(1)}%` : '-';
+      const rr = Number.isFinite(pt.riskReward) ? `1:${pt.riskReward.toFixed(1)}` : '-';
+      const rsi = x.result.rsi?.rsi != null ? x.result.rsi.rsi.toFixed(0) : '-';
+      return `<li class="top-rec-item" onclick="selectSearchStock('${escapeJsAttr(x.code)}','${escapeJsAttr(x.name)}')">
+        <div class="top-rec-rank">${i + 1}</div>
+        <div>
+          <div class="top-rec-name">${escapeHtml(x.name)}</div>
+          <div class="top-rec-meta">${escapeHtml(x.code)} · RSI ${rsi} · 손익비 ${rr}</div>
+        </div>
+        <div class="top-rec-right up-chip">${upside}</div>
+      </li>`;
+    }).join('');
+    if (status) status.textContent = `상위 ${ranked.length}개`;
+  } catch (e) {
+    ol.innerHTML = `<li class="top-rec-empty">분석 실패: ${escapeHtml(e.message || '')}</li>`;
+    if (status) status.textContent = '오류';
+  }
+}
+
+// ═══ 대장주 전 고점 돌파 + 장대양봉 스크리너 ═══════════════════════
+function formatTurnover(turnover, market) {
+  if (!Number.isFinite(turnover) || turnover <= 0) return '-';
+  if (market === 'J') {
+    if (turnover >= 1e12) return (turnover / 1e12).toFixed(2) + '조원';
+    if (turnover >= 1e8)  return Math.round(turnover / 1e8) + '억원';
+    return Math.round(turnover / 1e4) + '만원';
+  }
+  if (turnover >= 1e9) return '$' + (turnover / 1e9).toFixed(2) + 'B';
+  if (turnover >= 1e6) return '$' + (turnover / 1e6).toFixed(1) + 'M';
+  return '$' + Math.round(turnover).toLocaleString();
+}
+
+async function runBreakoutScreener() {
+  const status = document.getElementById('breakout-status');
+  const result = document.getElementById('search-breakout-result');
+  if (!result) return;
+  if (status) status.textContent = '실행 중...';
+  result.innerHTML = '<div class="muted-card" style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div><p style="font-size:.78rem;color:var(--text2);margin-top:10px;">대장주 OHLC 조회 중... (30~60초 소요)</p></div>';
+
+  // 대장주 유니버스
+  const koLeaders = (WILDER_UNIVERSES.kospi || []).slice(0, 50);
+  const usLeadersRaw = [...(WILDER_UNIVERSES.dow || []), ...(WILDER_UNIVERSES.nasdaq || []).slice(0, 50)];
+  const usLeaders = usLeadersRaw.filter((v, i, a) => a.findIndex(x => x.code === v.code) === i);
+
+  const allLeaders = [
+    ...koLeaders.map(x => ({ ...x, market: 'J' })),
+    ...usLeaders.map(x => ({ ...x, market: x.market || 'NAS' })),
+  ];
+
+  // 30개씩 청크
+  const chunkSize = 25;
+  const chunks = [];
+  for (let i = 0; i < allLeaders.length; i += chunkSize) {
+    chunks.push(allLeaders.slice(i, i + chunkSize));
+  }
+
+  const allBars = {};
+  let done = 0;
+  for (const chunk of chunks) {
+    try {
+      const res = await apiFetch('/api/ohlc-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: chunk.map(x => ({ code: x.code, market: x.market })), days: 90 }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        Object.assign(allBars, data);
+      }
+    } catch (e) {
+      console.warn('breakout chunk failed', e);
+    }
+    done += chunk.length;
+    if (status) status.textContent = `조회 ${done}/${allLeaders.length}`;
+  }
+
+  // 조건 검사
+  const PRIOR_HIGH_WINDOW = 60;
+  const MIN_BODY_RATIO = 0.6;
+  const MIN_TURNOVER_KRW = 10_000_000_000;
+  const MIN_TURNOVER_USD = 50_000_000;
+
+  const candidates = [];
+  for (const leader of allLeaders) {
+    const key = `${leader.market}:${leader.code}`;
+    const item = allBars[key] || allBars[`${leader.market === 'J' ? 'J' : 'NAS'}:${leader.code}`];
+    if (!item || item.error || !Array.isArray(item.bars) || item.bars.length < PRIOR_HIGH_WINDOW + 2) continue;
+    const bars = item.bars;
+    const today = bars[bars.length - 1];
+    if (!today || !Number.isFinite(today.close) || !Number.isFinite(today.open) || !Number.isFinite(today.high) || !Number.isFinite(today.low)) continue;
+
+    const priorBars = bars.slice(Math.max(0, bars.length - 1 - PRIOR_HIGH_WINDOW), bars.length - 1);
+    if (!priorBars.length) continue;
+    const priorHigh = Math.max(...priorBars.map(b => b.high || 0));
+    if (!Number.isFinite(priorHigh) || priorHigh <= 0) continue;
+    if (today.close <= priorHigh) continue;             // ① 전 고점 돌파
+    if (today.close <= today.open) continue;            // ② 당일 양봉
+
+    const range = today.high - today.low;
+    const body = today.close - today.open;
+    const bodyRatio = range > 0 ? body / range : 0;
+    if (bodyRatio < MIN_BODY_RATIO) continue;            // ③ 장대양봉
+
+    const turnover = today.close * (today.volume || 0);
+    const minTurnover = leader.market === 'J' ? MIN_TURNOVER_KRW : MIN_TURNOVER_USD;
+    if (turnover < minTurnover) continue;                // ④ 거래대금
+
+    const breakoutPct = ((today.close - priorHigh) / priorHigh) * 100;
+    const dayChangePct = ((today.close - today.open) / today.open) * 100;
+
+    candidates.push({
+      ...leader,
+      today,
+      priorHigh,
+      breakoutPct,
+      dayChangePct,
+      bodyRatio,
+      turnover,
+      _score: bodyRatio * 60 + breakoutPct * 2 + dayChangePct * 0.8,
+    });
+  }
+  candidates.sort((a, b) => b._score - a._score);
+
+  if (!candidates.length) {
+    result.innerHTML = '<div class="mp-empty"><div class="ei">😔</div><p>오늘 조건을 만족하는 대장주가 없습니다. 시장이 조용하거나 신선 데이터가 아직 반영되지 않았을 수 있습니다.</p></div>';
+    if (status) status.textContent = '0개';
+    return;
+  }
+
+  result.innerHTML = `<div class="sheet-wrap"><table class="sheet-table">
+    <thead><tr>
+      <th style="width:32px">#</th>
+      <th>종목명</th>
+      <th>코드</th>
+      <th>시장</th>
+      <th class="calc-col">현재가</th>
+      <th class="calc-col">전고점</th>
+      <th class="calc-col">돌파(%)</th>
+      <th class="calc-col">당일(%)</th>
+      <th class="calc-col">몸통/전체</th>
+      <th class="calc-col">거래대금</th>
+    </tr></thead>
+    <tbody>${candidates.map((c, i) => `
+      <tr onclick="selectSearchStock('${escapeJsAttr(c.code)}','${escapeJsAttr(c.name)}')">
+        <td>${i + 1}</td>
+        <td>${escapeHtml(c.name)}</td>
+        <td>${escapeHtml(c.code)}</td>
+        <td>${c.market === 'J' ? '🇰🇷 KR' : '🇺🇸 US'}</td>
+        <td class="up-chip">${formatMoneyByCode(c.today.close, c.code)}</td>
+        <td>${formatMoneyByCode(c.priorHigh, c.code)}</td>
+        <td class="up-chip">+${c.breakoutPct.toFixed(2)}%</td>
+        <td class="up-chip">+${c.dayChangePct.toFixed(2)}%</td>
+        <td>${(c.bodyRatio * 100).toFixed(0)}%</td>
+        <td>${formatTurnover(c.turnover, c.market)}</td>
+      </tr>`).join('')}</tbody>
+  </table></div>`;
+  if (status) status.textContent = `${candidates.length}개 발견`;
+}
+
+window.loadTopRecommendations = loadTopRecommendations;
+window.runBreakoutScreener = runBreakoutScreener;
 
 // 종목 검색 자동완성 (STOCK_DB 기준)
 let _searchSuggestActiveIdx = -1;
@@ -7070,6 +7403,40 @@ function drawAcctRows(rows) {
   }).join('');
   updateAcctFooter(rows);
   renderBrokerPnlChart(rows);
+  renderSearchAcctTable(rows);
+}
+
+function renderSearchAcctTable(rows) {
+  const tbody = document.getElementById('search-acct-body');
+  if (!tbody) return;
+  const valid = (rows || []).filter(a => normalizeStockCode(a.code) || a.stockName);
+  if (!valid.length) {
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:18px;color:var(--text2);font-size:.82rem;">계좌별 현황을 입력하면 여기에 현재가가 표시됩니다. (MY자산 → 계좌별 현황)</td></tr>';
+    return;
+  }
+  tbody.innerHTML = valid.map((a, i) => {
+    const ev   = a.price && a.qty ? a.qty * a.price : (a.eval || 0);
+    const pur  = a.avgBuy && a.qty ? a.qty * a.avgBuy : (a.purchase || 0);
+    const pnl  = ev - pur;
+    const rate = pur > 0 ? Math.round(pnl / pur * 10000) / 100 : 0;
+    const pc   = pnl > 0 ? 'cell-up' : pnl < 0 ? 'cell-down' : 'cell-flat';
+    const rc   = rate > 0 ? 'cell-up' : rate < 0 ? 'cell-down' : 'cell-flat';
+    const codeClean = normalizeStockCode(a.code);
+    return `<tr onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))showHoldingDetail('${escapeJsAttr(a.code||'')}')">
+      <td>${i + 1}</td>
+      <td>${escapeHtml(a.brokerage || '-')}</td>
+      <td>${escapeHtml(a.acctType || '-')}</td>
+      <td>${escapeHtml(codeClean || a.code || '-')}</td>
+      <td>${escapeHtml(a.stockName || '-')}</td>
+      <td>${a.qty ? fmt(a.qty) : '-'}</td>
+      <td>${a.avgBuy ? formatMoneyByCode(a.avgBuy, a.code) : '-'}</td>
+      <td class="cell-flat">${a.price ? formatMoneyByCode(a.price, a.code) : '-'}</td>
+      <td>${ev ? formatMoneyByCode(ev, a.code) : '-'}</td>
+      <td class="cell-flat">${pur ? formatMoneyByCode(pur, a.code) : '-'}</td>
+      <td class="${rc}">${pur || ev ? (rate >= 0 ? '+' : '') + rate.toFixed(2) + '%' : '-'}</td>
+      <td class="${pc}">${pur || ev ? (pnl >= 0 ? '+' : '-') + formatMoneyByCode(Math.abs(pnl), a.code) : '-'}</td>
+    </tr>`;
+  }).join('');
 }
 
 function acctCellChange(idx, input) {
