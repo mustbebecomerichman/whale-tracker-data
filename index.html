@@ -2892,6 +2892,39 @@ async function initMyPage(){
   await loadAutoFxRate();
   await loadMpData();
   schedulePortfolioAutoQuote(true);
+  // 관리자: 로그인/새로고침 시 KIS 거래내역 자동 동기화 (1시간에 1회 throttle, 백그라운드)
+  scheduleAutoKisTxSync();
+}
+
+// MY자산 진입 시 KIS 거래내역 자동 동기화 (관리자 본인, 1h throttle)
+async function scheduleAutoKisTxSync(){
+  if (!me) return;
+  if (typeof importKisTransactions !== 'function') return;
+  let isAdm = false;
+  try { isAdm = await isAdminUser(); } catch(_) {}
+  if (!isAdm) return;
+  const yr = new Date().getFullYear();
+  const key = `kis-tx-last-auto-sync-${me.uid}-${yr}`;
+  const last = parseInt(localStorage.getItem(key) || '0', 10);
+  const ONE_HOUR = 60 * 60 * 1000;
+  if (last && Date.now() - last < ONE_HOUR) {
+    console.log('[KIS-tx auto-sync] 1시간 이내 동기화 완료 상태 — skip');
+    return;
+  }
+  // 페이지 렌더 후 1.5초 뒤 백그라운드로 시작 (UI 차단 방지)
+  setTimeout(async () => {
+    try {
+      const added = await importKisTransactions({silent: true});
+      localStorage.setItem(key, String(Date.now()));
+      if (typeof added === 'number' && added > 0) {
+        showToast(`📋 KIS 거래내역 자동 동기화 — 신규 ${added}건`, 'ok');
+      } else {
+        console.log('[KIS-tx auto-sync] 신규 거래 없음 (또는 동기화 완료)');
+      }
+    } catch (e) {
+      console.warn('[KIS-tx auto-sync] 실패:', e.message || e);
+    }
+  }, 1500);
 }
 function emptyPortfolio(){
   const yr=String(new Date().getFullYear());
