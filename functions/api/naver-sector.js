@@ -1,4 +1,4 @@
-﻿import { corsHeaders, rejectUntrustedOrigin, requireApprovedFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
+import { corsHeaders, rejectUntrustedOrigin, requireApprovedFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
 
 /**
  * Cloudflare Pages Function — 네이버 금융 종목 섹터 조회
