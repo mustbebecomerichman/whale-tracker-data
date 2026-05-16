@@ -3413,8 +3413,19 @@ function normalizeAccountInputRow(a){
 function syncSheetRowsToMpData(){
   if(!mpData)mpData=emptyPortfolio();
   if(!mpData.transactions)mpData.transactions={};
+  // 빈 행(코드/이름만 있고 수량·가격 0) 자동 폐기 — 잔류 'phantom' 방지
+  // 의미 있는 행: draft + (qty>0 AND (avgBuy>0 || price>0)) OR fee/tax/note 입력
+  const isMeaningful = (t) => {
+    if (t._draftId) return true;
+    const q = Number(t.qty)||0;
+    const a = Number(t.avgBuy)||0;
+    const p = Number(t.price)||0;
+    if (q > 0 && (a > 0 || p > 0)) return true;
+    if (Number(t.fee) > 0 || Number(t.tax) > 0 || (t.note||'').trim()) return true;
+    return false;
+  };
   mpData.transactions[mpYear]=_sheetRows
-    .filter(t=>t._draftId||t.name||t.code||t.brokerage||t.acctType||t.qty||t.avgBuy||t.price||t.note)
+    .filter(isMeaningful)
     .map(t=>({...t,code:normalizeStockCode(t.code||''),name:resolveStockName(t.code,t.name||''),acctType:t.acctType||'위탁'}));
   renderYearChips(mpData.transactions);
   renderPortfolioPeriodMetrics(mpData.history||[]);
@@ -3432,9 +3443,45 @@ function syncAcctRowsToMpData(){
 function syncDivRowsToMpData(){
   if(!mpData)mpData=emptyPortfolio();
   if(!mpData.dividends)mpData.dividends={};
-  mpData.dividends[_divYear]=_divRows
+  const validRows = _divRows
     .filter(d=>d._draftId||d.name||d.code||d.brokerage||calcDivGross(d)>0||d.note)
-    .map(d=>({...d,code:normalizeStockCode(d.code||''),name:resolveStockName(d.code,d.name||'')}));
+    .map(d=>{
+      const {_year, ...rest} = d;
+      return {...rest,code:normalizeStockCode(d.code||''),name:resolveStockName(d.code,d.name||'')};
+    });
+  if (_divYear === 'all') {
+    // 전체 보기: 행의 date 연도로 재구성
+    const next = {};
+    validRows.forEach(d => {
+      const yr = (d.date||'').slice(0,4) || String(new Date().getFullYear());
+      if (!next[yr]) next[yr] = [];
+      next[yr].push(d);
+    });
+    mpData.dividends = next;
+  } else {
+    // 특정 연도 보기: 행의 date 가 다른 연도면 해당 연도 버킷으로 이동
+    const stayRows = [];
+    const movedByYear = {};
+    validRows.forEach(d => {
+      const dateYr = (d.date||'').slice(0,4);
+      if (dateYr && dateYr !== _divYear) {
+        if (!movedByYear[dateYr]) movedByYear[dateYr] = [];
+        movedByYear[dateYr].push(d);
+      } else {
+        stayRows.push(d);
+      }
+    });
+    mpData.dividends[_divYear] = stayRows;
+    Object.entries(movedByYear).forEach(([yr, rows]) => {
+      if (!mpData.dividends[yr]) mpData.dividends[yr] = [];
+      // dedup: (date+code+brokerage+dpq+qty)
+      const seen = new Set(mpData.dividends[yr].map(r => `${r.date}|${r.code}|${r.brokerage}|${r.dpq}|${r.qty}`));
+      rows.forEach(r => {
+        const k = `${r.date}|${r.code}|${r.brokerage}|${r.dpq}|${r.qty}`;
+        if (!seen.has(k)) { mpData.dividends[yr].push(r); seen.add(k); }
+      });
+    });
+  }
   renderDivYearChips(mpData.dividends);
 }
 
@@ -3859,6 +3906,16 @@ async function importTx2025FromSheet(){
 window.importTx2025FromSheet=importTx2025FromSheet;
 function deleteRow(idx){
   if(!confirm('이 행을 삭제하시겠습니까?'))return;
+  // KIS 자동 동기화로 가져온 행을 삭제할 경우, 다음 동기화에서 재추가되지 않도록
+  // _kisOrderNo 를 mpData.deletedKisOrders 에 영구 기록
+  const removed = _sheetRows[idx];
+  if (removed?._kisOrderNo) {
+    if (!mpData) mpData = emptyPortfolio();
+    if (!Array.isArray(mpData.deletedKisOrders)) mpData.deletedKisOrders = [];
+    if (!mpData.deletedKisOrders.includes(String(removed._kisOrderNo))) {
+      mpData.deletedKisOrders.push(String(removed._kisOrderNo));
+    }
+  }
   _sheetRows.splice(idx,1);
   drawSheetRows(_sheetRows);
   syncSheetRowsToMpData();
@@ -7512,6 +7569,9 @@ async function importKisTransactions(options={}){
     Object.values(mpData.transactions).forEach(yearRows => {
       (yearRows || []).forEach(t => { if (t._kisOrderNo) existingOrders.add(String(t._kisOrderNo)); });
     });
+    // 사용자가 명시적으로 삭제한 KIS 주문 — 자동 재추가 차단
+    const deletedOrders = new Set((mpData.deletedKisOrders || []).map(String));
+    deletedOrders.forEach(o => existingOrders.add(o));
     // 매도 행의 평균매입가를 가중평균으로 계산하기 위해 (code+acctType) 별 포지션 추적
     // 1) 기존 mpData 의 매수 거래로 초기 포지션 빌드 (이전 KIS 동기화 시 들어온 매수들)
     const positions = {};  // key: code|acctType -> { qty, cost }
