@@ -1,4 +1,4 @@
-﻿import { corsHeaders, rejectUntrustedOrigin, requireApprovedFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
+import { corsHeaders, rejectUntrustedOrigin, requireApprovedFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
 
 /**
  * Cloudflare Pages Function — KIS 주식잔고조회 (관리자 본인 계정 전용)

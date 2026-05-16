@@ -1,4 +1,4 @@
-﻿import { corsHeaders, rejectUntrustedOrigin, requireApprovedFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
+import { corsHeaders, rejectUntrustedOrigin, requireApprovedFirebaseUser, safeErrorResponse } from '../_shared/firebase-auth.js';
 
 /**
  * Cloudflare Pages Function - KIS 투자자별 수급 현황
