@@ -888,31 +888,34 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   #detail-tbody td:nth-child(7)::before{content:"변동";}
   #detail-tbody td:nth-child(8)::before{content:"동향";}
 
-  #acct-body td:nth-child(2)::before{content:"증권사";}
-  #acct-body td:nth-child(3)::before{content:"계좌유형";}
-  #acct-body td:nth-child(4)::before{content:"종목코드";}
-  #acct-body td:nth-child(5)::before{content:"종목명";}
-  #acct-body td:nth-child(6)::before{content:"수량";}
-  #acct-body td:nth-child(7)::before{content:"평균매입가";}
-  #acct-body td:nth-child(8)::before{content:"현재가";}
-  #acct-body td:nth-child(9)::before{content:"평가금액";}
-  #acct-body td:nth-child(10)::before{content:"매입금액";}
-  #acct-body td:nth-child(11)::before{content:"수익률";}
-  #acct-body td:nth-child(12)::before{content:"평가손익";}
+  #acct-body td:nth-child(2)::before{content:"소유주";}
+  #acct-body td:nth-child(3)::before{content:"증권사";}
+  #acct-body td:nth-child(4)::before{content:"계좌유형";}
+  #acct-body td:nth-child(5)::before{content:"종목코드";}
+  #acct-body td:nth-child(6)::before{content:"종목명";}
+  #acct-body td:nth-child(7)::before{content:"수량";}
+  #acct-body td:nth-child(8)::before{content:"평균매입가";}
+  #acct-body td:nth-child(9)::before{content:"현재가";}
+  #acct-body td:nth-child(10)::before{content:"등락(%)";}
+  #acct-body td:nth-child(11)::before{content:"평가금액";}
+  #acct-body td:nth-child(12)::before{content:"매입금액";}
+  #acct-body td:nth-child(13)::before{content:"수익률";}
+  #acct-body td:nth-child(14)::before{content:"평가손익";}
 
-  #div-body td:nth-child(2)::before{content:"날짜";}
-  #div-body td:nth-child(3)::before{content:"증권사";}
-  #div-body td:nth-child(4)::before{content:"종목코드";}
-  #div-body td:nth-child(5)::before{content:"종목명";}
-  #div-body td:nth-child(6)::before{content:"주당배당금";}
-  #div-body td:nth-child(7)::before{content:"보유주식수";}
-  #div-body td:nth-child(8)::before{content:"배당금";}
-  #div-body td:nth-child(9)::before{content:"ISA";}
-  #div-body td:nth-child(10)::before{content:"연금";}
-  #div-body td:nth-child(11)::before{content:"과세율";}
-  #div-body td:nth-child(12)::before{content:"세금";}
-  #div-body td:nth-child(13)::before{content:"실수령액";}
-  #div-body td:nth-child(14)::before{content:"메모";}
+  #div-body td:nth-child(2)::before{content:"소유주";}
+  #div-body td:nth-child(3)::before{content:"날짜";}
+  #div-body td:nth-child(4)::before{content:"증권사";}
+  #div-body td:nth-child(5)::before{content:"종목코드";}
+  #div-body td:nth-child(6)::before{content:"종목명";}
+  #div-body td:nth-child(7)::before{content:"주당배당금";}
+  #div-body td:nth-child(8)::before{content:"보유주식수";}
+  #div-body td:nth-child(9)::before{content:"배당금";}
+  #div-body td:nth-child(10)::before{content:"ISA";}
+  #div-body td:nth-child(11)::before{content:"연금";}
+  #div-body td:nth-child(12)::before{content:"과세율";}
+  #div-body td:nth-child(13)::before{content:"세금";}
+  #div-body td:nth-child(14)::before{content:"실수령액";}
+  #div-body td:nth-child(15)::before{content:"메모";}
 }
 
 /* 거래내역: 1줄 테이블 layout */
@@ -976,7 +979,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
     <p id="privacy-consent-copy">WhaleTracker Pro는 로그인과 포트폴리오 저장에 필요한 정보만 사용합니다.</p>
     <ul class="consent-list">
       <li><b>수집</b><span>이메일, 표시 이름, Firebase UID, 로그인/동의 시각</span></li>
-      <li><b>사용</b><span>회원 식별, MY자산 저장, 보안 확인</span></li>
+      <li><b>사용</b><span>회원 식별, MY금융 저장, 보안 확인</span></li>
       <li><b>보관</b><span>동의 이력은 나중에 확인할 수 있도록 기록됩니다</span></li>
     </ul>
     <p>동의하지 않아도 취소할 수 있고, Google 계정 선택은 동의 후에만 열립니다.</p>
@@ -993,7 +996,8 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   <div class="header-inner">
     <div class="logo" onclick="showPage('mypage')">🐋 <span>Whale</span>Tracker Pro</div>
     <nav id="main-nav">
-      <button class="active" onclick="showPage('mypage')">MY자산</button>
+      <button class="active" onclick="showPage('mypage')">MY금융</button>
+      <button onclick="showPage('wealth')">💎 자산증식플랜</button>
       <button onclick="showPage('rebalance')">🔄 리밸런싱</button>
       <button onclick="showPage('search')">🔍 신규 종목 서치</button>
       <button id="admin-nav-btn" style="display:none" onclick="showPage('admin')">⚙ 관리자</button>
@@ -1111,7 +1115,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
             <th class="calc-col">추정EPS</th>
           </tr></thead>
           <tbody id="search-acct-body">
-            <tr><td colspan="13" style="text-align:center;padding:18px;color:var(--text2);font-size:.82rem;">계좌별 현황을 입력하면 여기에 핵심 지표가 표시됩니다. (MY자산 → 계좌별 현황)</td></tr>
+            <tr><td colspan="13" style="text-align:center;padding:18px;color:var(--text2);font-size:.82rem;">계좌별 현황을 입력하면 여기에 핵심 지표가 표시됩니다. (MY금융 → 계좌별 현황)</td></tr>
           </tbody>
         </table>
       </div>
@@ -1307,14 +1311,14 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
 <div class="page active product-view-products asset-section-change stock-only" id="page-mypage">
   <div class="myasset-mobile-header" aria-label="MY asset header">
     <button type="button" class="myasset-back" onclick="showPage('nps')" aria-label="뒤로">‹</button>
-    <div class="myasset-title">MY자산<span class="myasset-date-badge" id="mp-title-date-m"></span></div>
+    <div class="myasset-title">MY금융<span class="myasset-date-badge" id="mp-title-date-m"></span></div>
     <button type="button" class="myasset-gear" onclick="setPortfolioProductView('accounts',this)" aria-label="설정">⚙</button>
   </div>
   <div class="hero">
-    <h1>MY<span>자산</span><span class="myasset-date-badge" id="mp-title-date"></span></h1>
-    <p>개인 투자 현황 · 연간 실현 손익 · 계좌별 성과</p>
+    <h1>MY<span>금융</span><span class="myasset-date-badge" id="mp-title-date"></span></h1>
+    <p>증권 · 계좌별 현황 · 거래 · 배당</p>
   </div>
-  <div class="myasset-tabs" role="tablist" aria-label="MY자산 섹션">
+  <div class="myasset-tabs" role="tablist" aria-label="MY금융 섹션">
     <button type="button" class="myasset-tab active" data-asset-section="change" onclick="setMyAssetSection('change',this)">자산변동</button>
     <button type="button" class="myasset-tab" data-asset-section="accounts" onclick="setMyAssetSection('accounts',this)">계좌별현황</button>
     <button type="button" class="myasset-tab" data-asset-section="tx" onclick="setMyAssetSection('tx',this)">거래내역</button>
@@ -1390,9 +1394,11 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <table class="sheet-table" id="acct-table">
         <thead><tr>
           <th style="width:34px">#</th>
+          <th>소유주</th>
           <th>증권사</th><th>계좌유형</th><th>종목코드</th><th>종목명</th>
           <th>수량</th><th>평균매입가</th>
           <th class="calc-col">현재가</th>
+          <th class="calc-col" title="전일 대비 등락률">등락(%)</th>
           <th class="calc-col">평가금액</th>
           <th class="calc-col">매입금액</th>
           <th class="calc-col">수익률</th>
@@ -1400,7 +1406,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         </tr></thead>
         <tbody id="acct-body"></tbody>
         <tfoot><tr>
-          <td colspan="8" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
+          <td colspan="10" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
           <td id="af-eval" style="padding:8px 10px;font-weight:700;"></td>
           <td id="af-purchase" style="padding:8px 10px;font-weight:700;"></td>
           <td id="af-rate" style="padding:8px 10px;font-weight:700;"></td>
@@ -1461,6 +1467,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <table class="sheet-table" id="sheet-table">
         <thead><tr>
           <th style="width:34px;">#</th>
+          <th>소유주</th>
           <th>날짜</th>
           <th>증권사</th>
           <th>계좌유형</th>
@@ -1479,7 +1486,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         </tr></thead>
         <tbody id="sheet-body"></tbody>
         <tfoot><tr id="sheet-foot">
-          <td colspan="9" style="text-align:right;font-weight:700;color:var(--text2);">합 계</td>
+          <td colspan="10" style="text-align:right;font-weight:700;color:var(--text2);">합 계</td>
           <td id="ft-purchase" style="font-weight:700;"></td>
           <td id="ft-eval" style="font-weight:700;"></td>
           <td id="ft-pnl" style="font-weight:700;"></td>
@@ -1520,6 +1527,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <table class="sheet-table" id="div-table">
         <thead><tr>
           <th style="width:34px">#</th>
+          <th>소유주</th>
           <th>날짜</th><th>증권사</th>
           <th>종목코드</th><th>종목명</th>
           <th>주당배당금</th><th>보유주식수</th>
@@ -1533,7 +1541,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         </tr></thead>
         <tbody id="div-body"></tbody>
         <tfoot><tr>
-          <td colspan="7" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
+          <td colspan="8" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
           <td id="div-ft-gross" style="font-weight:700;padding:8px 10px;"></td>
           <td></td><td></td><td></td>
           <td id="div-ft-tax" style="font-weight:700;padding:8px 10px;color:var(--down)"></td>
@@ -1590,6 +1598,126 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
 </div>
 
 <!-- ── REBALANCE PAGE (RRG 섹터 로테이션) ── -->
+<!-- ── 자산증식플랜 PAGE ── -->
+<div class="page" id="page-wealth">
+  <div class="hero">
+    <h1>💎 <span>자산증식플랜</span></h1>
+    <p>주식·예적금·부동산·연봉·연금 — 가족 전체 자산을 한 곳에서 관리</p>
+  </div>
+  <div class="search-subnav">
+    <button type="button" class="search-subnav-btn active" data-tab="assets" onclick="showWealthTab('assets')">🏦 자산</button>
+    <button type="button" class="search-subnav-btn" data-tab="salary" onclick="showWealthTab('salary')">💼 연봉</button>
+    <button type="button" class="search-subnav-btn" data-tab="gemini" onclick="showWealthTab('gemini')">🤖 GEMINAI 상담</button>
+  </div>
+
+  <!-- 자산 sub-tab -->
+  <div id="wealth-tab-assets-content">
+    <div class="section">
+      <div class="section-title">
+        <div class="section-title-left">📊 순자산 요약</div>
+        <button class="btn btn-outline btn-sm" onclick="recomputeWealthSummary()">🔄 재계산</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
+        <div class="mp-card c-green"><div class="mp-lbl">자산 합계 (+)</div><div class="mp-val up" id="wealth-asset-total">-</div></div>
+        <div class="mp-card c-blue"><div class="mp-lbl">부채 합계 (−)</div><div class="mp-val down" id="wealth-liab-total">-</div></div>
+        <div class="mp-card c-orange" style="border-top:3px solid var(--accent);"><div class="mp-lbl">순자산</div><div class="mp-val" id="wealth-net" style="color:var(--accent);font-size:1.3rem;">-</div></div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">
+        <div class="section-title-left">💎 자산/부채 항목
+          <span class="badge" id="wealth-asset-count">0건</span>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="addWealthAssetRow()">＋ 항목 추가</button>
+      </div>
+      <p style="font-size:.74rem;color:var(--text2);margin:0 0 10px;line-height:1.55;">
+        분류: 계좌·현금 / 예적금 / 투자(증권 계좌별 현황 합계 자동 반영) / 부동산 / 자동차 / 보험 / 연금 / 페이머니 / 포인트 / 대출 / 카드이용대금. 부채는 음수로 입력하거나 분류에 ‘대출/카드’로 지정.
+      </p>
+      <div class="sheet-wrap">
+        <table class="sheet-table" id="wealth-asset-table">
+          <thead><tr>
+            <th style="width:34px">#</th>
+            <th>소유주</th>
+            <th>분류</th>
+            <th>항목명</th>
+            <th class="calc-col">금액(원)</th>
+            <th class="calc-col">자동</th>
+            <th>비고</th>
+          </tr></thead>
+          <tbody id="wealth-asset-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 연봉 sub-tab -->
+  <div id="wealth-tab-salary-content" style="display:none;">
+    <div class="section">
+      <div class="section-title">
+        <div class="section-title-left">💼 연봉 추이
+          <span class="badge" id="wealth-salary-count">0건</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="window.open('https://docs.google.com/spreadsheets/d/1MojjXJOBVybDRWObrk5sHDWU0YTHDwypaDjMZB5AQMU/edit','_blank')">📄 Google Sheets 원본</button>
+          <button class="btn btn-primary btn-sm" onclick="addSalaryRow()">＋ 행 추가</button>
+        </div>
+      </div>
+      <p style="font-size:.74rem;color:var(--text2);margin:0 0 10px;line-height:1.55;">
+        본인/배우자/가족의 연봉을 연도별로 기록. 세전/세후/실수령 모두 입력하면 평균 인상률과 누적 추이가 자동 계산됩니다.
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px;">
+        <div class="mp-card c-green"><div class="mp-lbl">최근 연봉(세전)</div><div class="mp-val up" id="salary-latest-gross">-</div></div>
+        <div class="mp-card c-blue"><div class="mp-lbl">최근 실수령</div><div class="mp-val" id="salary-latest-net" style="color:#2563eb;">-</div></div>
+        <div class="mp-card c-orange"><div class="mp-lbl">평균 인상률 (CAGR)</div><div class="mp-val" id="salary-cagr" style="color:#e67e22;">-</div></div>
+      </div>
+      <div class="sheet-wrap">
+        <table class="sheet-table" id="salary-table">
+          <thead><tr>
+            <th style="width:34px">#</th>
+            <th>소유주</th>
+            <th>연도</th>
+            <th class="calc-col">세전(원)</th>
+            <th class="calc-col">세후(원)</th>
+            <th class="calc-col">실수령(원)</th>
+            <th class="calc-col">전년 대비(%)</th>
+            <th>비고</th>
+          </tr></thead>
+          <tbody id="salary-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- GEMINAI 상담 sub-tab -->
+  <div id="wealth-tab-gemini-content" style="display:none;">
+    <div class="section">
+      <div class="section-title">
+        <div class="section-title-left">🤖 GEMINAI 종합 자산 상담
+          <span class="badge" style="background:#fff7e0;color:#b07900;border-color:#f4d685;">실험 단계</span>
+        </div>
+      </div>
+      <p style="font-size:.85rem;color:var(--text2);line-height:1.7;">
+        Google Gemini 모델에 본인의 종합 자산 스냅샷(자산/부채/연봉/배당/실현손익)을 넘기고
+        <b>은퇴 시뮬레이션 · 세금 최적화 · 자산 배분 리밸런싱 · 부채 상환 우선순위</b> 조언을 받는 사용자 전용 채팅 인터페이스입니다.
+      </p>
+      <div style="margin:14px 0;padding:14px 16px;background:#f0f7ff;border:1px solid #cfe2ff;border-radius:10px;font-size:.82rem;line-height:1.6;color:#0f4e9b;">
+        <b>준비 중인 기능</b><br>
+        1) 현재 자산 스냅샷 자동 추출 (계좌·예적금·부동산·연봉·배당·실현손익) <br>
+        2) Gemini API 호출 (관리자의 GOOGLE_API_KEY 필요) <br>
+        3) 시나리오 입력 → 5가지 답변: 은퇴 가능 시점 / 세후 자산 추이 / 추천 리밸런싱 / 부채 우선순위 / 절세 액션 <br>
+        4) 답변은 사용자별 Firestore 기록 — 과거 상담 비교 가능
+      </p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <label style="font-size:.85rem;font-weight:700;">상담 시나리오 입력</label>
+        <textarea id="gemini-prompt" rows="4" placeholder="예: 현재 자산으로 만 65세에 월 400만원 인출 가능한지, 어느 자산을 줄이고 어느 자산을 늘려야 하는지 조언해줘."
+          style="width:100%;border:1.5px solid var(--border);border-radius:10px;padding:11px 14px;font-size:.92rem;font-family:inherit;resize:vertical;"></textarea>
+        <button class="btn btn-primary" onclick="askGemini()" style="align-self:flex-start;">💬 상담 요청 (준비 중)</button>
+      </div>
+      <div id="gemini-response" style="margin-top:18px;display:none;padding:14px 16px;background:#fafbfc;border:1px solid var(--border);border-radius:10px;font-size:.85rem;line-height:1.7;white-space:pre-wrap;"></div>
+    </div>
+  </div>
+</div>
+
 <div class="page" id="page-rebalance">
   <div class="hero">
     <h1>🔄 <span>리밸런싱</span> 분석</h1>
@@ -3413,11 +3541,14 @@ function accountRowToData(a){
   return {
     name:a.brokerage||'',
     acctType:a.acctType||'위탁',
+    owner:a.owner||DEFAULT_OWNER,
     code:a.code||'',
     stockName,
     qty:a.qty||0,
     avgBuy:a.avgBuy||0,
     price:a.price||0,
+    change:a.change||0,
+    changeRate:a.changeRate||0,
     eval:ev,
     purchase:pur,
     rate,
@@ -3445,11 +3576,14 @@ function normalizeAccountInputRow(a){
   return {
     brokerage: rawBroker,
     acctType:  a.acctType || '위탁',
+    owner:     a.owner || DEFAULT_OWNER,
     code,
     stockName,
     qty:       a.qty || 0,
     avgBuy:    a.avgBuy || (a.purchase && a.qty ? Math.round(a.purchase/a.qty) : 0),
     price:     a.price || 0,
+    change:    a.change || 0,
+    changeRate:a.changeRate || 0,
     eval:      a.eval || 0,
     purchase:  a.purchase || 0,
     _draftId:  a._draftId || '',
@@ -3806,6 +3940,7 @@ function drawSheetRows(rows, filtered=false){
     const acctOpts=ACCT_TYPES.map(a=>`<option${a===(t.acctType||'위탁')?' selected':''}>${escapeHtml(a)}</option>`).join('');
     return`<tr data-idx="${rowIdx}">
       <td class="row-num" title="Delete row">${rowDeleteButton(`deleteRow(${rowIdx})`)}</td>
+      <td><select class="sheet-input" data-field="owner" onchange="cellChange(${rowIdx},this)" style="width:64px">${ownerOptionsHtml(t.owner)}</select></td>
       <td><input class="sheet-input" type="date" value="${escapeAttr(t.date||'')}" data-field="date" onchange="cellChange(${rowIdx},this)" style="width:108px"/></td>
       <td><select class="sheet-input" data-field="brokerage" onchange="cellChange(${rowIdx},this)" style="width:82px"><option value="">선택</option>${brokerOpts}</select></td>
       <td><select class="sheet-input" data-field="acctType" onchange="cellChange(${rowIdx},this)" style="width:58px"><option value="">선택</option>${acctOpts}</select></td>
@@ -3847,7 +3982,7 @@ function cellChange(idx, input){
   if(!_sheetRows[idx]) return;
   const field=input.dataset.field;
   const val=input.value;
-  _sheetRows[idx][field]=field==='date'||field==='brokerage'||field==='acctType'||field==='code'||field==='name'||field==='note'?val:parseFloat(val)||0;
+  _sheetRows[idx][field]=field==='date'||field==='brokerage'||field==='acctType'||field==='code'||field==='name'||field==='note'||field==='owner'?val:parseFloat(val)||0;
   if(field==='code'){_sheetRows[idx]._autoName=false;_sheetRows[idx]._autoPrice=false;}
   if(field==='name'){_sheetRows[idx]._autoName=false;input.classList.remove('auto-filled');}
   if(field==='price'){_sheetRows[idx]._autoPrice=false;input.classList.remove('auto-price');}
@@ -3890,7 +4025,7 @@ function cellChange(idx, input){
 }
 function addSheetRow(){
   const today=new Date().toISOString().slice(0,10);
-  _sheetRows.unshift({date:today,brokerage:'',acctType:'위탁',code:'',name:'',qty:0,avgBuy:0,price:0,fee:0,tax:0,note:'',_autoFee:true,_autoTax:true,_draftId:String(Date.now())});
+  _sheetRows.unshift({date:today,owner:DEFAULT_OWNER,brokerage:'',acctType:'위탁',code:'',name:'',qty:0,avgBuy:0,price:0,fee:0,tax:0,note:'',_autoFee:true,_autoTax:true,_draftId:String(Date.now())});
   drawSheetRows(_sheetRows);
   syncSheetRowsToMpData();
   schedulePortfolioAutosave(true,120);
@@ -5317,6 +5452,232 @@ async function runBreakoutScreener() {
 window.loadTopRecommendations = loadTopRecommendations;
 window.runBreakoutScreener = runBreakoutScreener;
 
+// ═══ 자산증식플랜 (Wealth Plan) ═══════════════════════════════════════
+// 자산/부채 카테고리 + 연봉 추이 + GEMINAI 상담 입력
+const WEALTH_CATEGORIES = [
+  { key: '계좌·현금', sign: +1 },
+  { key: '예적금',     sign: +1 },
+  { key: '투자(자동)', sign: +1, auto: true },  // _acctRows 평가금액 합계 자동 반영
+  { key: '부동산',     sign: +1 },
+  { key: '자동차',     sign: +1 },
+  { key: '보험',       sign: +1 },
+  { key: '연금',       sign: +1 },
+  { key: '페이머니',   sign: +1 },
+  { key: '포인트',     sign: +1 },
+  { key: '대출',       sign: -1 },
+  { key: '카드이용대금', sign: -1 },
+];
+
+let _wealthAssets = [];
+let _salaryRows = [];
+let _wealthActiveTab = 'assets';
+
+function initWealthPage() {
+  loadWealthFromMpData();
+  showWealthTab(_wealthActiveTab || 'assets');
+}
+function showWealthTab(name) {
+  _wealthActiveTab = name;
+  document.querySelectorAll('#page-wealth .search-subnav-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === name)
+  );
+  const map = { assets:'wealth-tab-assets-content', salary:'wealth-tab-salary-content', gemini:'wealth-tab-gemini-content' };
+  Object.entries(map).forEach(([k,id]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (k===name) ? 'block' : 'none';
+  });
+  if (name === 'assets') { drawWealthAssetRows(); recomputeWealthSummary(); }
+  if (name === 'salary') { drawSalaryRows(); }
+}
+window.showWealthTab = showWealthTab;
+
+function loadWealthFromMpData() {
+  const wealth = (mpData && mpData.wealth) || {};
+  _wealthAssets = Array.isArray(wealth.assets) ? wealth.assets.slice() : [];
+  _salaryRows   = Array.isArray(wealth.salaries) ? wealth.salaries.slice() : [];
+}
+function syncWealthToMpData() {
+  if (!mpData) mpData = (typeof emptyPortfolio === 'function' ? emptyPortfolio() : {});
+  mpData.wealth = {
+    assets: _wealthAssets.filter(r => r.category || r.label || r.amount),
+    salaries: _salaryRows.filter(r => r.year || r.gross),
+  };
+}
+
+function autoWealthInvestmentAmount() {
+  // 계좌별 현황의 평가금액 합 (KRW만 단순 합산 — wealth는 원화 단일 기준)
+  if (!Array.isArray(_acctRows)) return 0;
+  return _acctRows.reduce((sum, a) => {
+    const ev = a.price && a.qty ? a.price * a.qty : (a.eval || 0);
+    return sum + (Number(ev) || 0);
+  }, 0);
+}
+
+function recomputeWealthSummary() {
+  // 자동 분류 항목('투자(자동)') 금액 갱신
+  _wealthAssets.forEach(r => {
+    if (r.category === '투자(자동)' || r._auto === true) {
+      r.amount = autoWealthInvestmentAmount();
+      r._auto = true;
+    }
+  });
+  let asset = 0, liab = 0;
+  _wealthAssets.forEach(r => {
+    const amt = Number(r.amount) || 0;
+    const cat = WEALTH_CATEGORIES.find(c => c.key === r.category);
+    const sign = cat ? cat.sign : (amt < 0 ? -1 : +1);
+    if (sign > 0) asset += Math.abs(amt);
+    else liab += Math.abs(amt);
+  });
+  const net = asset - liab;
+  const fmt = n => (n >= 0 ? '+' : '-') + Math.abs(Math.round(n)).toLocaleString('ko-KR') + '원';
+  const setText = (id, txt, cls) => {
+    const el = document.getElementById(id); if (!el) return;
+    el.textContent = txt;
+    if (cls != null) el.className = 'mp-val ' + cls;
+  };
+  setText('wealth-asset-total', fmt(asset), 'up');
+  setText('wealth-liab-total', fmt(-liab), 'down');
+  setText('wealth-net', fmt(net));
+  document.getElementById('wealth-asset-count').textContent = _wealthAssets.length + '건';
+}
+
+function drawWealthAssetRows() {
+  // 자동 합계가 빠져있으면 한 줄 자동 추가
+  if (!_wealthAssets.some(r => r.category === '투자(자동)')) {
+    _wealthAssets.unshift({ owner: DEFAULT_OWNER, category: '투자(자동)', label: '증권 계좌별 현황 합계', amount: autoWealthInvestmentAmount(), note: '자동 계산', _auto: true });
+  }
+  const tbody = document.getElementById('wealth-asset-body');
+  if (!tbody) return;
+  const catOptionsHtml = (selected) => WEALTH_CATEGORIES.map(c => `<option${c.key===selected?' selected':''}>${escapeHtml(c.key)}</option>`).join('');
+  tbody.innerHTML = _wealthAssets.map((r, i) => {
+    const isAuto = !!r._auto;
+    const amt = Number(r.amount) || 0;
+    const cat = WEALTH_CATEGORIES.find(c => c.key === r.category);
+    const sign = cat ? cat.sign : (amt < 0 ? -1 : +1);
+    const cls = sign > 0 ? 'up' : 'down';
+    return `<tr>
+      <td class="row-num">${rowDeleteButton(`deleteWealthAssetRow(${i})`)}</td>
+      <td><select class="sheet-input" data-field="owner" onchange="wealthAssetChange(${i},this)" style="width:64px">${ownerOptionsHtml(r.owner)}</select></td>
+      <td><select class="sheet-input" data-field="category" onchange="wealthAssetChange(${i},this)" style="min-width:110px">${catOptionsHtml(r.category)}</select></td>
+      <td><input class="sheet-input" type="text" value="${escapeAttr(r.label||'')}" data-field="label" placeholder="항목명" onchange="wealthAssetChange(${i},this)" style="min-width:140px"${isAuto?' readonly':''}/></td>
+      <td><input class="sheet-input calc-input ${cls}" type="number" value="${amt||''}" data-field="amount" placeholder="0" oninput="wealthAssetChange(${i},this)" style="width:130px"${isAuto?' readonly':''}/></td>
+      <td style="text-align:center;font-size:.72rem;color:var(--text2);">${isAuto?'🔄':''}</td>
+      <td><input class="sheet-input" type="text" value="${escapeAttr(r.note||'')}" data-field="note" placeholder="비고" onchange="wealthAssetChange(${i},this)" style="min-width:120px"/></td>
+    </tr>`;
+  }).join('');
+  recomputeWealthSummary();
+}
+function wealthAssetChange(idx, input) {
+  if (!_wealthAssets[idx]) return;
+  const field = input.dataset.field;
+  if (field === 'amount') _wealthAssets[idx].amount = parseFloat(input.value) || 0;
+  else _wealthAssets[idx][field] = input.value;
+  recomputeWealthSummary();
+  syncWealthToMpData();
+  schedulePortfolioAutosave(false);
+}
+function addWealthAssetRow() {
+  _wealthAssets.push({ owner: DEFAULT_OWNER, category: '계좌·현금', label: '', amount: 0, note: '' });
+  drawWealthAssetRows();
+  syncWealthToMpData();
+  schedulePortfolioAutosave(true, 120);
+}
+function deleteWealthAssetRow(idx) {
+  if (!confirm('이 항목을 삭제하시겠습니까?')) return;
+  _wealthAssets.splice(idx, 1);
+  drawWealthAssetRows();
+  syncWealthToMpData();
+  schedulePortfolioAutosave(true, 120);
+}
+window.addWealthAssetRow = addWealthAssetRow;
+window.deleteWealthAssetRow = deleteWealthAssetRow;
+window.wealthAssetChange = wealthAssetChange;
+window.recomputeWealthSummary = recomputeWealthSummary;
+
+function drawSalaryRows() {
+  const tbody = document.getElementById('salary-body');
+  if (!tbody) return;
+  _salaryRows.sort((a,b) => String(b.year||'').localeCompare(String(a.year||'')));
+  tbody.innerHTML = _salaryRows.map((r, i) => {
+    const prev = _salaryRows.find(x => Number(x.year) === Number(r.year) - 1 && x.owner === r.owner);
+    const growth = prev && prev.gross ? ((Number(r.gross||0) - Number(prev.gross||0)) / Number(prev.gross) * 100) : null;
+    const gCls = growth == null ? 'money-neutral' : growth > 0 ? 'up' : growth < 0 ? 'down' : 'money-neutral';
+    const gTxt = growth == null ? '-' : (growth >= 0 ? '+' : '') + growth.toFixed(1) + '%';
+    return `<tr>
+      <td class="row-num">${rowDeleteButton(`deleteSalaryRow(${i})`)}</td>
+      <td><select class="sheet-input" data-field="owner" onchange="salaryChange(${i},this)" style="width:64px">${ownerOptionsHtml(r.owner)}</select></td>
+      <td><input class="sheet-input" type="number" value="${r.year||''}" data-field="year" placeholder="2026" onchange="salaryChange(${i},this)" style="width:74px"/></td>
+      <td><input class="sheet-input" type="number" value="${r.gross||''}" data-field="gross" placeholder="0" oninput="salaryChange(${i},this)" style="width:120px"/></td>
+      <td><input class="sheet-input" type="number" value="${r.afterTax||''}" data-field="afterTax" placeholder="0" oninput="salaryChange(${i},this)" style="width:120px"/></td>
+      <td><input class="sheet-input" type="number" value="${r.net||''}" data-field="net" placeholder="0" oninput="salaryChange(${i},this)" style="width:120px"/></td>
+      <td><input class="sheet-input calc-input ${gCls}" value="${gTxt}" readonly style="width:78px"/></td>
+      <td><input class="sheet-input" type="text" value="${escapeAttr(r.note||'')}" data-field="note" placeholder="비고" onchange="salaryChange(${i},this)" style="min-width:120px"/></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('wealth-salary-count').textContent = _salaryRows.length + '건';
+  // 요약 카드
+  const latest = _salaryRows[0];
+  const fmt = n => Math.round(Number(n)||0).toLocaleString('ko-KR') + '원';
+  const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  setText('salary-latest-gross', latest && latest.gross ? fmt(latest.gross) : '-');
+  setText('salary-latest-net',   latest && latest.net   ? fmt(latest.net)   : (latest && latest.afterTax ? fmt(latest.afterTax) : '-'));
+  // CAGR: 가장 오래된 vs 가장 최근 (같은 owner 기준 — 단순화: 전체 기준)
+  if (_salaryRows.length >= 2) {
+    const oldest = _salaryRows[_salaryRows.length - 1];
+    const yrs = Number(latest.year) - Number(oldest.year);
+    if (yrs > 0 && oldest.gross > 0 && latest.gross > 0) {
+      const cagr = (Math.pow(latest.gross / oldest.gross, 1/yrs) - 1) * 100;
+      setText('salary-cagr', (cagr >= 0 ? '+' : '') + cagr.toFixed(2) + '%');
+    } else setText('salary-cagr', '-');
+  } else setText('salary-cagr', '-');
+}
+function salaryChange(idx, input) {
+  if (!_salaryRows[idx]) return;
+  const field = input.dataset.field;
+  if (['year','gross','afterTax','net'].includes(field)) _salaryRows[idx][field] = parseFloat(input.value) || 0;
+  else _salaryRows[idx][field] = input.value;
+  drawSalaryRows();
+  syncWealthToMpData();
+  schedulePortfolioAutosave(false);
+}
+function addSalaryRow() {
+  const thisYear = new Date().getFullYear();
+  _salaryRows.unshift({ owner: DEFAULT_OWNER, year: thisYear, gross: 0, afterTax: 0, net: 0, note: '' });
+  drawSalaryRows();
+  syncWealthToMpData();
+  schedulePortfolioAutosave(true, 120);
+}
+function deleteSalaryRow(idx) {
+  if (!confirm('이 행을 삭제하시겠습니까?')) return;
+  _salaryRows.splice(idx, 1);
+  drawSalaryRows();
+  syncWealthToMpData();
+  schedulePortfolioAutosave(true, 120);
+}
+window.addSalaryRow = addSalaryRow;
+window.deleteSalaryRow = deleteSalaryRow;
+window.salaryChange = salaryChange;
+
+async function askGemini() {
+  const promptEl = document.getElementById('gemini-prompt');
+  const respEl = document.getElementById('gemini-response');
+  if (!promptEl || !respEl) return;
+  respEl.style.display = 'block';
+  respEl.innerHTML = `<div style="color:var(--text2);">⚠️ Gemini 백엔드는 아직 연결되지 않았습니다. 관리자가 <code>GOOGLE_API_KEY</code>와 <code>/api/gemini-consult</code> 엔드포인트를 추가하면 활성화됩니다.</div>
+  <div style="margin-top:8px;font-size:.78rem;color:var(--text2);">미리 보기: 입력한 시나리오와 다음 스냅샷이 전송될 예정입니다.</div>
+  <pre style="margin-top:6px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:.74rem;overflow-x:auto;">${escapeHtml(JSON.stringify({
+    prompt: promptEl.value,
+    snapshot: {
+      investments_eval: autoWealthInvestmentAmount(),
+      wealth_assets: _wealthAssets,
+      salaries: _salaryRows,
+    }
+  }, null, 2))}</pre>`;
+}
+window.askGemini = askGemini;
+window.initWealthPage = initWealthPage;
+
 // 종목 검색 자동완성 (STOCK_DB 기준)
 let _searchSuggestActiveIdx = -1;
 function buildSearchableStockList() {
@@ -5554,7 +5915,7 @@ function showPage(p){
   document.body.classList.toggle('mypage-active',p==='mypage');
   const target=document.getElementById('page-'+p);
   if(target)target.classList.add('active');
-  const map={mypage:0,rebalance:1,search:2,admin:3};
+  const map={mypage:0,wealth:1,rebalance:2,search:3,admin:4};
   const btns=document.querySelectorAll('nav button');
   if(btns[map[p]]) btns[map[p]].classList.add('active');
   if(p==='admin'){loadUserList();loadChangelog();}
@@ -5562,6 +5923,7 @@ function showPage(p){
   if(p==='wilder') initWilderPage();
   if(p==='rebalance') initRebalancePage();
   if(p==='search') initSearchPage();
+  if(p==='wealth' && typeof initWealthPage === 'function') initWealthPage();
 }
 
 // ── REBALANCE / RRG 섹터 로테이션 ──────────────────────────
@@ -6040,14 +6402,14 @@ function renderMyHoldingsAnalysis(holdings) {
     const koreanRows = (_acctRows || []).filter(a => normalizeStockCode(a.code) && stockRegionForCode(a.code) === 'domestic').length;
     let msg;
     if (totalRows === 0) {
-      msg = `<p style="margin-bottom:10px;">계좌별 현황 데이터가 없습니다.</p><button class="btn btn-primary btn-sm" onclick="showPage('mypage')">MY자산 → 계좌별 현황 입력하러 가기</button>`;
+      msg = `<p style="margin-bottom:10px;">계좌별 현황 데이터가 없습니다.</p><button class="btn btn-primary btn-sm" onclick="showPage('mypage')">MY금융 → 계좌별 현황 입력하러 가기</button>`;
     } else if (koreanRows === 0) {
       msg = `<p>계좌별 현황에 ${totalRows}개 행이 있지만 <b>한국 종목</b>이 없습니다. (해외 종목은 현재 한국 섹터 ETF 기반 분석에서 제외)</p>`;
     } else {
       msg = `<p>한국 보유 종목 ${koreanRows}개는 있지만 종목코드가 모두 비어있거나 인식 실패. 계좌별 현황의 종목코드를 확인하세요.</p>`;
     }
     wrap.innerHTML = `<div class="mp-empty"><div class="ei">📋</div>${msg}</div>`;
-    if (statusEl) statusEl.textContent = totalRows === 0 ? 'MY자산 계좌별 현황 입력 필요' : '한국 보유 종목 0개 — 진단 대상 없음';
+    if (statusEl) statusEl.textContent = totalRows === 0 ? 'MY금융 계좌별 현황 입력 필요' : '한국 보유 종목 0개 — 진단 대상 없음';
     return;
   }
   const sorted = [...holdings].sort((a, b) => a.action.priority - b.action.priority || b.ev - a.ev);
@@ -7393,6 +7755,8 @@ async function handleAcctCodeInput(acctIdx, codeInput){
       _acctRows[acctIdx].price=q.price||0;
       _acctRows[acctIdx].eval=(_acctRows[acctIdx].qty||0)*_acctRows[acctIdx].price;
       _acctRows[acctIdx]._autoPrice=!!q.price;
+      if (Number.isFinite(Number(q.changeRate))) _acctRows[acctIdx].changeRate = Number(q.changeRate);
+      if (Number.isFinite(Number(q.change)))     _acctRows[acctIdx].change     = Number(q.change);
     }
     drawAcctRows(_acctRows);
     updateAcctSummaryBar();
@@ -7487,6 +7851,12 @@ function autoFillAcctName(acctIdx, codeInput) {
 
 // ═══ 계좌별 현황 스프레드시트 ═══════════════════════════════
 let _acctRows = [];
+// 가족 자산 관리 — 소유주 목록 (관리자가 변경 가능, 기본 3인)
+const OWNERS = ['상민', '유자', '진운'];
+const DEFAULT_OWNER = '상민';
+function ownerOptionsHtml(selected){
+  return OWNERS.map(o => `<option${o===(selected||DEFAULT_OWNER)?' selected':''}>${escapeHtml(o)}</option>`).join('');
+}
 
 function initAcctSheet(accounts) {
   // accounts 데이터를 _acctRows로 변환
@@ -7516,8 +7886,13 @@ function drawAcctRows(rows) {
     // stock-asset 클래스: stock-only 모드에서 행이 보이도록 — 코드 있으면 무조건 부여
     // (KIS 반환 종목 중 ETF/ELW/HK 등이 stockRegionForCode 정규식에 안 맞아도 노출)
     const isStock = !!region || isDraft || !!codeClean;
+    // 전일대비 등락(%) — quoteCache에 저장된 값 우선, 없으면 행 자체에 저장된 값
+    const cr = Number.isFinite(Number(a.changeRate)) ? Number(a.changeRate) : null;
+    const drCls = cr == null ? 'money-neutral' : cr > 0 ? 'up' : cr < 0 ? 'down' : 'money-neutral';
+    const drText = cr == null ? '' : (cr >= 0 ? '+' : '') + cr.toFixed(2) + '%';
     return `<tr class="${[isStock?'stock-asset':'',region==='overseas'?'usd-asset':''].filter(Boolean).join(' ')}" data-aidx="${i}" onclick="if(!['INPUT','SELECT','BUTTON'].includes(event.target.tagName))showHoldingDetail('${escapeJsAttr(a.code||'')}')">
       <td class="row-num" title="Delete row">${rowDeleteButton(`deleteAcctRow(${i})`)}</td>
+      <td><select class="sheet-input" data-field="owner" onchange="acctCellChange(${i},this)" style="width:64px">${ownerOptionsHtml(a.owner)}</select></td>
       <td><select class="sheet-input" data-field="brokerage" onchange="acctCellChange(${i},this)" style="width:92px"><option value="">선택</option>${bOpts}</select></td>
       <td><select class="sheet-input" data-field="acctType" onchange="acctCellChange(${i},this)" style="width:64px"><option value="">선택</option>${aOpts}</select></td>
       <td><input class="sheet-input" type="text" value="${escapeAttr(a.code||'')}" data-field="code" placeholder="005930"
@@ -7529,6 +7904,7 @@ function drawAcctRows(rows) {
       <td><input class="sheet-input" type="number" value="${a.avgBuy||''}" data-field="avgBuy" placeholder="70000"
           oninput="acctCellChange(${i},this)" style="width:80px"/></td>
       <td><input class="sheet-input calc-input${a._autoPrice?' auto-price':''} ${valueCls}" id="ap-price-${i}" value="${a.price ? formatMoneyByCode(a.price,a.code) : ''}" readonly style="width:84px"/></td>
+      <td><input class="sheet-input calc-input ${drCls}" id="ap-dr-${i}" value="${drText}" readonly style="width:64px"/></td>
       <td><input class="sheet-input calc-input ${valueCls}" value="${ev ? formatMoneyByCode(ev,a.code) : ''}" readonly style="width:100px"/></td>
       <td><input class="sheet-input calc-input money-neutral" value="${pur ? formatMoneyByCode(pur,a.code) : ''}" readonly style="width:100px"/></td>
       <td><input class="sheet-input calc-input ${rc}" value="${pur||ev ? (rate>=0?'+':'')+rate.toFixed(2)+'%' : ''}" readonly style="width:62px"/></td>
@@ -7567,7 +7943,7 @@ function renderSearchAcctTable(rows) {
     valid.push({ ...a, code });
   }
   if (!valid.length) {
-    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:18px;color:var(--text2);font-size:.82rem;">계좌별 현황을 입력하면 여기에 핵심 지표가 표시됩니다. (MY자산 → 계좌별 현황)</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:18px;color:var(--text2);font-size:.82rem;">계좌별 현황을 입력하면 여기에 핵심 지표가 표시됩니다. (MY금융 → 계좌별 현황)</td></tr>';
     return;
   }
   tbody.innerHTML = valid.map((a, i) => {
@@ -7651,7 +8027,7 @@ function acctCellChange(idx, input) {
   if (!_acctRows[idx]) return;
   const field = input.dataset.field;
   const val   = input.value;
-  _acctRows[idx][field] = ['brokerage','acctType','code','stockName'].includes(field) ? val : (parseFloat(val)||0);
+  _acctRows[idx][field] = ['brokerage','acctType','code','stockName','owner'].includes(field) ? val : (parseFloat(val)||0);
   if(field==='code'){_acctRows[idx]._autoName=false;_acctRows[idx]._autoPrice=false;}
   if(field==='stockName'){_acctRows[idx]._autoName=false;input.classList.remove('auto-filled');}
   // 계산 셀 업데이트
@@ -7672,12 +8048,13 @@ function acctCellChange(idx, input) {
   a.purchase = pur;
   a.rate = rate;
   const calcs = row.querySelectorAll('.calc-input');
-  // calcs: 현재가(0), 평가금액(1), 매입금액(2), 수익률(3), 평가손익(4)
+  // calcs: 현재가(0), 등락%(1), 평가금액(2), 매입금액(3), 수익률(4), 평가손익(5)
   if(calcs[0]) calcs[0].className='sheet-input calc-input '+(a._autoPrice?'auto-price ':'')+valueCls;
-  if(calcs[1]) { calcs[1].value = ev  ? formatMoneyByCode(ev,a.code) : ''; calcs[1].className='sheet-input calc-input '+valueCls; }
-  if(calcs[2]) { calcs[2].value = pur ? formatMoneyByCode(pur,a.code) : ''; calcs[2].className='sheet-input calc-input money-neutral'; }
-  if(calcs[3]) { calcs[3].value=(pur||ev?(rate>=0?'+':'')+rate.toFixed(2)+'%':''); calcs[3].className='sheet-input calc-input '+rc; }
-  if(calcs[4]) { calcs[4].value=(pur||ev?(pnl>=0?'+':'-')+formatMoneyByCode(Math.abs(pnl),a.code):''); calcs[4].className='sheet-input calc-input '+pc; }
+  // 등락(%): 셀 내용은 가격 fetch 시 별도로 갱신됨 — 여기서는 클래스만 유지
+  if(calcs[2]) { calcs[2].value = ev  ? formatMoneyByCode(ev,a.code) : ''; calcs[2].className='sheet-input calc-input '+valueCls; }
+  if(calcs[3]) { calcs[3].value = pur ? formatMoneyByCode(pur,a.code) : ''; calcs[3].className='sheet-input calc-input money-neutral'; }
+  if(calcs[4]) { calcs[4].value=(pur||ev?(rate>=0?'+':'')+rate.toFixed(2)+'%':''); calcs[4].className='sheet-input calc-input '+rc; }
+  if(calcs[5]) { calcs[5].value=(pur||ev?(pnl>=0?'+':'-')+formatMoneyByCode(Math.abs(pnl),a.code):''); calcs[5].className='sheet-input calc-input '+pc; }
   updateAcctFooter(_acctRows);
   // 계좌별 요약 바 차트 업데이트
   updateAcctSummaryBar();
@@ -7833,6 +8210,9 @@ async function fetchAndUpdateAcctPrices(options={}) {
         _acctRows[i].price = p.price;
         _acctRows[i].eval  = (a.qty||0) * p.price;
         _acctRows[i]._autoPrice = !!p.price;
+        // 전일 대비 등락률(%) 저장 — drawAcctRows에서 표시
+        if (Number.isFinite(Number(p.changeRate))) _acctRows[i].changeRate = Number(p.changeRate);
+        if (Number.isFinite(Number(p.change)))     _acctRows[i].change     = Number(p.change);
         // 종목명: 사용자가 수기 입력한 경우(_autoName===false && 값 존재) 보호
         const protectName = isUserEditedName(_acctRows[i]);
         const localName = lookupCode(a.code);
@@ -8325,6 +8705,7 @@ function drawDivRows(rows) {
     const bOpts = BROKERS_LIST.map(b => `<option${b===d.brokerage?' selected':''}>${escapeHtml(b)}</option>`).join('');
     return `<tr>
       <td class="row-num" title="Delete row">${rowDeleteButton(`deleteDivRow(${i})`)}</td>
+      <td><select class="sheet-input" data-field="owner" onchange="divCellChange(${i},this)" style="width:64px">${ownerOptionsHtml(d.owner)}</select></td>
       <td><input class="sheet-input" type="date" value="${escapeAttr(d.date||'')}" data-field="date" onchange="divCellChange(${i},this)"/></td>
       <td><select class="sheet-input" data-field="brokerage" onchange="divCellChange(${i},this)" style="min-width:95px"><option value="">선택</option>${bOpts}</select></td>
       <td><input class="sheet-input" type="text" value="${escapeAttr(d.code||'')}" data-field="code" placeholder="005930"
@@ -8369,6 +8750,7 @@ function divCellChange(idx, input) {
     if(input.checked) _divRows[idx].isa = false;
   }
   else if (['dpq','qty','gross'].includes(field)) _divRows[idx][field] = parseFloat(input.value)||0;
+  else if (field === 'owner')  _divRows[idx].owner = input.value;
   else                         _divRows[idx][field] = input.value;
   if(field==='code')_divRows[idx]._autoName=false;
   if(field==='name'){_divRows[idx]._autoName=false;input.classList.remove('auto-filled');}
@@ -8410,7 +8792,7 @@ function autoFillDivName(idx, codeInput) {
 }
 
 function addDivRow() {
-  _divRows.unshift({date:new Date().toISOString().slice(0,10),brokerage:'',code:'',name:'',dpq:0,qty:0,gross:0,isa:false,pension:false,note:'',_draftId:String(Date.now())});
+  _divRows.unshift({date:new Date().toISOString().slice(0,10),owner:DEFAULT_OWNER,brokerage:'',code:'',name:'',dpq:0,qty:0,gross:0,isa:false,pension:false,note:'',_draftId:String(Date.now())});
   drawDivRows(_divRows);
   syncDivRowsToMpData();
   schedulePortfolioAutosave(true,120);
