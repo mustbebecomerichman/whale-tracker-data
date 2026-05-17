@@ -908,10 +908,11 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
   #div-body td:nth-child(7)::before{content:"보유주식수";}
   #div-body td:nth-child(8)::before{content:"배당금";}
   #div-body td:nth-child(9)::before{content:"ISA";}
-  #div-body td:nth-child(10)::before{content:"과세율";}
-  #div-body td:nth-child(11)::before{content:"세금";}
-  #div-body td:nth-child(12)::before{content:"실수령액";}
-  #div-body td:nth-child(13)::before{content:"메모";}
+  #div-body td:nth-child(10)::before{content:"연금";}
+  #div-body td:nth-child(11)::before{content:"과세율";}
+  #div-body td:nth-child(12)::before{content:"세금";}
+  #div-body td:nth-child(13)::before{content:"실수령액";}
+  #div-body td:nth-child(14)::before{content:"메모";}
 }
 
 /* 거래내역: 1줄 테이블 layout */
@@ -1511,6 +1512,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       <div class="mp-card c-blue"><div class="mp-lbl">총 세금</div><div class="mp-val down" id="div-total-tax">0원</div></div>
       <div class="mp-card c-orange"><div class="mp-lbl">실수령 합계</div><div class="mp-val up" id="div-total-net">0원</div></div>
       <div class="mp-card" style="border-top:3px solid var(--accent)"><div class="mp-lbl">ISA 비과세</div><div class="mp-val" id="div-isa-net" style="color:var(--accent)">0원</div><div class="mp-sub">세금 0원</div></div>
+      <div class="mp-card" style="border-top:3px solid #2563eb"><div class="mp-lbl">연금계좌 (5.5%)</div><div class="mp-val" id="div-pension-net" style="color:#2563eb">0원</div><div class="mp-sub" id="div-pension-tax">연금소득세</div></div>
       <div class="mp-card" style="border-top:3px solid #e67e22"><div class="mp-lbl">일반계좌 (15.4%)</div><div class="mp-val" id="div-taxed-net" style="color:#e67e22">0원</div><div class="mp-sub" id="div-taxed-tax"></div></div>
     </div>
     <!-- 배당 스프레드시트 -->
@@ -1523,6 +1525,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
           <th>주당배당금</th><th>보유주식수</th>
           <th class="calc-col">배당금(원)</th>
           <th title="체크하면 비과세(ISA계좌)">ISA계좌<br><small style="font-weight:400">(비과세)</small></th>
+          <th title="체크하면 연금소득세 5.5% 적용">연금계좌<br><small style="font-weight:400">(5.5%)</small></th>
           <th class="calc-col">과세율</th>
           <th class="calc-col">세금</th>
           <th class="calc-col">실수령액</th>
@@ -1532,7 +1535,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         <tfoot><tr>
           <td colspan="7" style="text-align:right;font-weight:700;color:var(--text2);padding:8px 10px;">합 계</td>
           <td id="div-ft-gross" style="font-weight:700;padding:8px 10px;"></td>
-          <td></td><td></td>
+          <td></td><td></td><td></td>
           <td id="div-ft-tax" style="font-weight:700;padding:8px 10px;color:var(--down)"></td>
           <td id="div-ft-net" style="font-weight:700;padding:8px 10px;color:var(--up)"></td>
           <td></td>
@@ -3193,18 +3196,22 @@ function renderMpSummary(data){
     realEl.innerHTML = (realized>=0?'+':'-')+Math.abs(Math.round(realized)).toLocaleString('ko-KR')+'원';
     realEl.className = 'mp-val '+(realized>=0?'up':'down');
   }
-  // 배당이익 (전체 누계, 세후)
+  // 배당이익 (당해년도, 세후) — 사용자가 보고 있는 _divYear가 'all'이면 전체, 아니면 그 연도
+  const divYearFilter = (typeof _divYear === 'string' && _divYear && _divYear !== 'all') ? _divYear : String(new Date().getFullYear());
   let divNet = 0;
-  Object.values(data.dividends||{}).forEach(yearRows => {
-    (yearRows||[]).forEach(d => {
+  if (data.dividends) {
+    const yearRows = data.dividends[divYearFilter] || [];
+    yearRows.forEach(d => {
       divNet += (typeof calcDivNet === 'function' ? calcDivNet(d) : 0) || 0;
     });
-  });
+  }
   const divEl = document.getElementById('mp-dividend');
   if(divEl){
     divEl.innerHTML = (divNet>=0?'+':'-')+Math.abs(Math.round(divNet)).toLocaleString('ko-KR')+'원';
     divEl.className = 'mp-val '+(divNet>=0?'up':'down');
   }
+  const divSubEl = document.getElementById('mp-dividend-sub');
+  if (divSubEl) divSubEl.textContent = `${divYearFilter}년 세후`;
   // 보유 종목 통계 chip
   document.getElementById('mp-stock-stats').innerHTML=s.numStocks?
     `<span class="status-chip" title="보유 종목 수">📊 ${s.numStocks}개</span>`+
@@ -3350,6 +3357,18 @@ function resolveStockName(code,current='',apiName=''){
   if(resolved && !looksLikeStockCodeText(resolved,clean))return resolved;
   return lookupCode(clean)||usableFallback||resolved||clean;
 }
+// 사용자가 수기 입력할 빈칸을 보호하기 위해 종목명 매핑 실패 시 ''(빈문자) 반환.
+// normalize/load 단계에서만 사용. 표시(display)에는 위 일반 resolveStockName 사용.
+function resolveStockNameStrict(code,current=''){
+  const clean=normalizeStockCode(code);
+  const cur=String(current||'').trim();
+  // 사용자가 직접 입력한 의미 있는 종목명은 그대로 보존
+  if(cur && !looksLikeStockCodeText(cur,clean) && !looksLikeBrokerName(cur))return cur;
+  // DB 매핑 시 사용
+  const local=lookupCode(clean);
+  if(local && !looksLikeStockCodeText(local,clean))return local;
+  return '';  // 매핑 실패 → 빈칸 유지
+}
 function normalizePortfolioStockNames(data){
   if(!data)return false;
   let changed=false;
@@ -3360,7 +3379,9 @@ function normalizePortfolioStockNames(data){
     if(!code)return;
     const current=row[nameField]||row.stockName||row.stock_name||row.stock||
       (nameField==='stockName'&&!looksLikeBrokerName(row.name)?row.name:'')||'';
-    const next=resolveStockName(code,current);
+    // 사용자가 수기 입력한 종목명(_autoName===false)이거나 의미 있는 값이면 건드리지 않음
+    if(row._autoName===false && current)return;
+    const next=resolveStockNameStrict(code,current);
     if(next && next!==current){
       row[nameField]=next;
       if(nameField==='stockName')row._autoName=true;
@@ -3376,14 +3397,19 @@ function normalizePortfolioStockNames(data){
 function normalizeTxRow(t){
   const s=splitBrokerage(t.brokerage,t.acctType);
   const code=normalizeStockCode(t.code||'');
-  const name=code?resolveStockName(code,t.name||t.stockName||''):(t.name||'');
-  return {...t,code,name,brokerage:s.brokerage,acctType:s.acctType||'위탁',_autoName:!!(code&&name&&name!==(t.name||''))||!!t._autoName};
+  const inputName=t.name||t.stockName||'';
+  // 사용자가 수기 입력했을 가능성이 있는 경우(_autoName===false) 그대로 보존
+  const name=t._autoName===false
+    ? inputName
+    : (code?resolveStockNameStrict(code,inputName):inputName);
+  return {...t,code,name,brokerage:s.brokerage,acctType:s.acctType||'위탁',_autoName:!!(code&&name&&name!==inputName)||!!t._autoName};
 }
 function accountRowToData(a){
   const ev=a.price&&a.qty?a.qty*a.price:(a.eval||0);
   const pur=a.avgBuy&&a.qty?a.qty*a.avgBuy:(a.purchase||0);
   const rate=pur>0?Math.round((ev-pur)/pur*10000)/100:0;
-  const stockName=resolveStockName(a.code,a.stockName||'');
+  // 사용자가 수기 입력한 종목명(_autoName===false)은 그대로, 아니면 매핑 실패 시 빈칸 유지
+  const stockName=a._autoName===false ? (a.stockName||'') : resolveStockNameStrict(a.code, a.stockName||'');
   return {
     name:a.brokerage||'',
     acctType:a.acctType||'위탁',
@@ -3409,9 +3435,13 @@ function normalizeAccountInputRow(a){
   const rawBroker=a.brokerage || (looksLikeBrokerName(a.name)?a.name:'');
   const localName=code?lookupCode(code):'';
   const rawStock=a.stockName || a.stock_name || a.stock || '';
-  const stockName=looksLikeBrokerName(rawStock)
-    ? (localName || '')
-    : (code?resolveStockName(code,rawStock || (!looksLikeBrokerName(a.name)?a.name:'')):(rawStock || localName || (!code && !looksLikeBrokerName(a.name)?a.name:'')));
+  // 사용자가 수기 입력했을 가능성(_autoName===false)일 때 raw 값 보존
+  const stockName=a._autoName===false
+    ? rawStock
+    : (looksLikeBrokerName(rawStock)
+        ? (localName || '')
+        : (code?resolveStockNameStrict(code,rawStock || (!looksLikeBrokerName(a.name)?a.name:''))
+                :(rawStock || localName || (!code && !looksLikeBrokerName(a.name)?a.name:''))));
   return {
     brokerage: rawBroker,
     acctType:  a.acctType || '위탁',
@@ -3443,7 +3473,11 @@ function syncSheetRowsToMpData(){
   };
   mpData.transactions[mpYear]=_sheetRows
     .filter(isMeaningful)
-    .map(t=>({...t,code:normalizeStockCode(t.code||''),name:resolveStockName(t.code,t.name||''),acctType:t.acctType||'위탁'}));
+    .map(t=>{
+      const code = normalizeStockCode(t.code||'');
+      const name = t._autoName === false ? (t.name||'') : (code ? resolveStockNameStrict(code, t.name||'') : (t.name||''));
+      return {...t, code, name, acctType:t.acctType||'위탁'};
+    });
   renderYearChips(mpData.transactions);
   renderPortfolioPeriodMetrics(mpData.history||[]);
 }
@@ -3464,7 +3498,10 @@ function syncDivRowsToMpData(){
     .filter(d=>d._draftId||d.name||d.code||d.brokerage||calcDivGross(d)>0||d.note)
     .map(d=>{
       const {_year, ...rest} = d;
-      return {...rest,code:normalizeStockCode(d.code||''),name:resolveStockName(d.code,d.name||'')};
+      const code = normalizeStockCode(d.code||'');
+      // 사용자가 빈칸을 의도한 경우(_autoName===false)이면 그대로 저장, 아니면 strict 매핑
+      const name = d._autoName === false ? (d.name||'') : (code ? resolveStockNameStrict(code, d.name||'') : (d.name||''));
+      return {...rest, code, name};
     });
   if (_divYear === 'all') {
     // 전체 보기: 행의 date 연도로 재구성
@@ -7121,10 +7158,21 @@ function markQuotePending(codeInput){
   }
   setPriceApiStatus('Lookup', 'neutral');
 }
+// 사용자 정책 (2026-05-16):
+// - 종목코드 입력 시 STOCK_DB/API 룩업 결과가 있으면 종목명 자동 채움
+// - 룩업 실패 시 빈칸 유지 (코드를 종목명으로 넣지 않음)
+// - 사용자가 직접 입력한 종목명(_autoName=false)은 절대 덮어쓰지 않음
+function isUserEditedName(row){
+  // _autoName=false && stockName/name 값이 비어있지 않음 → 사용자가 직접 입력한 상태
+  if(!row)return false;
+  const v=row.stockName!=null?row.stockName:row.name;
+  return !!v && row._autoName===false;
+}
 function applyLocalSheetName(rowIdx, codeInput, overwrite=true){
   const code=normalizeStockCode(codeInput.value);
   const name=lookupCode(code);
   if(!name)return false;
+  if(isUserEditedName(_sheetRows[rowIdx]))return false;
   const row=codeInput.closest('tr');
   fillInputValue(row,'name',name,overwrite);
   const input=row?.querySelector('input[data-field="name"]');
@@ -7139,6 +7187,7 @@ function applyLocalAcctName(acctIdx, codeInput, overwrite=true){
   const code=normalizeStockCode(codeInput.value);
   const name=lookupCode(code);
   if(!name)return false;
+  if(isUserEditedName(_acctRows[acctIdx]))return false;
   const row=codeInput.closest('tr');
   fillInputValue(row,'stockName',name,overwrite);
   const input=row?.querySelector('input[data-field="stockName"]');
@@ -7153,6 +7202,7 @@ function applyLocalDivName(divIdx, codeInput, overwrite=true){
   const code=normalizeStockCode(codeInput.value);
   const name=lookupCode(code);
   if(!name)return false;
+  if(isUserEditedName(_divRows[divIdx]))return false;
   const row=codeInput.closest('tr');
   fillInputValue(row,'name',name,overwrite);
   const input=row?.querySelector('input[data-field="name"]');
@@ -7281,13 +7331,15 @@ async function handleSheetCodeInput(rowIdx, codeInput){
     const q=await fetchQuoteForCode(code);
     if(normalizeStockCode(codeInput.value)!==code)return;
     const row=codeInput.closest('tr');
-    const apiName=bestStockName(code,q.name,lookupCode(code));
-    if(apiName){
-      fillInputValue(row,'name',apiName,true);
+    const localName=lookupCode(code);
+    const candidate=isMeaningfulName(q.name,code) ? q.name : (isMeaningfulName(localName,code) ? localName : '');
+    const protectName=isUserEditedName(_sheetRows[rowIdx]);
+    if(candidate && !protectName){
+      fillInputValue(row,'name',candidate,true);
       const nameInput=row?.querySelector('input[data-field="name"]');
       if(nameInput)nameInput.classList.add('auto-filled');
       if(_sheetRows[rowIdx]){
-        _sheetRows[rowIdx].name=apiName;
+        _sheetRows[rowIdx].name=candidate;
         _sheetRows[rowIdx]._autoName=true;
       }
     }
@@ -7305,6 +7357,15 @@ async function handleSheetCodeInput(rowIdx, codeInput){
     showToast(`현재가 조회 실패: ${explainPriceError(e)}`, 'err');
   }
 }
+// API/룩업이 코드 자체를 그대로 돌려준 경우(의미 없는 이름)인지 판별
+function isMeaningfulName(name, code){
+  if(!name)return false;
+  const n=String(name).trim();
+  if(!n)return false;
+  if(n===String(code).trim())return false;
+  if(/^[\dA-Z]{4,8}$/i.test(n) && n.toUpperCase()===String(code).toUpperCase())return false;
+  return true;
+}
 async function handleAcctCodeInput(acctIdx, codeInput){
   const code=normalizeStockCode(codeInput.value);
   if(!code)return;
@@ -7315,13 +7376,16 @@ async function handleAcctCodeInput(acctIdx, codeInput){
     const q=await fetchQuoteForCode(code);
     if(normalizeStockCode(codeInput.value)!==code)return;
     const row=codeInput.closest('tr');
-    const apiName=bestStockName(code,q.name,lookupCode(code));
-    if(apiName){
-      fillInputValue(row,'stockName',apiName,true);
+    const localName=lookupCode(code);
+    const candidate=isMeaningfulName(q.name,code) ? q.name : (isMeaningfulName(localName,code) ? localName : '');
+    // 사용자가 수기 입력한 종목명은 보호 — _autoName===false 이면 이름 갱신 스킵
+    const protectName=isUserEditedName(_acctRows[acctIdx]);
+    if(candidate && !protectName){
+      fillInputValue(row,'stockName',candidate,true);
       const nameInput=row?.querySelector('input[data-field="stockName"]');
       if(nameInput)nameInput.classList.add('auto-filled');
       if(_acctRows[acctIdx]){
-        _acctRows[acctIdx].stockName=apiName;
+        _acctRows[acctIdx].stockName=candidate;
         _acctRows[acctIdx]._autoName=true;
       }
     }
@@ -7329,7 +7393,6 @@ async function handleAcctCodeInput(acctIdx, codeInput){
       _acctRows[acctIdx].price=q.price||0;
       _acctRows[acctIdx].eval=(_acctRows[acctIdx].qty||0)*_acctRows[acctIdx].price;
       _acctRows[acctIdx]._autoPrice=!!q.price;
-      if(apiName)_acctRows[acctIdx].stockName=apiName;
     }
     drawAcctRows(_acctRows);
     updateAcctSummaryBar();
@@ -7351,13 +7414,15 @@ async function handleDivCodeInput(divIdx, codeInput){
     const q=await fetchQuoteForCode(code);
     if(normalizeStockCode(codeInput.value)!==code)return;
     const row=codeInput.closest('tr');
-    const apiName=bestStockName(code,q.name,lookupCode(code));
-    if(apiName){
-      fillInputValue(row,'name',apiName,true);
+    const localName=lookupCode(code);
+    const candidate=isMeaningfulName(q.name,code) ? q.name : (isMeaningfulName(localName,code) ? localName : '');
+    const protectName=isUserEditedName(_divRows[divIdx]);
+    if(candidate && !protectName){
+      fillInputValue(row,'name',candidate,true);
       const nameInput=row?.querySelector('input[data-field="name"]');
       if(nameInput)nameInput.classList.add('auto-filled');
       if(_divRows[divIdx]){
-        _divRows[divIdx].name=apiName;
+        _divRows[divIdx].name=candidate;
         _divRows[divIdx]._autoName=true;
       }
     }
@@ -7768,9 +7833,13 @@ async function fetchAndUpdateAcctPrices(options={}) {
         _acctRows[i].price = p.price;
         _acctRows[i].eval  = (a.qty||0) * p.price;
         _acctRows[i]._autoPrice = !!p.price;
-        const apiName=resolveStockName(a.code,a.stockName,p.name);
-        if(apiName){
-          _acctRows[i].stockName = apiName;
+        // 종목명: 사용자가 수기 입력한 경우(_autoName===false && 값 존재) 보호
+        const protectName = isUserEditedName(_acctRows[i]);
+        const localName = lookupCode(a.code);
+        const candidate = isMeaningfulName(p.name, a.code) ? p.name
+                         : isMeaningfulName(localName, a.code) ? localName : '';
+        if(candidate && !protectName){
+          _acctRows[i].stockName = candidate;
           _acctRows[i]._autoName = true;
         }
         // 현재가 셀 업데이트
@@ -8159,6 +8228,7 @@ window.importKisTransactions = importKisTransactions;
 
 // ═══ 배당 수익 스프레드시트 ══════════════════════════════════
 const DIV_TAX = 0.154;
+const DIV_TAX_PENSION = 0.055;  // 연금소득세 5.5% (55세 이후 연금 수령 기준)
 let _divRows = [], _divYear = '2026';
 
 function calcDivGross(d) {
@@ -8167,7 +8237,22 @@ function calcDivGross(d) {
   // gross가 직접 입력된 경우 우선, 아니면 주당×수량 계산
   return parseFloat(d.gross) || (dpq * qty) || 0;
 }
-function calcDivTax(d) { return d.isa ? 0 : Math.round(calcDivGross(d) * DIV_TAX); }
+function divTaxRate(d){
+  if(d.isa)return 0;            // ISA 비과세
+  if(d.pension)return DIV_TAX_PENSION;  // 연금계좌 5.5%
+  return DIV_TAX;               // 일반 15.4%
+}
+function divTaxLabel(d){
+  if(d.isa)return '0% (ISA)';
+  if(d.pension)return '5.5% (연금)';
+  return '15.4%';
+}
+function divTaxColor(d){
+  if(d.isa)return 'var(--accent)';
+  if(d.pension)return '#2563eb';
+  return 'var(--down)';
+}
+function calcDivTax(d) { return Math.round(calcDivGross(d) * divTaxRate(d)); }
 function calcDivNet(d) { return calcDivGross(d) - calcDivTax(d); }
 
 function renderDivYearChips(divByYear) {
@@ -8199,6 +8284,10 @@ function switchDivYear(yr, el) {
   const badge = document.getElementById('div-year-badge');
   if (badge) badge.textContent = yr==='all' ? '전체' : (yr + '년');
   renderDivSheet(yr, mpData?.dividends || {});
+  // 상단 배당이익 카드도 선택된 연도 기준으로 갱신
+  if (typeof mpData !== 'undefined' && typeof renderPortfolioSummary === 'function') {
+    try { renderMpSummary(mpData); } catch(_) {}
+  }
 }
 
 function renderDivSheet(year, allDivs) {
@@ -8209,12 +8298,16 @@ function renderDivSheet(year, allDivs) {
       (rows || []).map(d => ({...d, _year: yr}))
     ).sort((a,b) => (b.date||b._year||'').localeCompare(a.date||a._year||''));
   } else {
-    divs = (allDivs[year] || []);
+    // 연도별: 최근 일자가 상단에 오도록 정렬
+    divs = (allDivs[year] || []).slice().sort((a,b) => String(b.date||'').localeCompare(String(a.date||'')));
   }
   _divRows = divs.map(d => {
     const code=normalizeStockCode(d.code||'');
-    const name=code?resolveStockName(code,d.name||''):(d.name||'');
-    return {...d,code,name,_autoName:!!(code&&name&&name!==(d.name||''))||!!d._autoName};
+    const inputName=d.name||'';
+    const name=d._autoName===false
+      ? inputName
+      : (code?resolveStockNameStrict(code,inputName):inputName);
+    return {...d,code,name,_autoName:!!(code&&name&&name!==inputName)||!!d._autoName};
   });
   const cnt = document.getElementById('div-count');
   if (cnt) cnt.textContent = _divRows.length + '건';
@@ -8245,10 +8338,14 @@ function drawDivRows(rows) {
       <td><input class="sheet-input calc-input" value="${gross ? gross.toLocaleString('ko-KR')+'원' : ''}" readonly style="width:90px"/></td>
       <td style="text-align:center;padding:4px;">
         <input type="checkbox" style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent)"
-          ${d.isa?'checked':''} data-field="isa" onchange="divCellChange(${i},this)"/>
+          ${d.isa?'checked':''} data-field="isa" onchange="divCellChange(${i},this)" title="ISA계좌 — 비과세"/>
       </td>
-      <td><input class="sheet-input calc-input" value="${d.isa?'0% (비과세)':'15.4%'}"
-          readonly style="width:85px;color:${d.isa?'var(--accent)':'var(--down)'};font-size:.78rem"/></td>
+      <td style="text-align:center;padding:4px;">
+        <input type="checkbox" style="width:18px;height:18px;cursor:pointer;accent-color:#2563eb"
+          ${d.pension?'checked':''} data-field="pension" onchange="divCellChange(${i},this)" title="연금계좌 — 연금소득세 5.5%"/>
+      </td>
+      <td><input class="sheet-input calc-input" value="${divTaxLabel(d)}"
+          readonly style="width:95px;color:${divTaxColor(d)};font-size:.78rem"/></td>
       <td><input class="sheet-input calc-input ${tax?'down':''}"
           value="${tax?'-'+tax.toLocaleString('ko-KR')+'원':gross?'0원':''}" readonly style="width:82px"/></td>
       <td><input class="sheet-input calc-input up"
@@ -8264,11 +8361,23 @@ function drawDivRows(rows) {
 function divCellChange(idx, input) {
   if (!_divRows[idx]) return;
   const field = input.dataset.field;
-  if (field === 'isa')        _divRows[idx].isa = input.checked;
+  if (field === 'isa') {
+    _divRows[idx].isa = input.checked;
+    if(input.checked) _divRows[idx].pension = false;  // ISA와 연금은 동시 불가
+  } else if (field === 'pension') {
+    _divRows[idx].pension = input.checked;
+    if(input.checked) _divRows[idx].isa = false;
+  }
   else if (['dpq','qty','gross'].includes(field)) _divRows[idx][field] = parseFloat(input.value)||0;
   else                         _divRows[idx][field] = input.value;
   if(field==='code')_divRows[idx]._autoName=false;
   if(field==='name'){_divRows[idx]._autoName=false;input.classList.remove('auto-filled');}
+  // ISA/연금 상호배제로 다른 체크박스 UI도 동기화
+  if(field==='isa' || field==='pension'){
+    const otherField = field==='isa' ? 'pension' : 'isa';
+    const otherCheckbox = input.closest('tr')?.querySelector(`input[data-field="${otherField}"]`);
+    if(otherCheckbox) otherCheckbox.checked = !!_divRows[idx][otherField];
+  }
   // 계산셀 업데이트
   const row = input.closest('tr'); if (!row) return;
   const d     = _divRows[idx];
@@ -8277,7 +8386,7 @@ function divCellChange(idx, input) {
   const net   = calcDivNet(d);
   const calcs = row.querySelectorAll('.calc-input');
   if (calcs[0]) calcs[0].value = gross ? gross.toLocaleString('ko-KR')+'원' : '';
-  if (calcs[1]) { calcs[1].value=d.isa?'0% (비과세)':'15.4%'; calcs[1].style.color=d.isa?'var(--accent)':'var(--down)'; }
+  if (calcs[1]) { calcs[1].value=divTaxLabel(d); calcs[1].style.color=divTaxColor(d); }
   if (calcs[2]) { calcs[2].value=tax?'-'+tax.toLocaleString('ko-KR')+'원':gross?'0원':''; calcs[2].className='sheet-input calc-input '+(tax?'down':''); }
   if (calcs[3]) calcs[3].value = net?'+'+net.toLocaleString('ko-KR')+'원':'';
   updateDivFooter(_divRows);
@@ -8301,7 +8410,7 @@ function autoFillDivName(idx, codeInput) {
 }
 
 function addDivRow() {
-  _divRows.unshift({date:new Date().toISOString().slice(0,10),brokerage:'',code:'',name:'',dpq:0,qty:0,gross:0,isa:false,note:'',_draftId:String(Date.now())});
+  _divRows.unshift({date:new Date().toISOString().slice(0,10),brokerage:'',code:'',name:'',dpq:0,qty:0,gross:0,isa:false,pension:false,note:'',_draftId:String(Date.now())});
   drawDivRows(_divRows);
   syncDivRowsToMpData();
   schedulePortfolioAutosave(true,120);
@@ -8331,15 +8440,19 @@ function updateDivCards(rows) {
   const gross = rows.reduce((s,d)=>s+calcDivGross(d),0);
   const tax   = rows.reduce((s,d)=>s+calcDivTax(d),0);
   const net   = rows.reduce((s,d)=>s+calcDivNet(d),0);
-  const isaNet   = rows.filter(d=>d.isa).reduce((s,d)=>s+calcDivGross(d),0);
-  const taxedNet = rows.filter(d=>!d.isa).reduce((s,d)=>s+calcDivNet(d),0);
-  const taxedTax = rows.filter(d=>!d.isa).reduce((s,d)=>s+calcDivTax(d),0);
+  const isaNet     = rows.filter(d=>d.isa).reduce((s,d)=>s+calcDivGross(d),0);
+  const pensionNet = rows.filter(d=>d.pension && !d.isa).reduce((s,d)=>s+calcDivNet(d),0);
+  const pensionTax = rows.filter(d=>d.pension && !d.isa).reduce((s,d)=>s+calcDivTax(d),0);
+  const taxedNet   = rows.filter(d=>!d.isa && !d.pension).reduce((s,d)=>s+calcDivNet(d),0);
+  const taxedTax   = rows.filter(d=>!d.isa && !d.pension).reduce((s,d)=>s+calcDivTax(d),0);
   const fmt = n => n.toLocaleString('ko-KR')+'원';
   const set = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   set('div-total-gross', fmt(gross));
   set('div-total-tax',   tax ? '-'+fmt(tax) : '0원');
   set('div-total-net',   net ? '+'+fmt(net) : '0원');
   set('div-isa-net',     isaNet ? '+'+fmt(isaNet) : '0원');
+  set('div-pension-net', pensionNet ? '+'+fmt(pensionNet) : '0원');
+  set('div-pension-tax', pensionTax ? '세금 -'+fmt(pensionTax) : '연금소득세 5.5%');
   set('div-taxed-net',   taxedNet ? '+'+fmt(taxedNet) : '0원');
   set('div-taxed-tax',   taxedTax ? '세금 -'+fmt(taxedTax) : '');
 }
