@@ -1,4 +1,4 @@
-const CACHE_NAME = 'whaletracker-shell-v20260518-rebalance-debug';
+const CACHE_NAME = 'whaletracker-shell-v20260518-rebalance-fix';
 const APP_SHELL = [
   '/',
   '/index.html',
