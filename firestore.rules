@@ -120,6 +120,13 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // 관리자가 등록하는 종목코드 → 종목명 매핑 (전역 공유)
+    // 자동 lookup이 실패한 종목을 관리자가 수기 매핑하면 모든 사용자 화면에 반영
+    match /stock_name_overrides/{code} {
+      allow read: if signedInWithGoogle() && isApproved();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

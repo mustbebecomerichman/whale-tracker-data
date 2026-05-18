@@ -1659,6 +1659,8 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-outline btn-sm" onclick="window.open('https://docs.google.com/spreadsheets/d/1MojjXJOBVybDRWObrk5sHDWU0YTHDwypaDjMZB5AQMU/edit','_blank')">📄 Google Sheets 원본</button>
+          <input type="file" id="salary-csv-file" accept=".csv,text/csv" style="display:none" onchange="importSalaryCsv(event)"/>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('salary-csv-file').click()">📥 CSV 가져오기</button>
           <button class="btn btn-primary btn-sm" onclick="addSalaryRow()">＋ 행 추가</button>
         </div>
       </div>
@@ -1892,6 +1894,21 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
       </div>
     </div>
   </div>
+  <div class="admin-section">
+    <div class="admin-title">🏷️ 종목 코드 → 종목명 매핑 <span class="badge">전역 공유</span></div>
+    <p style="font-size:.78rem;color:var(--text2);margin-bottom:10px;line-height:1.6;">
+      자동 lookup에 실패하는 종목을 여기서 등록하면 모든 사용자 화면(계좌별 현황, 거래내역, 배당, 리밸런싱, 종목검색 등)에서 즉시 종목명이 표시됩니다.
+      코드는 한국 6자리 또는 미국 티커(예: <code>AAPL</code>) 형식.
+    </p>
+    <div class="admin-form-row">
+      <input class="admin-input" id="new-stock-code" placeholder="종목 코드 (예: 005930)" style="max-width:170px"/>
+      <input class="admin-input" id="new-stock-name" placeholder="종목명 (예: 삼성전자)" style="max-width:240px"/>
+      <button class="btn btn-primary" onclick="addStockMapping()">매핑 추가</button>
+      <button class="btn btn-outline btn-sm" onclick="loadStockMappingsAdmin()">🔄 새로고침</button>
+    </div>
+    <div id="stock-mapping-list" style="margin-top:12px;"><div style="text-align:center;padding:16px;color:var(--text2);">로딩 중…</div></div>
+  </div>
+
   <div class="admin-section">
     <div class="admin-title">📋 업데이트 이력</div>
     <div id="changelog-list"><div style="text-align:center;padding:16px;"><div class="spinner"></div></div></div>
@@ -2454,9 +2471,10 @@ async function afterLogin(u){
   show('app');
   setGoogleButtonsBusy(false);
   await recordUserLoginOncePerDay(u,'approved');
+  await loadStockNameOverrides();
   await loadWhaleData({force:isAdm});
   showPage('mypage');
-  if(isAdm){loadUserList();loadChangelog();}
+  if(isAdm){loadUserList();loadChangelog();loadStockMappingsAdmin();}
 }
 
 // ═══════════════════════════════════════════════════════
@@ -5118,6 +5136,69 @@ async function loadChangelog(){
   });
 }
 
+// ── 종목 코드 → 종목명 매핑 (관리자) ─────────────────────
+async function loadStockMappingsAdmin(){
+  const el=document.getElementById('stock-mapping-list');
+  if(!el)return;
+  el.innerHTML='<div style="text-align:center;padding:16px;"><div class="spinner"></div></div>';
+  try{
+    const snap=await db.collection('stock_name_overrides').orderBy(firebase.firestore.FieldPath.documentId()).get();
+    if(snap.empty){
+      el.innerHTML='<p style="color:var(--text2);font-size:.82rem;padding:12px;">등록된 매핑 없음</p>';
+      _adminStockNames={};
+      return;
+    }
+    const map={};
+    const rows=[];
+    snap.forEach(doc=>{
+      const d=doc.data()||{};
+      const name=String(d.name||'').trim();
+      if(name){map[doc.id]=name;rows.push({code:doc.id,name,updatedAt:d.updatedAt});}
+    });
+    _adminStockNames=map;
+    el.innerHTML=`<div class="sheet-wrap"><table class="sheet-table">
+      <thead><tr><th style="width:120px">코드</th><th>종목명</th><th style="width:90px;text-align:center;">삭제</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr>
+        <td><code>${escapeHtml(r.code)}</code></td>
+        <td>${escapeHtml(r.name)}</td>
+        <td style="text-align:center;"><button class="btn btn-outline btn-sm" onclick="deleteStockMapping('${escapeAttr(r.code)}')">🗑</button></td>
+      </tr>`).join('')}</tbody></table></div>`;
+  }catch(e){
+    el.innerHTML=`<p style="color:#dc2626;font-size:.82rem;padding:12px;">로드 실패: ${escapeHtml(e.message||String(e))}</p>`;
+  }
+}
+
+async function addStockMapping(){
+  const codeIn=document.getElementById('new-stock-code');
+  const nameIn=document.getElementById('new-stock-name');
+  const code=normalizeStockCode(codeIn.value);
+  const name=String(nameIn.value||'').trim();
+  if(!code){showToast('종목 코드를 입력하세요','err');return;}
+  if(!name){showToast('종목명을 입력하세요','err');return;}
+  try{
+    await db.collection('stock_name_overrides').doc(code).set({
+      code, name,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: me?.email||'',
+    });
+    codeIn.value='';nameIn.value='';
+    _adminStockNames[code]=name;
+    showToast('✅ 매핑 추가 완료','ok');
+    await loadStockMappingsAdmin();
+  }catch(e){showToast('추가 실패: '+(e.message||e),'err');}
+}
+
+async function deleteStockMapping(code){
+  if(!code)return;
+  if(!confirm(`'${code}' 매핑을 삭제할까요?`))return;
+  try{
+    await db.collection('stock_name_overrides').doc(code).delete();
+    delete _adminStockNames[code];
+    showToast('✅ 삭제 완료','ok');
+    await loadStockMappingsAdmin();
+  }catch(e){showToast('삭제 실패: '+(e.message||e),'err');}
+}
+
 // ═══════════════════════════════════════════════════════
 //  네비게이션 & 토스트
 // ═══════════════════════════════════════════════════════
@@ -5659,6 +5740,113 @@ window.addSalaryRow = addSalaryRow;
 window.deleteSalaryRow = deleteSalaryRow;
 window.salaryChange = salaryChange;
 
+// ── CSV 가져오기 (연봉 추이) ───────────────────────────
+// 따옴표 안 콤마 처리하는 최소 CSV 파서
+function parseCsvText(text){
+  const rows=[];
+  let i=0,field='',row=[],inQ=false;
+  const s=String(text||'').replace(/^﻿/,''); // BOM 제거
+  while(i<s.length){
+    const c=s[i];
+    if(inQ){
+      if(c==='"'){
+        if(s[i+1]==='"'){field+='"';i+=2;continue;}
+        inQ=false;i++;continue;
+      }
+      field+=c;i++;
+    }else{
+      if(c==='"'){inQ=true;i++;continue;}
+      if(c===','){row.push(field);field='';i++;continue;}
+      if(c==='\n'||c==='\r'){
+        if(field!==''||row.length){row.push(field);rows.push(row);row=[];field='';}
+        if(c==='\r'&&s[i+1]==='\n')i+=2;else i++;
+        continue;
+      }
+      field+=c;i++;
+    }
+  }
+  if(field!==''||row.length){row.push(field);rows.push(row);}
+  return rows;
+}
+
+function _csvHeaderIndex(headers, candidates){
+  const norm=h=>String(h||'').trim().toLowerCase().replace(/[\s_()]/g,'');
+  const H=headers.map(norm);
+  for(const cand of candidates){
+    const k=norm(cand);
+    const i=H.indexOf(k);
+    if(i>=0) return i;
+  }
+  // 부분 일치
+  for(const cand of candidates){
+    const k=norm(cand);
+    const i=H.findIndex(h=>h.includes(k));
+    if(i>=0) return i;
+  }
+  return -1;
+}
+
+function _csvNumber(v){
+  if(v==null) return 0;
+  const s=String(v).replace(/[,\s원₩]/g,'').replace(/[^\d.\-]/g,'');
+  const n=parseFloat(s);
+  return Number.isFinite(n)?n:0;
+}
+
+async function importSalaryCsv(event){
+  const file=event?.target?.files?.[0];
+  if(!file){return;}
+  try{
+    const text=await file.text();
+    const rows=parseCsvText(text).filter(r=>r.some(c=>String(c||'').trim()!==''));
+    if(rows.length<2){showToast('CSV에 데이터가 없습니다','err');event.target.value='';return;}
+    const headers=rows[0];
+    const idxOwner = _csvHeaderIndex(headers, ['소유주','owner','이름','name']);
+    const idxYear  = _csvHeaderIndex(headers, ['연도','년도','year']);
+    const idxGross = _csvHeaderIndex(headers, ['세전','gross','grossincome','연봉세전']);
+    const idxAfter = _csvHeaderIndex(headers, ['세후','aftertax','after_tax','과세후','세후소득']);
+    const idxNet   = _csvHeaderIndex(headers, ['실수령','net','takehome','수령액','월급실수령']);
+    const idxNote  = _csvHeaderIndex(headers, ['비고','note','memo','메모']);
+    if(idxYear<0){
+      showToast('CSV에 "연도" 컬럼이 없습니다','err');
+      event.target.value='';return;
+    }
+    const imported=[];
+    for(let i=1;i<rows.length;i++){
+      const r=rows[i];
+      const year=_csvNumber(r[idxYear]);
+      if(!year) continue;
+      imported.push({
+        owner: idxOwner>=0 ? (String(r[idxOwner]||'').trim()||DEFAULT_OWNER) : DEFAULT_OWNER,
+        year,
+        gross: idxGross>=0 ? _csvNumber(r[idxGross]) : 0,
+        afterTax: idxAfter>=0 ? _csvNumber(r[idxAfter]) : 0,
+        net: idxNet>=0 ? _csvNumber(r[idxNet]) : 0,
+        note: idxNote>=0 ? String(r[idxNote]||'').trim() : '',
+      });
+    }
+    if(!imported.length){
+      showToast('가져올 행이 없습니다 (연도 컬럼 비어있음)','err');
+      event.target.value='';return;
+    }
+    const replace = _salaryRows.length>0
+      ? confirm(`기존 ${_salaryRows.length}건의 데이터가 있습니다.\n\n[확인] = 기존 데이터를 모두 지우고 ${imported.length}건으로 교체\n[취소] = 기존 데이터에 ${imported.length}건 추가`)
+      : true;
+    if(replace) _salaryRows = imported;
+    else _salaryRows = _salaryRows.concat(imported);
+    drawSalaryRows();
+    syncWealthToMpData();
+    schedulePortfolioAutosave(true, 120);
+    showToast(`✅ ${imported.length}건 가져오기 완료`,'ok');
+  }catch(e){
+    console.error(e);
+    showToast('CSV 파싱 실패: '+(e.message||e),'err');
+  }finally{
+    event.target.value='';
+  }
+}
+window.importSalaryCsv = importSalaryCsv;
+
 async function askGemini() {
   const promptEl = document.getElementById('gemini-prompt');
   const respEl = document.getElementById('gemini-response');
@@ -5918,7 +6106,7 @@ function showPage(p){
   const map={mypage:0,wealth:1,rebalance:2,search:3,admin:4};
   const btns=document.querySelectorAll('nav button');
   if(btns[map[p]]) btns[map[p]].classList.add('active');
-  if(p==='admin'){loadUserList();loadChangelog();}
+  if(p==='admin'){loadUserList();loadChangelog();loadStockMappingsAdmin();}
   if(p==='mypage') initMyPage();
   if(p==='wilder') initWilderPage();
   if(p==='rebalance') initRebalancePage();
@@ -6836,11 +7024,14 @@ async function initRebalancePage(force = false) {
     if (typeof loadMpData === 'function' && typeof me !== 'undefined' && me) {
       await loadMpData();
     }
-  } catch (e) { /* 실패 시에도 진행 — RRG 분석은 보유 데이터 없이도 의미 있음 */ }
+  } catch (e) {
+    console.warn('[rebalance] loadMpData failed (계속 진행):', e);
+  }
   try {
     const cache = await fetchRebalanceData(force);
     const results = cache.results;
     const valid = results.filter(r => r.rrg);
+    const failed = results.filter(r => !r.rrg);
     const leadingN = valid.filter(r => r.rrg.quadrant === 'leading').length;
     const improvingN = valid.filter(r => r.rrg.quadrant === 'improving').length;
     document.getElementById('rb-sector-count').textContent = `${valid.length} / ${results.length}`;
@@ -6852,14 +7043,35 @@ async function initRebalancePage(force = false) {
     renderPortfolioSector(results);
     renderRecommendations(results, null);
     if (statusEl) {
-      const skipped = results.length - valid.length;
-      statusEl.textContent = `기준일 ${cache.bench?.lastBar?.date || '-'} · 벤치마크 ${cache.bench.name} (${cache.bench.code})${skipped ? ` · ${skipped}개 섹터 데이터 부족으로 제외` : ''}`;
+      const benchName = cache.bench?.name || RRG_BENCH.name;
+      const benchCode = cache.bench?.code || RRG_BENCH.code;
+      const baseInfo = `기준일 ${cache.bench?.lastBar?.date || '-'} · 벤치마크 ${benchName} (${benchCode})`;
+      if (failed.length) {
+        const failNames = failed.map(r => `${r.name}(${r.code}): ${r.error || '데이터 부족'}`).join(' / ');
+        statusEl.innerHTML = `${escapeHtml(baseInfo)}<br><span style="color:#dc2626;font-size:.78rem;">⚠️ ${failed.length}/${results.length}개 섹터 실패 — ${escapeHtml(failNames)}</span>`;
+        console.warn('[rebalance] 실패 섹터:', failed);
+      } else {
+        statusEl.textContent = baseInfo;
+      }
+    }
+    if (!valid.length) {
+      // 모든 섹터 데이터 실패 시 별도 안내
+      if (chartWrap) chartWrap.innerHTML = `<div class="mp-empty"><div class="ei">⚠️</div>
+        <p><b>모든 섹터 데이터 로드 실패</b></p>
+        <p style="font-size:.82rem;color:var(--text2);margin-top:8px;">Yahoo Finance가 일시적으로 응답하지 않을 수 있습니다. 잠시 후 "🔄 재계산" 버튼으로 재시도해 주세요. 콘솔(F12)에 실패 사유가 표시됩니다.</p>
+      </div>`;
     }
     // 심층 분석 백그라운드 시작 (Wilder 페치 → 종목 단위 추천 + 보유 진단)
     runDeepAnalysis(results, false);
   } catch (e) {
-    if (chartWrap) chartWrap.innerHTML = `<div class="mp-empty"><div class="ei">⚠️</div><p>데이터 로드 실패: ${escapeHtml(e.message || String(e))}</p></div>`;
-    if (statusEl) statusEl.textContent = '로드 실패. 재계산 버튼으로 재시도하세요.';
+    console.error('[rebalance] initRebalancePage failed:', e);
+    const msg = e?.message || String(e);
+    if (chartWrap) chartWrap.innerHTML = `<div class="mp-empty"><div class="ei">⚠️</div>
+      <p><b>데이터 로드 실패</b></p>
+      <p style="font-size:.82rem;color:var(--text2);margin-top:8px;">${escapeHtml(msg)}</p>
+      <p style="font-size:.78rem;color:var(--text2);margin-top:6px;">콘솔(F12 → Console 탭)에서 자세한 사유를 확인할 수 있습니다.</p>
+    </div>`;
+    if (statusEl) statusEl.textContent = `로드 실패: ${msg}. 재계산 버튼으로 재시도하세요.`;
   } finally {
     _rebalanceLoading = false;
   }
@@ -7327,10 +7539,31 @@ const STOCK_DB = {
   '000270':'기아','003550':'LG','006400':'삼성SDI',
 };
 
+// 관리자가 Firestore에 등록한 종목코드→종목명 override (전역 공유)
+// 로그인 후 loadStockNameOverrides() 가 채움. lookupCode 가 최우선으로 참조
+let _adminStockNames = {};
+
+async function loadStockNameOverrides(){
+  try{
+    if(!db) return;
+    const snap = await db.collection('stock_name_overrides').get();
+    const map = {};
+    snap.forEach(doc => {
+      const d = doc.data() || {};
+      const name = String(d.name||'').trim();
+      if(name) map[doc.id] = name;
+    });
+    _adminStockNames = map;
+  }catch(e){
+    console.warn('stock_name_overrides load failed', e);
+  }
+}
+
 // 종목 코드로 종목명 조회
 function lookupCode(code) {
   if (!code) return '';
   const clean=normalizeStockCode(code);
+  if(_adminStockNames[clean])return _adminStockNames[clean];
   if(STOCK_DB[clean])return STOCK_DB[clean];
   if(OVERSEAS_STOCK_DB[clean])return OVERSEAS_STOCK_DB[clean];
   const pools=[_quantAll,_npsAll,_a5All,S_QUANT,S_NPS,S_A5];
