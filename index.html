@@ -1708,7 +1708,7 @@ code{background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:.78rem;}
         2) Gemini API 호출 (관리자의 GOOGLE_API_KEY 필요) <br>
         3) 시나리오 입력 → 5가지 답변: 은퇴 가능 시점 / 세후 자산 추이 / 추천 리밸런싱 / 부채 우선순위 / 절세 액션 <br>
         4) 답변은 사용자별 Firestore 기록 — 과거 상담 비교 가능
-      </p>
+      </div>
       <div style="display:flex;flex-direction:column;gap:10px;">
         <label style="font-size:.85rem;font-weight:700;">상담 시나리오 입력</label>
         <textarea id="gemini-prompt" rows="4" placeholder="예: 현재 자산으로 만 65세에 월 400만원 인출 가능한지, 어느 자산을 줄이고 어느 자산을 늘려야 하는지 조언해줘."
@@ -7014,33 +7014,6 @@ function printRebalanceReport() {
 // ── 페이지 진입점 ────────────────────────────────────
 async function initRebalancePage(force = false) {
   if (_rebalanceLoading) return;
-  // 진단: page-rebalance DOM 상태를 콘솔 + 화면 우상단 오버레이에 표시
-  try {
-    const el = document.getElementById('page-rebalance');
-    const cs = el ? getComputedStyle(el) : null;
-    const info = {
-      exists: !!el,
-      classList: el?.classList?.value,
-      display: cs?.display,
-      visibility: cs?.visibility,
-      height: el?.offsetHeight,
-      childCount: el?.children?.length,
-      firstChildClass: el?.firstElementChild?.className,
-      parent: el?.parentElement?.tagName + '#' + (el?.parentElement?.id||''),
-      bodyClass: document.body.className,
-    };
-    console.log('[rebalance-debug]', info);
-    // 화면 오버레이 (콘솔 못 보는 환경 대비)
-    let dbg = document.getElementById('__rebalance_debug_overlay');
-    if (!dbg) {
-      dbg = document.createElement('div');
-      dbg.id = '__rebalance_debug_overlay';
-      dbg.style.cssText = 'position:fixed;top:70px;right:10px;background:#fff;color:#111;padding:10px 12px;font:11px/1.45 monospace;z-index:99999;max-width:340px;border:2px solid #dc2626;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.18);white-space:pre-wrap;word-break:break-all;';
-      dbg.innerHTML = '<b style="color:#dc2626">🔍 rebalance-debug</b><br><span style="color:#888;font-size:10px;">우상단 X 로 닫기</span> <button style="float:right;background:#eee;border:1px solid #ccc;border-radius:3px;cursor:pointer;font:11px monospace;padding:0 6px;" onclick="this.parentElement.remove()">X</button><pre id="__rebalance_debug_pre" style="margin:6px 0 0;font:11px monospace;"></pre>';
-      document.body.appendChild(dbg);
-    }
-    document.getElementById('__rebalance_debug_pre').textContent = JSON.stringify(info, null, 2);
-  } catch(e) { console.warn('[rebalance-debug] failed', e); }
   const statusEl = document.getElementById('rb-status');
   const chartWrap = document.getElementById('rb-chart-wrap');
   if (statusEl) statusEl.textContent = '데이터 불러오는 중… (12개 섹터 ETF + 벤치마크 일봉 365일)';
