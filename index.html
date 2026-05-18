@@ -1984,18 +1984,18 @@ const PRIVACY_CONSENT_SUMMARY='이메일, 표시 이름, Firebase UID, 로그인
 const PRIVACY_CONSENT_PENDING_KEY='whalePendingPrivacyConsent';
 const EXTERNAL_OPEN_ATTEMPT_KEY='whaleExternalOpenAttempt';
 let _authAccessCache=null;
-auth.setPersistence(firebase.auth.Auth.Persistence.NONE)
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
   .then(()=>auth.onAuthStateChanged(handleAuthState))
   .catch(()=>auth.onAuthStateChanged(handleAuthState));
 async function handleAuthState(u){
-  const explicit=sessionStorage.getItem(AUTH_SESSION_KEY)==='1';
+  const explicit=localStorage.getItem(AUTH_SESSION_KEY)==='1';
   if(u && explicit){
     me = u;
     await afterLogin(u);
   } else {
     me = null;
     _authAccessCache=null;
-    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    localStorage.removeItem(AUTH_SESSION_KEY);
     if(u){
       try{ await auth.signOut(); }catch(e){}
     }
@@ -2352,7 +2352,7 @@ async function apiFetch(url, options={}){
   const res=await fetch(url,{...options,headers});
   if(res.status===401){
     showToast('인증이 만료되었습니다. 다시 로그인하세요.','err');
-    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    localStorage.removeItem(AUTH_SESSION_KEY);
     try{await auth.signOut();}catch(e){}
     throw new Error('API 인증 실패');
   }
@@ -2393,7 +2393,7 @@ async function doGoogleLogin(){
   if(!consent)return;
   const provider=new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({prompt:'select_account'});
-  sessionStorage.setItem(AUTH_SESSION_KEY,'1');
+  localStorage.setItem(AUTH_SESSION_KEY,'1');
   setGoogleButtonsBusy(true);
   try{
     await auth.signInWithPopup(provider);
@@ -2408,7 +2408,7 @@ async function doGoogleLogin(){
         e=redirectErr;
       }
     }
-    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    localStorage.removeItem(AUTH_SESSION_KEY);
     sessionStorage.removeItem(PRIVACY_CONSENT_PENDING_KEY);
     const m={
       'auth/popup-closed-by-user':'Google 로그인이 취소되었습니다.',
@@ -2422,7 +2422,7 @@ async function doGoogleLogin(){
   }
 }
 async function doLogout(){
-  sessionStorage.removeItem(AUTH_SESSION_KEY);
+  localStorage.removeItem(AUTH_SESSION_KEY);
   _authAccessCache=null;
   _mpLoadedUid=null;
   await auth.signOut();
@@ -2442,7 +2442,7 @@ async function afterLogin(u){
   try{
     await ensurePrivacyConsentForAuth(u);
   }catch(e){
-    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    localStorage.removeItem(AUTH_SESSION_KEY);
     me=null;
     _mpLoadedUid=null;
     try{ await auth.signOut(); }catch(_e){}
@@ -2453,7 +2453,7 @@ async function afterLogin(u){
   }
   const access=await resolveUserAccess(u);
   if(!access.allowed){
-    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    localStorage.removeItem(AUTH_SESSION_KEY);
     me=null;
     _mpLoadedUid=null;
     await recordUserLoginOncePerDay(u,'pending');
@@ -5168,6 +5168,32 @@ async function loadStockMappingsAdmin(){
   }
 }
 
+// 매핑 변경 후 화면 전체에 즉시 반영 — 이미 그려진 종목명 재계산 + 재렌더
+function refreshAllStockNamesAfterMapping(){
+  try{
+    // _acctRows의 stockName 갱신 (사용자가 직접 입력하지 않은 자동 채움만)
+    if(Array.isArray(_acctRows)){
+      _acctRows.forEach(a=>{
+        if(a._autoName!==false){
+          const newName=resolveStockNameStrict(a.code, a.stockName||'');
+          if(newName && newName!==a.stockName){
+            a.stockName=newName;
+            a._autoName=true;
+          }
+        }
+      });
+    }
+    // 모든 시트의 종목명 자동 채움 갱신
+    if(typeof mpData!=='undefined' && mpData){
+      normalizePortfolioStockNames(mpData);
+    }
+    // 그려진 화면 재렌더
+    if(typeof drawAcctRows==='function' && Array.isArray(_acctRows)) drawAcctRows(_acctRows);
+    if(typeof renderSheetTable==='function') renderSheetTable();
+    if(typeof drawDivRows==='function' && typeof _divRows!=='undefined') drawDivRows(_divRows);
+  }catch(e){console.warn('매핑 즉시반영 일부 실패',e);}
+}
+
 async function addStockMapping(){
   const codeIn=document.getElementById('new-stock-code');
   const nameIn=document.getElementById('new-stock-name');
@@ -5183,6 +5209,7 @@ async function addStockMapping(){
     });
     codeIn.value='';nameIn.value='';
     _adminStockNames[code]=name;
+    refreshAllStockNamesAfterMapping();
     showToast('✅ 매핑 추가 완료','ok');
     await loadStockMappingsAdmin();
   }catch(e){showToast('추가 실패: '+(e.message||e),'err');}
@@ -5194,6 +5221,7 @@ async function deleteStockMapping(code){
   try{
     await db.collection('stock_name_overrides').doc(code).delete();
     delete _adminStockNames[code];
+    refreshAllStockNamesAfterMapping();
     showToast('✅ 삭제 완료','ok');
     await loadStockMappingsAdmin();
   }catch(e){showToast('삭제 실패: '+(e.message||e),'err');}
@@ -6448,31 +6476,36 @@ function generateTradingPlan({ wilder, action, currentPrice, avgBuy, rate }) {
   const distPct = (a, b) => ((a - b) / b * 100);
   const rules = [];
   const pri = action?.priority || 7;
+  // 현재가 대비 손절선 위치 — 이미 손절선 아래로 떨어진 경우 문구 보정
+  const stopAbove = lossStop && lossStop > current;
   if (pri === 1) {
     // 매도 강력 / 손절검토 — 즉각 행동
-    rules.push({ icon: '🔻', trigger: `${fmtP(support)} (지지선) 붕괴`, act: `50% 매도 (1차 손절)`, urgency: 'high' });
-    if (lossStop && lossStop !== support) {
-      rules.push({ icon: '🚫', trigger: `${fmtP(lossStop)} 도달`, act: `잔여 100% 전량 손절`, urgency: 'high' });
+    if (stopAbove) {
+      // 이미 평단가 −8% 손절선 아래로 떨어진 상태 → "도달" 표현 어색
+      rules.push({ icon: '🚨', trigger: `현재가 ${fmtP(current)} < 심리 손절선 ${fmtP(lossStop)}`, act: `이미 손절선 하회 — 즉시 매도 검토`, urgency: 'high' });
+    } else if (lossStop && lossStop !== support) {
+      rules.push({ icon: '🚫', trigger: `${fmtP(lossStop)} 도달 (심리 손절선)`, act: `잔여 100% 전량 손절`, urgency: 'high' });
     }
+    rules.push({ icon: '🔻', trigger: `${fmtP(support)} (지지선) 붕괴`, act: `50% 매도 (1차 손절)`, urgency: 'high' });
     rules.push({ icon: '🔄', trigger: `${fmtP(resistance)} (저항선) 돌파`, act: `매도 보류, 홀딩 전환 검토`, urgency: 'low' });
   } else if (pri === 2) {
     // 비중축소 / 익절검토
     const profitTake = Math.round(current + atr * 2);
-    rules.push({ icon: '💰', trigger: `${fmtP(profitTake)} 도달`, act: `30% 부분 익절`, urgency: 'mid' });
+    rules.push({ icon: '💰', trigger: `${fmtP(profitTake)} 도달 (익절 목표)`, act: `30% 부분 익절`, urgency: 'mid' });
     rules.push({ icon: '🔻', trigger: `${fmtP(support)} (지지선) 붕괴`, act: `추가 50% 매도`, urgency: 'high' });
     rules.push({ icon: '✅', trigger: `${fmtP(resistance)} (저항선) 돌파`, act: `홀딩 유지, 추가매수 보류`, urgency: 'low' });
   } else if (pri >= 3 && pri <= 4) {
     // 비중확대 / 분할매수
     rules.push({ icon: '🛒', trigger: `${fmtP(current)} 부근`, act: `분할매수 진입 (1/3씩 3회)`, urgency: 'mid' });
-    rules.push({ icon: '🎯', trigger: `${fmtP(target)} (목표가) 도달`, act: `50% 1차 차익실현`, urgency: 'mid' });
-    rules.push({ icon: '🚫', trigger: `${fmtP(lossStop || support)} 도달`, act: `손절 실행`, urgency: 'high' });
+    rules.push({ icon: '🎯', trigger: `${fmtP(target)} (매수 목표가) 도달`, act: `50% 1차 차익실현`, urgency: 'mid' });
+    rules.push({ icon: '🚫', trigger: `${fmtP(lossStop || support)} 도달 (손절선)`, act: `손절 실행`, urgency: 'high' });
   } else {
     // 5-7: 유지 / 관찰
     rules.push({ icon: '✅', trigger: `${fmtP(resistance)} (저항선) 돌파`, act: `추세 진입 → 비중확대 검토`, urgency: 'mid' });
     rules.push({ icon: '🔻', trigger: `${fmtP(support)} (지지선) 붕괴`, act: `매도 검토`, urgency: 'mid' });
   }
   return {
-    current, support, resistance, lossStop, target, atr,
+    current, support, resistance, lossStop, target, atr, priority: pri, stopAbove,
     supportDistPct: distPct(support, current),
     resistanceDistPct: distPct(resistance, current),
     rules,
@@ -6632,8 +6665,9 @@ function renderMyHoldingsAnalysis(holdings) {
                 <span>📊 <b style="color:var(--text);">현재 ${fmtP(tp.current)}</b></span>
                 <span>🟢 지지선 <b style="color:#16794b;">${fmtP(tp.support)}</b> (${tp.supportDistPct>=0?'+':''}${tp.supportDistPct.toFixed(1)}%)</span>
                 <span>🟠 저항선 <b style="color:#d97706;">${fmtP(tp.resistance)}</b> (${tp.resistanceDistPct>=0?'+':''}${tp.resistanceDistPct.toFixed(1)}%)</span>
-                ${tp.lossStop?`<span>🚫 손절가 <b style="color:#dc2626;">${fmtP(tp.lossStop)}</b></span>`:''}
-                ${tp.target?`<span>🎯 목표가 <b style="color:#2563eb;">${fmtP(tp.target)}</b></span>`:''}
+                ${tp.lossStop?`<span title="${tp.priority<=2?'평단가 −8% 기반 심리 손절선. 현재가가 이미 그 아래면 손절 영역 진입':'분할매수 손절 임계선'}">${tp.stopAbove?'⚠️ 손절선 (이미 하회)':'🚫 손절선'} <b style="color:#dc2626;">${fmtP(tp.lossStop)}</b></span>`:''}
+                ${tp.target && tp.priority>=3 && tp.priority<=4 ?`<span>🎯 매수 목표가 <b style="color:#2563eb;">${fmtP(tp.target)}</b></span>`:''}
+                ${tp.target && tp.priority<=2 ?`<span title="Wilder 분석상의 매수 진입 타이밍 — 보유 종목 매도/감축 시점엔 직접적 의미 없음">📌 Wilder 매수 목표가 <b style="color:#94a3b8;">${fmtP(tp.target)}</b></span>`:''}
               </div>
               <div style="display:flex;flex-direction:column;gap:5px;">
                 ${tp.rules.map(r => `

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'whaletracker-shell-v20260518-rebalance-fix';
+const CACHE_NAME = 'whaletracker-shell-v20260518-auth-mapping-labels';
 const APP_SHELL = [
   '/',
   '/index.html',
