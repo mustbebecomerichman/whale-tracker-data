@@ -7014,21 +7014,32 @@ function printRebalanceReport() {
 // ── 페이지 진입점 ────────────────────────────────────
 async function initRebalancePage(force = false) {
   if (_rebalanceLoading) return;
-  // 진단: page-rebalance DOM 상태 자동 로깅 (콘솔 붙여넣기 차단 우회)
+  // 진단: page-rebalance DOM 상태를 콘솔 + 화면 우상단 오버레이에 표시
   try {
     const el = document.getElementById('page-rebalance');
     const cs = el ? getComputedStyle(el) : null;
-    console.log('[rebalance-debug]',
-      'exists=', !!el,
-      'classList=', el?.classList?.value,
-      'display=', cs?.display,
-      'visibility=', cs?.visibility,
-      'height=', el?.offsetHeight,
-      'childCount=', el?.children?.length,
-      'firstChildClass=', el?.firstElementChild?.className,
-      'parent=', el?.parentElement?.tagName + '#' + (el?.parentElement?.id||''),
-      'bodyClass=', document.body.className,
-    );
+    const info = {
+      exists: !!el,
+      classList: el?.classList?.value,
+      display: cs?.display,
+      visibility: cs?.visibility,
+      height: el?.offsetHeight,
+      childCount: el?.children?.length,
+      firstChildClass: el?.firstElementChild?.className,
+      parent: el?.parentElement?.tagName + '#' + (el?.parentElement?.id||''),
+      bodyClass: document.body.className,
+    };
+    console.log('[rebalance-debug]', info);
+    // 화면 오버레이 (콘솔 못 보는 환경 대비)
+    let dbg = document.getElementById('__rebalance_debug_overlay');
+    if (!dbg) {
+      dbg = document.createElement('div');
+      dbg.id = '__rebalance_debug_overlay';
+      dbg.style.cssText = 'position:fixed;top:70px;right:10px;background:#fff;color:#111;padding:10px 12px;font:11px/1.45 monospace;z-index:99999;max-width:340px;border:2px solid #dc2626;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.18);white-space:pre-wrap;word-break:break-all;';
+      dbg.innerHTML = '<b style="color:#dc2626">🔍 rebalance-debug</b><br><span style="color:#888;font-size:10px;">우상단 X 로 닫기</span> <button style="float:right;background:#eee;border:1px solid #ccc;border-radius:3px;cursor:pointer;font:11px monospace;padding:0 6px;" onclick="this.parentElement.remove()">X</button><pre id="__rebalance_debug_pre" style="margin:6px 0 0;font:11px monospace;"></pre>';
+      document.body.appendChild(dbg);
+    }
+    document.getElementById('__rebalance_debug_pre').textContent = JSON.stringify(info, null, 2);
   } catch(e) { console.warn('[rebalance-debug] failed', e); }
   const statusEl = document.getElementById('rb-status');
   const chartWrap = document.getElementById('rb-chart-wrap');
