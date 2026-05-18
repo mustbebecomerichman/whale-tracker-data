@@ -7014,6 +7014,22 @@ function printRebalanceReport() {
 // ── 페이지 진입점 ────────────────────────────────────
 async function initRebalancePage(force = false) {
   if (_rebalanceLoading) return;
+  // 진단: page-rebalance DOM 상태 자동 로깅 (콘솔 붙여넣기 차단 우회)
+  try {
+    const el = document.getElementById('page-rebalance');
+    const cs = el ? getComputedStyle(el) : null;
+    console.log('[rebalance-debug]',
+      'exists=', !!el,
+      'classList=', el?.classList?.value,
+      'display=', cs?.display,
+      'visibility=', cs?.visibility,
+      'height=', el?.offsetHeight,
+      'childCount=', el?.children?.length,
+      'firstChildClass=', el?.firstElementChild?.className,
+      'parent=', el?.parentElement?.tagName + '#' + (el?.parentElement?.id||''),
+      'bodyClass=', document.body.className,
+    );
+  } catch(e) { console.warn('[rebalance-debug] failed', e); }
   const statusEl = document.getElementById('rb-status');
   const chartWrap = document.getElementById('rb-chart-wrap');
   if (statusEl) statusEl.textContent = '데이터 불러오는 중… (12개 섹터 ETF + 벤치마크 일봉 365일)';
